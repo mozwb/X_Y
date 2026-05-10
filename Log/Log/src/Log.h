@@ -8,8 +8,13 @@ namespace X_Y {
 		using LogConfigure<LOG>::LogConfigure;
 	};
 }
-#define LOG(logger, LEVEL, ...) \
-    logger.Log<decltype(logger)::LEVEL>(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
+#ifdef XY_DEBUG
+	#define LOG(logger, LEVEL, ...) \
+		logger.Log<decltype(logger)::LEVEL>(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__)
 
-#define log(logger, LEVEL, ...) \
-    logger.log<decltype(logger)::LEVEL>(__VA_ARGS__)
+	#define log(logger, LEVEL, ...) \
+		logger.log<decltype(logger)::LEVEL>(__VA_ARGS__)
+#else
+#define LOG(logger, LEVEL, ...)
+#define log(logger, LEVEL, ...)
+#endif

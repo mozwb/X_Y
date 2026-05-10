@@ -1,36 +1,42 @@
-workspace "Log"
-    architecture "x64"
+-- 模块开关：默认不启用 test
+local enable_test = false
 
-    configurations
-    {
-        "Debug",
-        "Release",
-        "Dist"
-    }
+-- 如果外部没工作区，自己建
+if not workspace() then
+    workspace "Log"
+        architecture "x64"
+        configurations
+        {
+            "Debug",
+            "Release",
+            "Dist"
+        }
+    outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
+end
 
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
-startproject "test"
--- ==========================================
--- Log 库：静态库（给别人调用）
--- ==========================================
+
+-- ===================== Log 静态库 =====================
 project "Log"
     location "Log"        
-    kind "StaticLib"      -- 静态库
+    kind "StaticLib"
     language "C++"
 
-    targetdir ("bin/" .. outputdir .. "/%{prj.name}")
-    objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
+    targetdir ("%{wks.location}/bin/" .. outputdir .. "/%{prj.name}")
+    objdir ("%{wks.location}/bin-int/" .. outputdir .. "/%{prj.name}")
 
     files
     {
-        "%{prj.name}/src/**.h",
-        "%{prj.name}/src/**.cpp"
+        "Log/src/**.h",
+        "Log/src/**.cpp"
     }
+
     includedirs{
-        "Log"
+        "Log/src"
     }
-
-
+    externalincludedirs{
+        "Log/src"
+    }
 
     filter "system:windows"
         cppdialect "C++20"
@@ -49,25 +55,25 @@ project "Log"
         defines "XY_DIST"
         optimize "Full"
 
--- ==========================================
--- test 测试程序：调用 Log 静态库
--- ==========================================
+-- ===================== test 仅开关开启时才生成 =====================
+if enable_test then
 project "test"
     location "test"        
     kind "ConsoleApp"         
     language "C++"
+    startproject "test"
 
     targetdir ("bin/" .. outputdir .. "/%{prj.name}")
     objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
 
     files
     {
-        "%{prj.name}/src/**.h",
-        "%{prj.name}/src/**.cpp"
+        "test/src/**.h",
+        "test/src/**.cpp"
     }
 
-    includedirs { "Log/src" }    -- 能找到 Log.h
-    links { "Log" }              -- 链接 Log 静态库
+    includedirs { "Log/src" }
+    links { "Log" }
 
     filter "system:windows"
         cppdialect "C++20"
@@ -85,3 +91,4 @@ project "test"
     filter "configurations:Dist"
         defines "XY_DIST"
         optimize "Full"
+end
