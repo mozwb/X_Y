@@ -1,4 +1,5 @@
-project "Log"
+-- 窗口库项目
+project "Window"
     location "."
     kind "StaticLib"
     language "C++"
@@ -6,13 +7,9 @@ project "Log"
     targetdir ("%{wks.location}/bin/" .. outputdir .. "/%{prj.name}")
     objdir ("%{wks.location}/bin-int/" .. outputdir .. "/%{prj.name}")
 
-    files
-    {
+    files {
         "src/**.h",
         "src/**.cpp"
     }
 
-    includedirs
-    {
-        "src"
-    }
+    includedirs { "src" }
