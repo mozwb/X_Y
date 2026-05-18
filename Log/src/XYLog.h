@@ -1,6 +1,7 @@
 ﻿#pragma once
-#include"Log/src/LogConfigure.h"
 #ifdef XY_DEBUG
+#include"Log/src/LogConfigure.h"
+#include"Log/src/LogDeviceExt.h"
 namespace X_Y {
 	template<typename T> using LogBase = LogConfigure::LogConfigure<T>;
 	using	LogConfigure::DEVICE;
@@ -10,20 +11,20 @@ namespace X_Y {
 		using LogBase<LOG>::LogBase;
 	};
 }
-	static X_Y::LOG logger("log");
-	#define LOG(logger, LEVEL,...) \
-			logger.Log<decltype(logger)::LEVEL>(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__);
-	#define INFO(...)\
+inline X_Y::LOG logger("log");
+	#define LOG(Logger, LEVEL,...) \
+			Logger.Log<decltype(logger)::LEVEL>(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__);
+	#define XINFO(...)\
 			LOG(logger, Info, __VA_ARGS__)
-	#define TRACE(...)\
+	#define XTRACE(...)\
 			LOG(logger, Trace, __VA_ARGS__)
-	#define WARN(...)\
+	#define XWARN(...)\
 			LOG(logger, Warn, __VA_ARGS__)
-	#define DEBUG(...)\
+	#define XDEBUG(...)\
 			LOG(logger, Debug, __VA_ARGS__)
-	#define ERROR(...)\
+	#define XERROR(...)\
 			LOG(logger, Error, __VA_ARGS__)
-	#define FATAL(...)\
+	#define XFATAL(...)\
 			LOG(logger, Fatal, __VA_ARGS__)
 
 	#if defined(XY_PLATFORM_WINDOWS)
@@ -38,7 +39,7 @@ namespace X_Y {
 
 	#define XY_CORE_ASSERT(condition, message) \
 			if (!(condition)) { \
-				FATAL("[ASSERT FAILED]:{}",message); \
+				XFATAL("[ASSERT FAILED]:{}",message); \
 				XY_DEBUGBREAK(); \
 			}
 

@@ -90,7 +90,7 @@ namespace X_Y {
             g_XYWindowClass.lpszMenuName = NULL;
         }
         inline void RegisterWinClass(HINSTANCE& hInstance) {
-            INFO("hInstance:{}",hInstance)
+            XINFO("hInstance:{}",hInstance)
             InitGlobalWindowClass(hInstance);
             if (!RegisterClassEx(&g_XYWindowClass))
             {

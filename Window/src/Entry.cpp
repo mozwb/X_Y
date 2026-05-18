@@ -9,7 +9,8 @@
 			_In_ LPSTR     lpCmdLine,//命令行参数字符串
 			_In_ int       nCmdShow//显示窗口的方式
 	) {
-		INFO("程序运行到入口")
+
+		XINFO("程序运行到入口")
 		X_Y::WinCore::RegisterWinClass(hInstance);
 		X_Y::WinCore::SetHinstace(hInstance);
 		return main(__argc, __argv);

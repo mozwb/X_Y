@@ -7,7 +7,7 @@ namespace X_Y {
         void XWidget::show(int nShow)
         {
             if (!create(m_title, m_width,m_height)) {
-                ERROR("{}:无法创建窗口",this)
+                XERROR("{}:无法创建窗口",this)
                 //std::cerr << "无法创建窗口" << std::endl;
 
             }
@@ -42,10 +42,10 @@ namespace X_Y {
             );
                 if (!hwnd) {
                 DWORD err = GetLastError();
-                ERROR("CreateWindowEx failed, error code: {}", err);
+                XERROR("CreateWindowEx failed, error code: {}", err);
                 return false;
                 }
-            INFO("hwnd:{}",hwnd)
+            XINFO("hwnd:{}",hwnd)
             if (hwnd) {
                 SetHwnd(hwnd);
                 return true;

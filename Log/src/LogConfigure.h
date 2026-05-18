@@ -45,16 +45,20 @@ namespace X_Y {
 		template<typename LEVEL_TYPE, typename SELF_TYPE>
 		struct LEVEL :public CustomLogBase {
 			LEVEL() = delete;
-			inline static std::string model;
-			static void setModel(std::string m) { model = m; }
-			static std::string getModel() { return model; }
+			static std::string& model()
+			{
+				static std::string m;
+				return m;
+			}
+			static void setModel(std::string m) { model() = m; }
+			static std::string getModel() { return model(); }
 			static std::string toString() { return "LEVEL"; }
 		};
 		//template<typename LEVEL_TYPE, typename SELF_TYPE> std::string LEVEL<LEVEL_TYPE, SELF_TYPE>::model;
 #define LOG_LEVEL_ALL \
 public: \
     struct Trace : LEVEL<Trace, Self> { \
-        static std::string toString() { return "TRACE"; } \
+       static std::string toString() { return "TRACE"; } \
     }; \
     struct Debug : LEVEL<Debug, Self> { \
         static std::string toString() { return "DEBUG"; } \
@@ -89,11 +93,6 @@ public: \
 			virtual void Log(const std::string& message)const {
 				*os << message << std::endl;
 			}
-		};
-
-		struct Console :public DEVICE {
-			Console(std::ostream& os = std::cout) :DEVICE(os) {}
-			std::string toString() const  override { return "Console"; }
 		};
 
 		struct File :public DEVICE {
@@ -198,7 +197,7 @@ void log##LevelName(std::string content, Args&&... args) { \
 
 				LogConfigure() {
 				name = "DefaultLogger";
-				this->add(new Console());
+				this->add(new DEVICE());
 				Trace::setModel("%180:180:180%[位置][日期][时间][发起者][等级]:[内容]%#");
 				Debug::setModel("%90:180:255%[位置][日期][时间][发起者][等级]:[内容]%#");
 				Info::setModel("%80:220:100%[位置][日期][时间][发起者][等级]:[内容]%#");
@@ -210,7 +209,7 @@ void log##LevelName(std::string content, Args&&... args) { \
 			LogConfigure(str name)
 				: name(name)
 			{
-				this->add(new Console());
+				this->add(new DEVICE());
 				Trace::setModel("%180:180:180%[位置][日期][时间][发起者][等级]:[内容]%#");
 				Debug::setModel("%90:180:255%[位置][日期][时间][发起者][等级]:[内容]%#");
 				Info::setModel("%80:220:100%[位置][日期][时间][发起者][等级]:[内容]%#");
@@ -236,7 +235,7 @@ void log##LevelName(std::string content, Args&&... args) { \
 			template<typename LevelType, typename T, typename... Args>
 			void Log(const char* file, int line, const char* func, T&& content, Args&&... args) {
 				str lev = LevelType::toString();
-				str model = LevelType::model;
+				str model = LevelType::model();
 				str result = replace(content, args...);
 				str Mfile = file == nullptr ? UN_KNOW : To_Str(file);
 				str MLine = line == -1 ? UN_KNOW : To_Str(line);

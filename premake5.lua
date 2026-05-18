@@ -53,7 +53,8 @@ include "Window"
 if test_enabled then
 project "Test"
     location "Test"
-    kind "WindowedApp"
+    kind "WinMainApp"
+    -- entrypoint "WinMain"
     language "C++"
 
     -- ✅ 无拼接、无括号、永不报错
@@ -76,7 +77,7 @@ project "Test"
 
     links
     {
-
+        "Log",
         "Window"
     }
 end
