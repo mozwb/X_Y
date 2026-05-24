@@ -59,7 +59,6 @@ namespace X_Y::Events {
 		MouseButtonEvent(const MouseCode button)
 			: m_Button(button) {
 		}
-
 		MouseCode m_Button;
 	};
 
@@ -96,14 +95,4 @@ namespace X_Y::Events {
 
 		EVENT_CLASS_TYPE(MouseButtonReleased)
 	};
-
-
-
-
-
-
-
-
-
-
 }

@@ -2,6 +2,7 @@
 
 #ifdef XY_PLATFORM_WINDOWS
 	#include"Window/src/windows/WinCore.h"
+	#include"Window/src/windows/winConfigure.h"
 	extern int main(int argc, char* argv[]);
 		int WINAPI WinMain(
 			_In_ HINSTANCE hInstance,//实例句柄
@@ -10,6 +11,7 @@
 			_In_ int       nCmdShow//显示窗口的方式
 	) {
 
+		X_Y::allowConsole();
 		XINFO("程序运行到入口")
 		X_Y::WinCore::RegisterWinClass(hInstance);
 		X_Y::WinCore::SetHinstace(hInstance);

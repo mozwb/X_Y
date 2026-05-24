@@ -53,7 +53,7 @@ include "Window"
 if test_enabled then
 project "Test"
     location "Test"
-    kind "WinMainApp"
+    kind "WindowedApp"
     -- entrypoint "WinMain"
     language "C++"
 

@@ -4,6 +4,7 @@
 namespace X_Y {
 		typedef unsigned int uint;
 		using Base = WinCore::BaseWin;
+
 		class XWidget :protected Base {
 		public :
 			XWidget(const char* title="X_Y", uint width = 800, uint height = 600);
