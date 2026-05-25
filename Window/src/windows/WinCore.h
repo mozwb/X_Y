@@ -15,17 +15,6 @@ namespace X_Y {
         inline  HINSTANCE g_hInstance = nullptr;
         inline  const TCHAR* g_szClassName = _T("X_YWindow");
         inline void SetHinstace(HINSTANCE& hInstance) { g_hInstance = hInstance;   }
-        //只负责管理HWND和消息分发，不负责任何实现
-        class BaseWin
-        {
-        public:
-            BaseWin() = default;
-            void SetHwnd(HWND& hwnd){ m_hwnd = hwnd; }
-            HWND GetHwnd()const { return m_hwnd; }
-        private:
-            HWND m_hwnd = nullptr; 
-        };
-
 
         inline LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {

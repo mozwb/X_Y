@@ -1,16 +1,16 @@
 ﻿#pragma once
 #include"Log/src/XYLog.h"
-#include"Window/src/movement/movements.h"
-#ifdef XY_PLATFORM_WINDOWS
-#include"Window/src/windows/WinCore.h"
+#include"Window/src/windows/BaseWin.h"
+#include"window/src/movement/movements.h"
 namespace X_Y {
+#ifdef XY_PLATFORM_WINDOWS
     class Application
     {
     private:
         static Application* s_instance;
         MovementDispatcher m_dispatcher;
         MovementQueue m_eventQueue;
-        bool Running=true;
+        bool Running = true;
     public:
         Application(int argc, char* argv[])
         {
@@ -32,7 +32,7 @@ namespace X_Y {
         }
         void pushEvents() {
             MSG msg{};
-            if (PeekMessage(&msg, NULL, 0, 0,PM_REMOVE)) {
+            if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
                 TranslateMessage(&msg);
                 DispatchMessage(&msg);
             }
@@ -42,11 +42,17 @@ namespace X_Y {
                 Movement* e = m_eventQueue.Pop();
                 if (e) {
                     m_dispatcher.DispatchEvent(e);
-                    if (e->Handled) { 
-                        XINFO("{}：处理成功",e)
-                        delete e; } // 记得释放
+                    auto* sender = (BaseWin*)e->sender;
+                    std::string senderName;
+                    if (sender) {
+                        senderName = sender->toString();
+                    }
+                    if (e->Handled) {
+                        XINFO("发起者:{} 事件{}：处理成功", senderName, e);
+                        delete e;
+                    } // 记得释放
                     else {
-                        XERROR("{}：处理失败", e)
+                        XINFO("发起者:{} 事件{}：处理失败", senderName, e);
                         delete(e);
                     }
                 }
@@ -62,7 +68,50 @@ namespace X_Y {
         }
     };
     inline Application* Application::s_instance = nullptr;
-}
+    inline void connect(
+        MovementSender sender,
+        MovementType type,
+        MovementReceiver receiver,
+        MovementHandler handler
+    ){
+        Application* app = Application::instance();
+        MovementDispatcher& dispatcher = app->GetDispatcher();
+        dispatcher.Connect(sender, type, receiver, handler);
+    }
+    inline void disConnect(
+        MovementSender sender,
+        MovementType type,
+        MovementReceiver receiver) {
+        Application* app = Application::instance();
+        MovementDispatcher& dispatcher = app->GetDispatcher();
+        dispatcher.disConnect(sender, type, receiver);
+    }
+    inline void DisConnect(
+        MovementReceiver receiver) {
+        Application* app = Application::instance();
+        MovementDispatcher& dispatcher = app->GetDispatcher();
+        dispatcher.DisConnect(receiver);
+    }
+    template <
+        typename SenderType,
+        typename ReceiverType,
+        typename... Args  // 任意个数参数
+    >
+    void connect(
+        SenderType* sender,
+        MovementType type,
+        ReceiverType* receiver,
+        void (ReceiverType::* slotFunc)(Args...)
+    ) {
+        // 自动包装成 lambda，你不用写！
+        MovementHandler handler = [=]() {
+            (receiver->*slotFunc)();
+            };
+
+        // 调用原来的 connect
+        connect(sender, type, receiver, handler);
+    }
 #else
     ERROR("仅支持windows系统")
 #endif
+}

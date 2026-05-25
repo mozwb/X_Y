@@ -3,21 +3,33 @@
 #include<string>
 namespace X_Y {
 		typedef unsigned int uint;
-		using Base = WinCore::BaseWin;
-
+		using Base = BaseWin;
+		using X_Y::MovementType;
+		enum showtype{
+			HIDE,
+			NORMAL,
+			MINIMIZED,
+			MAXIMIZED,
+			NOACTIVATE,
+			SHOW,
+			MINIMIZE,
+			MINNOACTIVE,
+			SHOWNA,
+			RESTORE,
+			DEFAULT
+		};
 		class XWidget :protected Base {
 		public :
 			XWidget(const char* title="X_Y", uint width = 800, uint height = 600);
 			~XWidget(){destroy();}
-			void show(int nShow = SW_SHOW);
+			bool show(showtype nShow=SHOW);
 			void close();
 			void destroy();
 
 			std::string getname() { return toString();}
-			std::string toString()const{
+			std::string toString()const override{
 				return m_title;
 			}
-			//HWND handle() const { return GetHwnd(); }
 		private:
 			const char* m_title;
 			uint m_width;
