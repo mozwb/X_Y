@@ -1,7 +1,7 @@
 ﻿#pragma once
+#include <fcntl.h>
 #ifdef XY_PLATFORM_WINDOWS
 #include <iostream>
-#include <fcntl.h>
 #include <Windows.h>
 #include <io.h>
 #include <stdio.h>

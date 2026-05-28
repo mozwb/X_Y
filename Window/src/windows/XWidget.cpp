@@ -1,11 +1,33 @@
 ﻿#include"Window/src/windows/XWidget.h"
 #include"Log/src/XYLog.h"
 namespace X_Y {
-        XWidget::XWidget(const char* title, uint width, uint height):m_title(title) 
-         ,m_width(width),m_height(height)
+#ifdef XY_PLATFORM_WINDOWS
+        XWidget::XWidget(XWidget* parent):
+            m_parent(parent)
         {
-        
-            connect(this, MovementType::WindowClose, this, &XWidget::destroy);
+            XDEBUG("XWidget 构造执行，parent={}", (uint16_t)parent)
+            auto app = Application::instance();
+            if (!app) {
+                // 处理单例为空的异常，比如直接assert或日志
+                XY_CORE_ASSERT(false,"Application instance is null!");
+                return;
+            }
+
+            if (m_parent) {
+                // 子窗口：绑定自身销毁和父窗口关闭时销毁
+                XDEBUG("子窗口构造执行")
+                connect(this, MovementType::WindowClose, this, &XWidget::destroy);
+                connect(parent, MovementType::WindowClose, this, &XWidget::destroy);
+            }
+            else if (!app->IsFirstWin()) {
+                // 顶级窗口：更新主窗口标记，并绑定到应用退出
+                app->updateFirstWin();
+                connect(this, MovementType::WindowClose, app, &Application::appClose);
+            }
+            else {
+                //主窗口逻辑
+                connect(this, MovementType::WindowClose, this, &XWidget::destroy);
+            }
         }
         bool XWidget::show(showtype nShow)
         {
@@ -33,6 +55,19 @@ namespace X_Y {
 
             return true;
         }
+        void XWidget::setTitle(const char* title) {
+            m_title = title;
+            HWND hwnd = GetHwnd();
+            if (hwnd)  // 你窗口句柄，一般叫 m_hwnd / m_handle / m_window
+            {
+                SetWindowTextA(hwnd, title);
+            }
+        }
+
+        void XWidget::setSize(uint width, uint height) {
+            m_width = width;
+            m_height = height;
+        }
         void XWidget::close() {
             XINFO("调用colse函数")
             HWND hwnd = this->GetHwnd();
@@ -42,11 +77,18 @@ namespace X_Y {
         }
         void XWidget::destroy() {
             HWND hwnd = this->GetHwnd();
-            DisConnect(this);
+            disConnect(this);
             if (hwnd) { DestroyWindow(hwnd); hwnd = nullptr; }
         }
-
-#ifdef XY_PLATFORM_WINDOWS
+        void XWidget::disconnectPa() {
+            if (m_parent) {
+                disConnect(m_parent, this);
+            }
+        }
+        void XWidget::releaseSelf() {
+            disconnectPa();
+            m_parent = nullptr;
+        }
         bool XWidget::create(const char* title, uint width, uint height){
             HINSTANCE hInstance = X_Y::WinCore::g_hInstance;
 

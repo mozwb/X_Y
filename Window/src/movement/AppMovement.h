@@ -28,10 +28,6 @@ namespace X_Y {
 			MOVEMENT_CLASS_CATEGORY(MTApplication)
 	};
 
-
-
-
-
 	class WindowResize : public Movement
 	{
 	public:

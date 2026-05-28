@@ -62,9 +62,6 @@ namespace X_Y {
 			return os << e.toString();
 		}
 	};
-	//用于逻辑事件
-	class Event :public Movement {
-	};
 	//消息队列知道行为及其发起者
 	//分发器通过匹配消息队列的信息寻找监听者执行其回调
 	//所以分发器维护了全局监听表
@@ -86,59 +83,18 @@ namespace X_Y {
 			MovementType type,
 			MovementReceiver receiver,
 			MovementHandler handler
-		) {
-			MovementBinding binding;
-			binding.sender = sender;
-			binding.type = type;
-			binding.receiver = receiver;
-			binding.handler = std::move(handler);
-			m_Bindings.push_back(binding);
-			XDEBUG("加入回调函数，队列有{}个",m_Bindings.size())
-		}
+		);
 		void disConnect(
 			MovementSender sender,
 			MovementType type,
 			MovementReceiver receiver
-		) {
-			// 遍历 → 找到匹配的三项 → 删除
-			for (auto it = m_Bindings.begin(); it != m_Bindings.end();) {
-				if (it->sender == sender &&
-					it->type == type &&
-					it->receiver == receiver)
-				{
-					it = m_Bindings.erase(it); // 删除并迭代
-				}
-				else {
-					++it;
-				}
-			}
-		}
-		void DisConnect(MovementReceiver receiver) {
-			for (auto it = m_Bindings.begin(); it != m_Bindings.end();) {
-				if (it->receiver == receiver)
-				{
-					XTRACE("{}回调被删除")
-					it = m_Bindings.erase(it); // 删除并迭代
-				}
-				else {
-					++it;
-				}
-			}
-		}
+		);
+		void disConnect(
+			MovementSender sender,
+			MovementReceiver receiver);
+		void disConnect(MovementReceiver receiver);
 		// === 触发：发送行为，自动找到所有绑定并执行 ===
-		bool DispatchEvent( Movement * event)
-		{
-			for (auto& binding : m_Bindings)
-			{
-				if (binding.sender == event->sender &&
-					binding.type == event->GetType())
-				{
-					binding.handler();
-				}
-			}
-			event->Handled = true;
-			return event->Handled;
-		}
+		bool DispatchEvent(Movement* event);
 	private:
 		std::vector<MovementBinding> m_Bindings;
 	};
@@ -160,4 +116,8 @@ namespace X_Y {
 	private:
 		std::queue<Movement*> m_Queue;
 	};
+
+	//用于逻辑事件
+	//可以继续仿写队列和分发器
+	class Event :public Movement {};
 }

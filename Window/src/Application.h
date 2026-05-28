@@ -4,6 +4,9 @@
 #include"window/src/movement/movements.h"
 namespace X_Y {
 #ifdef XY_PLATFORM_WINDOWS
+    
+    //这个管理了程序运行周期，接受win32消息转化系统事件，可以仿照这个写渲染层或者其他层
+    //总线接受所有事件，只负责系统事件，其他再下发执行
     class Application
     {
     private:
@@ -11,60 +14,30 @@ namespace X_Y {
         MovementDispatcher m_dispatcher;
         MovementQueue m_eventQueue;
         bool Running = true;
+         bool FirstWin = false;
     public:
-        Application(int argc, char* argv[])
-        {
-            s_instance = this;
-        }
-        ~Application()
-        {
-            s_instance = nullptr;
-        }
-
+        Application(int argc, char* argv[]);
+        ~Application();
         // 消息循环
-        void exec()
-        {
-            while (Running)
-            {
-                pushEvents();
-                ProcessEvents();
-            }
-        }
-        void pushEvents() {
-            MSG msg{};
-            if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-                TranslateMessage(&msg);
-                DispatchMessage(&msg);
-            }
-        }
-        void ProcessEvents() {
-            while (!m_eventQueue.Empty()) {
-                Movement* e = m_eventQueue.Pop();
-                if (e) {
-                    m_dispatcher.DispatchEvent(e);
-                    auto* sender = (BaseWin*)e->sender;
-                    std::string senderName;
-                    if (sender) {
-                        senderName = sender->toString();
-                    }
-                    if (e->Handled) {
-                        XINFO("发起者:{} 事件{}：处理成功", senderName, e);
-                        delete e;
-                    } // 记得释放
-                    else {
-                        XINFO("发起者:{} 事件{}：处理失败", senderName, e);
-                        delete(e);
-                    }
-                }
-            }
-        }
+        void exec();
+        void pushEvents();
+        void ProcessEvents();
         bool isRunning() { return Running; }
-        void appClose() { Running = false; }
+        void appClose() {
+            Running = false;
+            FirstWin = false;
+        }
         MovementDispatcher& GetDispatcher() { return m_dispatcher; }
         MovementQueue& GetEventQueue() { return m_eventQueue; }
         static Application* instance()
         {
             return s_instance;
+        }
+        bool IsFirstWin() {
+            return FirstWin;
+        }
+        void updateFirstWin() {
+            FirstWin = true;
         }
     };
     inline Application* Application::s_instance = nullptr;
@@ -86,11 +59,19 @@ namespace X_Y {
         MovementDispatcher& dispatcher = app->GetDispatcher();
         dispatcher.disConnect(sender, type, receiver);
     }
-    inline void DisConnect(
+    inline void disConnect(
+        MovementSender sender, 
+        MovementReceiver receiver
+        ) {
+        Application* app = Application::instance();
+        MovementDispatcher& dispatcher = app->GetDispatcher();
+        dispatcher.disConnect(sender,receiver);
+    }
+    inline void disConnect(
         MovementReceiver receiver) {
         Application* app = Application::instance();
         MovementDispatcher& dispatcher = app->GetDispatcher();
-        dispatcher.DisConnect(receiver);
+        dispatcher.disConnect(receiver);
     }
     template <
         typename SenderType,
@@ -103,7 +84,6 @@ namespace X_Y {
         ReceiverType* receiver,
         void (ReceiverType::* slotFunc)(Args...)
     ) {
-        // 自动包装成 lambda，你不用写！
         MovementHandler handler = [=]() {
             (receiver->*slotFunc)();
             };
