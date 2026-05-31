@@ -10,6 +10,7 @@ namespace X_Y {
         BaseWin() = default;
         void SetHwnd(HWND& hwnd) { m_hwnd = hwnd; }
         HWND GetHwnd()const { return m_hwnd; }
+        HWND GetNativeWindow()const { return GetHwnd();}
         virtual std::string toString() const { return "BaseWindow"; }
     private:
         HWND m_hwnd = nullptr;

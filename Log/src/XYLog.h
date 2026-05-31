@@ -39,7 +39,7 @@ inline X_Y::LOG logger("log");
 
 	#define XY_CORE_ASSERT(condition, message) \
 			if (!(condition)) { \
-				XFATAL("[ASSERT FAILED]:{}",message); \
+				XFATAL("[ASSERT FAILED]:{}",message) \
 				XY_DEBUGBREAK(); \
 			}
 

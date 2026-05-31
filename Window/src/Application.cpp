@@ -36,6 +36,7 @@ namespace X_Y {
                     senderName = sender->toString();
                 }
                 if (e->Handled) {
+                    if(e->GetType()!=X_Y::MovementType::WindowPaint)
                     XINFO("发起者:{} 事件{}：处理成功", senderName, e);
                     delete e;
                 } // 记得释放

@@ -87,7 +87,7 @@ namespace X_Y {
         }
         void XWidget::releaseSelf() {
             disconnectPa();
-            m_parent = nullptr;
+            m_parent=nullptr;
         }
         bool XWidget::create(const char* title, uint width, uint height){
             HINSTANCE hInstance = X_Y::WinCore::g_hInstance;

@@ -18,10 +18,25 @@ namespace X_Y {
 			RESTORE,
 			DEFAULT
 		};
+		class GraphicsContext
+		{
+		public:
+			virtual ~GraphicsContext() = default;
+			virtual void Init() = 0;
+			virtual bool MakeCurrent() = 0;
+			virtual void SwapBuffers() = 0;
+			virtual bool IsCurrent() const=0;
+			virtual void DoneCurrent()=0;
+
+		};
+
 		class XWidget :protected Base {
 		public :
 			explicit XWidget(XWidget* parent=nullptr);
 			~XWidget(){destroy();}
+
+			//show中执行创建，才有窗口指针
+			//除非主动调用create，否则应该show完之后在执行其他步骤
 			bool show(showtype nShow=SHOW);
 			void close();
 			void destroy();
@@ -29,6 +44,17 @@ namespace X_Y {
 			void disconnectPa();
 			//让自己变成独立窗口
 			void releaseSelf();
+
+			void  Render() {
+				XY_CORE_ASSERT(m_Context, "上下文不能为空");
+				if (!m_Context->IsCurrent())
+					if(!m_Context->MakeCurrent())
+						XY_CORE_ASSERT(false, "MakeCurrent失败");
+				this->onRender();
+				m_Context->SwapBuffers();
+			}
+
+			virtual void onRender() {};
 			std::string getname() { return toString();}
 			std::string toString()const override{
 				return m_title;
@@ -37,6 +63,9 @@ namespace X_Y {
 			void setSize(uint width, uint height);
 			XWidget* getParent() const { return m_parent; }
 
+
+
+
 			// C++11及以后：直接删除拷贝构造、拷贝赋值
 			XWidget(const XWidget&) = delete;
 			XWidget& operator=(const XWidget&) = delete;
@@ -44,13 +73,25 @@ namespace X_Y {
 			// 要不要移动看需求，也可以一起禁掉
 			//XWidget(XWidget&&) = delete;
 			//XWidget& operator=(XWidget&&) = delete;
-
+			template<typename T = GraphicsContext,class... Args>
+			void setGrContext(Args&& ... args) {
+				XY_CORE_ASSERT((std::is_base_of_v<GraphicsContext,T>),"T must inherit from GraphicsContext")
+				
+				m_Context = CreateScope<T>(std::forward<Args>(args)...);
+			}
+			template<typename T = GraphicsContext>
+			void createContext() {
+				setGrContext<T>(this->GetNativeWindow());
+				m_Context->Init();
+			}
+			bool createWin() {return create(m_title, m_width, m_height);}
+			virtual bool create(const char* title, uint width, uint height);
 		private:
 			const char* m_title = "X_Y";
 			uint m_width = 800;
 			uint m_height = 600;
-			XWidget* m_parent;
-			virtual bool create(const char* title, uint width, uint height);
+			XWidget* m_parent = nullptr;
+			Scope<GraphicsContext> m_Context;
 		};
 	}
 

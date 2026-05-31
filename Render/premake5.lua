@@ -1,5 +1,4 @@
-﻿-- 窗口库项目
-project "Window"
+project "Render"
     location "."
     kind "StaticLib"
     language "C++"
@@ -11,6 +10,5 @@ project "Window"
         "src/**.h",
         "src/**.cpp"
     }
-    includedirs { 
-        "src"
-     }
+
+    includedirs { "src" }

@@ -26,7 +26,7 @@ namespace X_Y {
 	enum class MovementType {
 		None=0,
 		AppTick,AppUpdate,AppRender,
-		WindowClose,WindowResize,WindowFocus,WindowMoved,WindowDestory,
+		WindowClose,WindowResize,WindowFocus,WindowMoved,WindowDestory,WindowPaint,
 		KeyPressed,KeyReleased,KeyTyped,
 		MouseButtonPressed,MouseButtonReleased,MouseMoved,MouseScrolled
 

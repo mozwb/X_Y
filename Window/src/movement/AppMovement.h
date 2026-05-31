@@ -83,5 +83,10 @@ namespace X_Y {
 		MOVEMENT_CLASS_TYPE(WindowMoved)
 			MOVEMENT_CLASS_CATEGORY(MTWindow)
 	};
-
+	class WindowPaint :public Movement {
+	public:
+		WindowPaint(MovementSender s) :Movement(s) {}
+		MOVEMENT_CLASS_TYPE(WindowPaint)
+		MOVEMENT_CLASS_CATEGORY(MTWindow)
+	};
 }

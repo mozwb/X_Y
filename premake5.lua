@@ -48,6 +48,8 @@ filter {}
 -- 引入模块
 include "Log"
 include "Window"
+include "Render"
+include "vendor/glad"  
 
 -- 测试项目
 if test_enabled then
@@ -69,15 +71,18 @@ project "Test"
         "Test/src/**.h",
         "Test/src/**.cpp",
         "xypch/xypch.h",
-        "xypch/xypch.cpp"
+        "xypch/xypch.cpp",
     }
 
     -- ✅ 因为全局已经 includedirs "."，这里啥都不用写！
-    includedirs { "xypch" }
-
+    includedirs { 
+    "xypch",
+    "vendor/glad/include" }
     links
     {
         "Log",
-        "Window"
+        "Window",
+        "opengl32",
+        "glad"
     }
 end

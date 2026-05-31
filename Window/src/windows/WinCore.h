@@ -70,7 +70,12 @@ namespace X_Y {
                     app->GetEventQueue().Push(movement);
                     return 0;
                 }
-
+                case WM_PAINT:
+                {
+                    movement = new WindowPaint(pThis);
+                    app->GetEventQueue().Push(movement);
+                    return 0;
+                }
                 // 窗口焦点变化（简单处理为焦点获得/失去，你可以再细分）
                 case WM_SETFOCUS:
                 {
