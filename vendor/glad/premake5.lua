@@ -4,8 +4,6 @@
     staticruntime "On"
     systemversion "latest"
     
-    targetdir ("%{wks.location}/bin/" .. outputdir .. "/%{prj.name}")
-    objdir ("%{wks.location}/bin-int/" .. outputdir .. "/%{prj.name}")
 
       -- 🔴 关键：彻底禁用预编译头
     pchheader ""

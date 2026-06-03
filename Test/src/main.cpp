@@ -1,9 +1,8 @@
 ﻿#include"xypch.h"
-#include<Log/src/XYLog.h>
-#include"Window/src/windows/XWidget.h"
-#include"Window/src/windows/GL/GLWidget.h"
-#include"Window/src/Application.h"
-#include"Window/src/windows/GraphicsContext.h"
+#include<Log/include/XYLog.h>
+#include"Window/include/XWidget.h"
+#include"Application/include/Application.h"
+#include"GraphicsContext/include/GraphicsContext.h"
 #include"glad/glad.h"
 
 class GLWin : public X_Y::XWidget {

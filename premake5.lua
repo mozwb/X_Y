@@ -11,7 +11,8 @@ workspace "X_Y"
       includedirs
     {
         ".",            -- 你的引擎根目录
-        "vendor"        -- 👈 就加这一行！
+        "vendor",
+        "Core"
     }
 
     -- ✅ Test 设为启动项目
@@ -19,37 +20,47 @@ workspace "X_Y"
         startproject "Test"
     end
 
--- 输出目录（无拼接，纯 Premake 宏，永不报错）
-outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
+    -- 全局统一输出，全工程共用
+    local outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
+    targetdir ("%{wks.location}/bin/" .. outputdir .. "/%{prj.name}")
+    objdir ("%{wks.location}/bin-int/" .. outputdir .. "/%{prj.name}")
 
--- 全局编译配置
-filter "configurations:Debug"
-    symbols "On"
-    defines "XY_DEBUG"
+    -- 全局编译配置
+    filter "configurations:Debug"
+        symbols "On"
+        defines "XY_DEBUG"
 
-filter "configurations:Release"
-    optimize "On"
-    defines "XY_RELEASE"
+    filter "configurations:Release"
+        optimize "On"
+        defines "XY_RELEASE"
 
-filter "configurations:Dist"
-    optimize "Full"
-    defines "XY_DIST"
-    symbols "Off"
-  
-filter "system:Windows"
-    defines "XY_PLATFORM_WINDOWS"  -- Windows 专属宏
-filter "system:Linux"
-    defines "XY_PLATFORM_LINUX"    -- Linux 专属宏
-filter "system:macosx"
-    defines "XY_PLATFORM_MAC"      -- macOS 专属宏    
+    filter "configurations:Dist"
+        optimize "Full"
+        defines "XY_DIST"
+        symbols "Off"
+    
+    filter "system:Windows"
+        defines "XY_PLATFORM_WINDOWS"  -- Windows 专属宏
+    filter "system:Linux"
+        defines "XY_PLATFORM_LINUX"    -- Linux 专属宏
+    filter "system:macosx"
+        defines "XY_PLATFORM_MAC"      -- macOS 专属宏    
 
-filter {}
+    filter {}
 
 -- 引入模块
-include "Log"
-include "Window"
+
 include "Render"
 include "vendor/glad"  
+group "Core"
+include "Core/Log"
+include "Core/Input"
+include "Core/Movement"
+include "Core/GraphicsContext"
+include "Core/XCore"
+include "Core/Application"
+include "Core/Window"
+group ""
 
 -- 测试项目
 if test_enabled then
@@ -59,10 +70,7 @@ project "Test"
     -- entrypoint "WinMain"
     language "C++"
 
-    -- ✅ 无拼接、无括号、永不报错
-    targetdir "%{wks.location}/bin/%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}/%{prj.name}"
-    objdir "%{wks.location}/bin-int/%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}/%{prj.name}"
-
+  
     pchheader "xypch.h"
     pchsource "xypch/xypch.cpp"
 
@@ -80,8 +88,10 @@ project "Test"
     "vendor/glad/include" }
     links
     {
-        "Log",
         "Window",
+        "Application",
+        "GraphicsContext",
+        "Render",
         "opengl32",
         "glad"
     }
