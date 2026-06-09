@@ -9,6 +9,12 @@ namespace X_Y {
 	using LogConfigure::DATE;
 	struct LOG : public LogBase<LOG> {
 		using LogBase<LOG>::LogBase;
+		LOG_LEVEL_EXT(Pink)
+		LOG_LEVEL_API(Pink)
+		LOG(str name): LogBase<LOG>(name) {
+			Pink::setModel("%255:105:180%[位置][日期][时间][发起者][等级]:[内容]%#");
+		}
+
 	};
 }
 inline X_Y::LOG logger("log");
@@ -26,6 +32,8 @@ inline X_Y::LOG logger("log");
 			LOG(logger, Error, __VA_ARGS__)
 	#define XFATAL(...)\
 			LOG(logger, Fatal, __VA_ARGS__)
+	#define XPINK(...)\
+			LOG(logger, Pink, __VA_ARGS__)
 
 	#if defined(XY_PLATFORM_WINDOWS)
 	#define XY_DEBUGBREAK() __debugbreak()
@@ -42,6 +50,11 @@ inline X_Y::LOG logger("log");
 				XFATAL("[ASSERT FAILED]:{}",message) \
 				XY_DEBUGBREAK(); \
 			}
+	#define XY_CORE_OUT(condition, message) \
+			if (!(condition)) { \
+				XDEBUG("[ASSERT FAILED]:{}",message) \
+			}
+
 
 
 

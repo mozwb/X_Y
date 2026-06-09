@@ -5,11 +5,12 @@ project "Render"
 
 
     files {
-        "src/**.h",
+        "include/**.h",
         "src/**.cpp",
-        "vendor/glad/src/**.c"
+         "%{wks.location}/vendor/glad/src/glad.c"
     }
 
-    includedirs { "src",
-    "vendor/glad/include" 
+    includedirs { 
+    "include",
+    "%{wks.location}/vendor/glad/include"       
     }

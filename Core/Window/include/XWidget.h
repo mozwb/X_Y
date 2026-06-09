@@ -50,6 +50,15 @@ namespace X_Y {
 			std::string toString()const override{
 				return m_title;
 			}
+			GraphicsContext* get_context() {
+				return m_Context.get();
+			}
+			uint get_width() {
+				return m_width;
+			}
+			uint get_height() {
+				return m_height;
+			}
 			void setTitle(const char* title);
 			void setSize(uint width, uint height);
 			XWidget* getParent() const { return m_parent; }
@@ -67,7 +76,6 @@ namespace X_Y {
 			template<typename T = GraphicsContext,class... Args>
 			void setGrContext(Args&& ... args) {
 				XY_CORE_ASSERT((std::is_base_of_v<GraphicsContext,T>),"T must inherit from GraphicsContext")
-				
 				m_Context = CreateScope<T>(std::forward<Args>(args)...);
 			}
 			template<typename T = GraphicsContext>

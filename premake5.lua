@@ -60,6 +60,7 @@ include "Core/GraphicsContext"
 include "Core/XCore"
 include "Core/Application"
 include "Core/Window"
+include "Core/Math"
 group ""
 
 -- 测试项目

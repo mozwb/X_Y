@@ -7,7 +7,8 @@ namespace X_Y {
 		AppTick(MovementSender s) :Movement(s) {};
 
 		MOVEMENT_CLASS_TYPE(AppTick)
-			MOVEMENT_CLASS_CATEGORY(MTApplication)
+		MOVEMENT_CLASS_CATEGORY(MTApplication)
+		
 	};
 
 	class AppUpdate : public Movement
@@ -17,6 +18,7 @@ namespace X_Y {
 
 		MOVEMENT_CLASS_TYPE(AppUpdate)
 			MOVEMENT_CLASS_CATEGORY(MTApplication)
+		
 	};
 
 	class AppRender : public Movement
@@ -26,6 +28,7 @@ namespace X_Y {
 
 		MOVEMENT_CLASS_TYPE(AppRender)
 			MOVEMENT_CLASS_CATEGORY(MTApplication)
+		
 	};
 
 	class WindowResize : public Movement
@@ -46,6 +49,7 @@ namespace X_Y {
 		}
 		MOVEMENT_CLASS_TYPE(WindowResize)
 			MOVEMENT_CLASS_CATEGORY(MTWindow)
+			
 	private:
 		unsigned int m_Width, m_Height;
 	};
@@ -57,6 +61,7 @@ namespace X_Y {
 
 		MOVEMENT_CLASS_TYPE(WindowClose)
 			MOVEMENT_CLASS_CATEGORY(MTWindow)
+			
 	};
 	class WindowDestory : public Movement
 	{
@@ -65,6 +70,7 @@ namespace X_Y {
 
 		MOVEMENT_CLASS_TYPE(WindowDestory)
 			MOVEMENT_CLASS_CATEGORY(MTWindow)
+			
 	};
 	//暂且不知道这俩有啥用
 	class WindowFouces : public Movement
@@ -74,6 +80,7 @@ namespace X_Y {
 
 		MOVEMENT_CLASS_TYPE(WindowFocus)
 			MOVEMENT_CLASS_CATEGORY(MTWindow)
+
 	};
 	class WindowMoved : public Movement
 	{
@@ -82,11 +89,13 @@ namespace X_Y {
 
 		MOVEMENT_CLASS_TYPE(WindowMoved)
 			MOVEMENT_CLASS_CATEGORY(MTWindow)
+
 	};
 	class WindowPaint :public Movement {
 	public:
 		WindowPaint(MovementSender s) :Movement(s) {}
 		MOVEMENT_CLASS_TYPE(WindowPaint)
 		MOVEMENT_CLASS_CATEGORY(MTWindow)
+		
 	};
 }

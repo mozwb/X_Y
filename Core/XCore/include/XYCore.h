@@ -6,6 +6,28 @@
 #include <memory>       
 #include <type_traits>  
 namespace X_Y {
+    template <typename E>
+    constexpr std::string_view GetEnumName(E value) {
+        // 只支持 enum class / enum
+        static_assert(std::is_enum_v<E>, "必须是枚举类型");
+
+        // 编译器内置宏，自动提取枚举名（全平台通用：MSVC/GCC/Clang）
+#ifdef _MSC_VER
+        std::string_view sig = __FUNCSIG__;
+        auto start = sig.find_last_of(' ') + 1;
+        auto end = sig.find_last_of(']');
+#else
+        std::string_view sig = __PRETTY_FUNCTION__;
+        auto start = sig.find_first_of('=') + 2;
+        auto end = sig.find_last_of(';');
+#endif
+
+        sig = sig.substr(start, end - start);
+        return sig;
+    }
+
+
+
     // 1. 检测有没有 toString()
     template<typename T, typename = void>
     struct Has_toString : std::false_type {};
@@ -59,8 +81,6 @@ namespace X_Y {
         // 或逻辑
         static constexpr bool value = has_low || has_upp;
     };
-
-
     template <typename T, typename = void>
     struct IsStreamable : std::false_type {};
     template <typename T>
@@ -90,6 +110,11 @@ namespace X_Y {
             oss << obj; // 只要类型支持 operator<<，就能直接输出
             return oss.str();
         }
+        else if constexpr (std::is_enum_v<T>) {
+            std::ostringstream oss;
+            oss << GetEnumName(obj);// 只要类型支持 operator<<，就能直接输出
+            return oss.str();
+        }
         else {
             return "NO_TO_STRING";
         }
@@ -112,6 +137,7 @@ namespace X_Y {
     {
         return std::make_shared<T>(std::forward<Args>(args)...);
     }
+
 
 #define BIT(X)  (1<<X)
 

@@ -12,13 +12,18 @@ namespace X_Y {
         MovementDispatcher m_dispatcher;
         MovementQueue m_eventQueue;
         bool Running = true;
-         bool FirstWin = false;
+        bool FirstWin = false;
+        //如果你需要打包一些逻辑，你可以写层栈，从而减轻事件分发器压力
+        LayerStack m_LayerStack;  
+
     public:
+        // 1.构造、析构放protected，允许子类继承构造，禁止外部new
         Application(int argc, char* argv[]);
-        ~Application();
+        virtual ~Application();// 2.虚析构，多态析构必备
         // 消息循环
-        void exec();
+        virtual void exec();
         virtual void pushEvents();
+        virtual void pushEvents(XMovement* e);
         virtual void ProcessEvents();
         bool isRunning() { return Running; }
         void appClose() {
@@ -37,25 +42,37 @@ namespace X_Y {
         void updateFirstWin() {
             FirstWin = true;
         }
+        void PushLayer(Layer* layer) {
+            m_LayerStack.PushLayer(layer);
+        }
+        void PopLayer(Layer* layer) {
+            m_LayerStack.PopLayer(layer);
+                    }
+
+        Application(const Application&) = delete;
+        Application& operator=(const Application&) = delete;
     };
     inline Application* Application::s_instance = nullptr;
-    inline void connect(
+ 
+    template <typename EnumT>
+    void Connect(
         MovementSender sender,
-        MovementType type,
+        EnumT type,            // 直接保留原始枚举！
         MovementReceiver receiver,
         MovementHandler handler
-    ){
-        Application* app = Application::instance();
-        MovementDispatcher& dispatcher = app->GetDispatcher();
-        dispatcher.Connect(sender, type, receiver, handler);
+    ) {
+        auto& dispatcher = Application::instance()->GetDispatcher();
+        // 直接把 EnumT 传给 dispatcher，类型 100% 保留！
+        dispatcher.Connect<EnumT>(sender, type, receiver, std::move(handler));
     }
-    inline void disConnect(
+    template <typename EnumT>
+    void disConnect(
         MovementSender sender,
-        MovementType type,
-        MovementReceiver receiver) {
-        Application* app = Application::instance();
-        MovementDispatcher& dispatcher = app->GetDispatcher();
-        dispatcher.disConnect(sender, type, receiver);
+        EnumT type,
+        MovementReceiver receiver
+    ) {
+        auto& dispatcher = Application::instance()->GetDispatcher();
+        dispatcher.disConnect<EnumT>(sender, type, receiver);
     }
     inline void disConnect(
         MovementSender sender, 
@@ -71,23 +88,41 @@ namespace X_Y {
         MovementDispatcher& dispatcher = app->GetDispatcher();
         dispatcher.disConnect(receiver);
     }
-    template <
-        typename SenderType,
-        typename ReceiverType,
-        typename... Args  // 任意个数参数
-    >
+    template <typename S, typename E, typename R>
     void connect(
-        SenderType* sender,
-        MovementType type,
-        ReceiverType* receiver,
-        void (ReceiverType::* slotFunc)(Args...)
+        S* sender,
+        E type,
+        R* receiver,
+        void (R::* slotFunc)(const XMovement&)
     ) {
-        MovementHandler handler = [=]() {
+        MovementHandler handler = [=](const XMovement& e) {
+            (receiver->*slotFunc)(e);
+            };
+        Connect(sender, type, receiver, std::move(handler));
+    }
+    template <typename S, typename E, typename R>
+    void connect(
+        S* sender,
+        E type,
+        R* receiver,
+        void (R::* slotFunc)(XMovement*)
+    ) {
+        MovementHandler handler = [=](const XMovement& e) {
+            (receiver->*slotFunc)(const_cast<XMovement*>(&e));
+            };
+        Connect(sender, type, receiver, std::move(handler));
+    }
+    template <typename S, typename E, typename R>
+    void connect(
+        S* sender,
+        E type,
+        R* receiver,
+        void (R::* slotFunc)()
+    ) {
+        MovementHandler handler = [=](const XMovement&) {
             (receiver->*slotFunc)();
             };
-
-        // 调用原来的 connect
-        connect(sender, type, receiver, handler);
+        Connect(sender, type, receiver, std::move(handler));
     }
 #else
     ERROR("仅支持windows系统")

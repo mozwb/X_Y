@@ -21,7 +21,6 @@ project "Window"
     links {
         "Log",
         "Input",
-        "Movement",
         "GraphicsContext",
         "Application"
     }

@@ -1,10 +1,12 @@
 ﻿#include"GraphicsContext.h"
 #include"Log/include/XYLog.h"
+#include"glad/glad.h"
 namespace X_Y {
 #ifdef XY_PLATFORM_WINDOWS
     OpenglGrContext::OpenglGrContext(HWND hwnd)
         : m_hWnd(hwnd), m_hDC(nullptr), m_hGLRC(nullptr)
     {
+		m_Type = GraphicsType::OpenGL;
         m_hDC = ::GetDC(m_hWnd);
         if (!m_hDC) {
             XFATAL("GetDC 失败");
@@ -46,6 +48,13 @@ namespace X_Y {
         }
 
         XINFO("OpenGL 上下文初始化成功");
+
+		// 这里可以加载 OpenGL 函数指针了
+
+		if (!gladLoadGL()) {
+			XFATAL("glad 初始化失败");
+			return;
+		}
     }
 
     bool OpenglGrContext::MakeCurrent()
