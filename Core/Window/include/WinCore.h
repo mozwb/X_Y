@@ -12,6 +12,7 @@
 #include <tchar.h>
 namespace X_Y {
     namespace WinCore {
+        using BaseWin = X_Y::BaseWin;
         inline   WNDCLASSEX g_XYWindowClass = { 0 };
         inline  HINSTANCE g_hInstance = nullptr;
         inline  const TCHAR* g_szClassName = _T("X_YWindow");
@@ -19,13 +20,13 @@ namespace X_Y {
 
         inline LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
-            BaseWin* pThis = nullptr;
+           BaseWin* pThis = nullptr;
             auto* app = Application::instance();
             // 1. 窗口创建时：绑定 C++ 对象与 HWND
             if (msg == WM_NCCREATE) {
                 pThis = (BaseWin*)((CREATESTRUCT*)lParam)->lpCreateParams;
                 SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pThis);
-                pThis->SetHwnd(hwnd);
+                pThis->SetNHWD(hwnd);
             }
             else {
                 // 其他消息：从窗口附加数据取出对象

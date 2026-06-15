@@ -3,6 +3,9 @@
 #include"XCore/include/XYCore.h"
 #include"GraphicsContext/include/GraphicsType.h"
 namespace X_Y {
+    enum class RApiType {
+        None,OpenGL
+    };
     class RenderAPI {
     public:
         virtual ~RenderAPI() = default;
@@ -12,9 +15,7 @@ namespace X_Y {
         virtual void SetLineWidth(float width) = 0;
         virtual void Cleanup() = 0;            // 释放资源
         virtual void Clear() = 0;
+        virtual RApiType getType() = 0;
        static  Scope<RenderAPI> Create(GraphicsType e);
     };
-
-
-
 }

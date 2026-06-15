@@ -31,7 +31,7 @@ namespace X_Y {
     bool GLWidget::initOpenGL()
     {
         // 1. 获取当前窗口的 DC
-        m_hDC = GetDC(GetHwnd());  // 假设 XWidget 提供 winId() 返回 HWND
+        m_hDC = GetDC(GetNHWD());  // 假设 XWidget 提供 winId() 返回 HWND
 
         if (!m_hDC) {
             return false;
@@ -85,12 +85,6 @@ namespace X_Y {
         return true;
     }
 
-    // 交换双缓冲 → 把渲染好的画面显示出来
-    void GLWidget::swapBuffers()
-    {
-        if (m_hDC) {
-            SwapBuffers(m_hDC);
-        }
-    }
+
 #endif
 }

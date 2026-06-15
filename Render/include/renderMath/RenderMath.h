@@ -17,5 +17,6 @@ namespace X_Y {
 		MATH_SELF_NAME_USE(Quat, Quat)
 
 		MATH_SELF_API(Dot,Dot)
+		MATH_SELF_API(Value_ptr,Value_ptr)
 	};
 }

@@ -5,22 +5,10 @@
 #include<GraphicsContext/include/GraphicsContext.h>
 #include<Log/include/XYLog.h>
 namespace X_Y {
-		typedef unsigned int uint;
+	
 		using Base = BaseWin;
 		using MovementType = X_Y::MovementType;
-		enum showtype{
-			HIDE,
-			NORMAL,
-			MINIMIZED,
-			MAXIMIZED,
-			NOACTIVATE,
-			SHOW,
-			MINIMIZE,
-			MINNOACTIVE,
-			SHOWNA,
-			RESTORE,
-			DEFAULT
-		};
+	
 		class XWidget :protected Base {
 		public :
 			explicit XWidget(XWidget* parent=nullptr);
@@ -63,6 +51,9 @@ namespace X_Y {
 			void setSize(uint width, uint height);
 			XWidget* getParent() const { return m_parent; }
 
+			void SwapBuffers() {
+				m_Context->SwapBuffers();
+			}
 
 
 
@@ -83,14 +74,13 @@ namespace X_Y {
 				setGrContext<T>(this->GetNativeWindow());
 				m_Context->Init();
 			}
-			bool createWin() {return create(m_title, m_width, m_height);}
-			virtual bool create(const char* title, uint width, uint height);
+			bool create() {return this->Create(m_title, m_width, m_height);}
 		private:
+			XWidget* m_parent = nullptr;
+			Scope<GraphicsContext> m_Context;
 			const char* m_title = "X_Y";
 			uint m_width = 800;
 			uint m_height = 600;
-			XWidget* m_parent = nullptr;
-			Scope<GraphicsContext> m_Context;
 		};
 	}
 

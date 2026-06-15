@@ -1,7 +1,7 @@
 ﻿#include "Render.h"
 
 namespace X_Y {
-    void Render::submit(XMovement* e) {
+    void Render::submitEvent(XMovement* e) {
         if (!e) return;
         XDEBUG("submit执行")
 

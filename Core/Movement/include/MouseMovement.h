@@ -1,6 +1,6 @@
 ﻿#pragma once
-#include"Movements.h"
-#include"Input.h"
+#include"Movement/include/Movements.h"
+#include"Input/include/Input.h"
 namespace X_Y {
 	using MouseCode = Input_t::MouseCode;
 	class MouseMoved : public Movement

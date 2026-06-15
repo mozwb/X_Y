@@ -276,12 +276,6 @@ void log##LevelName(std::string content, Args&&... args) { \
 				replaceModel(s, "}}", '}');
 				return s;
 			}
-
-			friend std::ostream& operator<<(std::ostream& os, const LogConfigure<T>& log) {
-				os << To_Str(log);
-				return os;
-			}
-
 		public:
 			str name;
 		};

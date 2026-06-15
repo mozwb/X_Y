@@ -11,6 +11,7 @@
 // 插值、数值：mix/slerp/clamp/inverse/transpose
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #define ALL_GLM_FUNCTIONS \
     MATH_FUNC(Radians,     glm::radians) \
@@ -32,7 +33,8 @@
     MATH_FUNC(Transpose,   glm::transpose) \
     MATH_FUNC(Slerp,       glm::slerp) \
     MATH_FUNC(Mix,         glm::mix) \
-    MATH_FUNC(Clamp,       glm::clamp)
+    MATH_FUNC(Clamp,       glm::clamp)\
+    MATH_FUNC(Value_ptr,   glm::value_ptr)
 
 
 namespace X_Y {
@@ -49,7 +51,6 @@ namespace X_Y {
             using Mat3 = glm::mat3;
             using Mat4 = glm::mat4;
             using Quat = glm::quat;
-
             ALL_GLM_FUNCTIONS
         };
 }
@@ -85,5 +86,6 @@ namespace X_Y {
   MATH_API( Transpose) \
   MATH_API( Slerp) \
   MATH_API( Mix) \
-  MATH_API( Clamp)
+  MATH_API( Clamp)\
+  MATH_API(Value_ptr)
 

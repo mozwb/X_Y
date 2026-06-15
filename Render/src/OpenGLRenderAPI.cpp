@@ -1,4 +1,4 @@
-﻿#include"RenderAPI/OpenGLRenderAPI.h"
+﻿#include"Render/include/OpenGl/OpenGLRenderAPI.h"
 namespace X_Y {
     // OpenGL 初始化
     void OpenGLRenderAPI::Init()
@@ -38,5 +38,8 @@ namespace X_Y {
     void OpenGLRenderAPI::Clear()
     {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    }
+    RApiType OpenGLRenderAPI::getType() {
+        return RApiType::OpenGL;
     }
 }

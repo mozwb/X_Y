@@ -1,19 +1,43 @@
 ﻿#pragma once
-namespace X_Y {
 #include<string>
 #ifdef XY_PLATFORM_WINDOWS
 #include<windows.h>
-    //只负责管理HWND和消息分发，不负责任何实现
+#define NativeWindow  HWND
+#elif 
+    ERROR("不支持其他os")
+#endif
+
+#define NHWD NativeWindow
+namespace X_Y {
+        typedef unsigned int uint;
+        enum showtype {
+            HIDE,
+            NORMAL,
+            MINIMIZED,
+            MAXIMIZED,
+            NOACTIVATE,
+            SHOW,
+            MINIMIZE,
+            MINNOACTIVE,
+            SHOWNA,
+            RESTORE,
+            DEFAULT
+        };
     class BaseWin
     {
     public:
         BaseWin() = default;
-        void SetHwnd(HWND& hwnd) { m_hwnd = hwnd; }
-        HWND GetHwnd()const { return m_hwnd; }
-        HWND GetNativeWindow()const { return GetHwnd();}
+        void SetNHWD(NHWD& hwnd) { m_Nhwd = hwnd; }
+        NHWD GetNHWD()const { return m_Nhwd; }
+        NHWD GetNativeWindow()const { return GetNHWD();}
+    protected:
+        bool Show(showtype nshow=SHOW);
+        void Close();
+        void SetTitle(const char* title);
+        void Destroy();
+        virtual bool Create(const char* title, uint width, uint height);
         virtual std::string toString() const { return "BaseWindow"; }
     private:
-        HWND m_hwnd = nullptr;
+        NHWD m_Nhwd = nullptr;
     };
-#endif
 }

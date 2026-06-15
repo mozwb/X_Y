@@ -5,7 +5,7 @@ namespace X_Y {
             this,
             RenderType::RenderStart,
             Render::instance(),
-            &Render::submit
+            &Render::submitEvent
         );
 	}
     void RenderWin::RenderInit() {
