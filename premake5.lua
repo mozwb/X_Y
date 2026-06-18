@@ -61,6 +61,7 @@ include "Core/XCore"
 include "Core/Application"
 include "Core/Window"
 include "Core/Math"
+include "Core/Timer"
 group ""
 
 -- 测试项目
@@ -94,6 +95,7 @@ project "Test"
         "GraphicsContext",
         "Render",
         "opengl32",
-        "glad"
+        "glad",
+        "Timer"
     }
 end

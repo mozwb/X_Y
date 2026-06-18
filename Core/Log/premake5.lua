@@ -2,8 +2,6 @@ project "Log"
     kind "StaticLib"
     language "C++"
 
-
-
     files
     {
         "include/**.h",
@@ -13,7 +11,8 @@ project "Log"
     includedirs
     {
         "include",  
-        "%{wks.location}/Core/XCore/include"      -- 只写 include，Core 项目自己的目录
+        "%{wks.location}/Core/XCore/include",      -- 只写 include，Core 项目自己的目录
+        "%{wks.location}/Core/Timer/include"      
     }
     links{
     }

@@ -5,8 +5,6 @@
 namespace X_Y {
 	template<typename T> using LogBase = LogConfigure::LogConfigure<T>;
 	using	LogConfigure::DEVICE;
-	using LogConfigure::TIME;
-	using LogConfigure::DATE;
 	struct LOG : public LogBase<LOG> {
 		using LogBase<LOG>::LogBase;
 		LOG_LEVEL_EXT(Pink)
@@ -56,8 +54,9 @@ inline X_Y::LOG logger("log");
 			}
 
 
-
-
+	#define XY_PROFILE_FUNCTION()\
+        XTRACE("函数性能分析")\
+		X_Y::StopWatch timer;
 #else
 	#define LOG(logger, LEVEL, ...)
 	#define INFO(...)
@@ -69,6 +68,7 @@ inline X_Y::LOG logger("log");
 
 	#define XY_CORE_ASSERT(condition, message)
 	#define XY_DEBUGBREAK()
+	#define XY_PROFILE_FUNCTION
 #endif
 //使用示例
 //

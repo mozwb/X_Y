@@ -7,10 +7,15 @@
 #include"Window/include/XWidget.h"
 //#include"GraphicsContext/include/GraphicsContext.h"
 //#include"glad/glad.h"
+void test() {
+   XY_PROFILE_FUNCTION
+   return;
+}
 int main(int argc, char* argv[]) {
     X_Y::Application app(argc, argv);
-    std::cout << logger << std::endl;
+    //std::cout << logger << std::endl;
     // ====================== 替换成你自己的 GLWin 窗口 ======================
+    test();
     X_Y::XWidget win;
     win.setTitle("OpenGL 三角形");
     win.show();

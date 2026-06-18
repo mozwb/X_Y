@@ -2,44 +2,45 @@
 // 配置里用到的类型
 #include<iostream>
 #include<string>
-#include <chrono>
-#include <ctime>
+//#include <chrono>
+//#include <ctime>
 #include<ostream>
 #include<fstream>
 #include"LogTools.h"
+#include"Timer/include/Timer.h"
 namespace X_Y {
 
 	//这个里面是基础配置，该暴露在外面的都在外面了，拓展LEVEL用LOG_LEVEL_EXT,加LOG_LEVEL_API
 	//拓展设备直接继承DEVICE，重写toString和Log方法，添加成员变量（如果需要的话），然后add到LogConfigure里就行了
 	namespace LogConfigure {
 		using namespace  LogTools;
-		struct TIME :public  CustomLogBase {
-			static std::string now() {
-				auto now = std::chrono::system_clock::now();
-				std::time_t t = std::chrono::system_clock::to_time_t(now);
-				char buf[32];
-				std::strftime(buf, sizeof(buf), "%H:%M:%S", std::localtime(&t));
-				return buf;
-			}
+		//struct TIME :public  CustomLogBase {
+		//	static std::string now() {
+		//		auto now = std::chrono::system_clock::now();
+		//		std::time_t t = std::chrono::system_clock::to_time_t(now);
+		//		char buf[32];
+		//		std::strftime(buf, sizeof(buf), "%H:%M:%S", std::localtime(&t));
+		//		return buf;
+		//	}
 
-			std::string toString() const {
-				return now();
-			}
-		};
-		struct DATE :public  CustomLogBase {
-			static std::string now() {
-				auto now = std::chrono::system_clock::now();
-				std::time_t t = std::chrono::system_clock::to_time_t(now);
-				char buf[32];
-				std::strftime(buf, sizeof(buf), "%Y-%m-%d", std::localtime(&t));
-				return buf;
-			}
+		//	std::string toString() const {
+		//		return now();
+		//	}
+		//};
+		//struct DATE :public  CustomLogBase {
+		//	static std::string now() {
+		//		auto now = std::chrono::system_clock::now();
+		//		std::time_t t = std::chrono::system_clock::to_time_t(now);
+		//		char buf[32];
+		//		std::strftime(buf, sizeof(buf), "%Y-%m-%d", std::localtime(&t));
+		//		return buf;
+		//	}
 
 			// 支持 toString（给你之前的自动替换用）
-			std::string toString() const {
-				return now(); // 直接返回当前时间
-			}
-		};
+		//	std::string toString() const {
+		//		return now(); // 直接返回当前时间
+		//	}
+		//};
 
 
 		template<typename LEVEL_TYPE, typename SELF_TYPE>
@@ -257,8 +258,8 @@ void log##LevelName(std::string content, Args&&... args) { \
 			//如果你不喜欢这个格式化方式，可以重写这个函数，匹配你想要的模板（model）,可以用regex库
 			virtual	str format(str mod, str lev, str content, str file, str line, str func) {
 				replaceModel(mod, "[位置]", "[" + file + ":" + line + ":" + func + "]");
-				replaceModel(mod, "[日期]", "[" + To_Str(DATE()) + "]");
-				replaceModel(mod, "[时间]", "[" + To_Str(TIME()) + "]");
+				replaceModel(mod, "[日期]", "[" + SysClock::NowFormat("YY-MM-DD") + "]");
+				replaceModel(mod, "[时间]", "[" + SysClock::NowFormat("hh:mm:ss") + "]");
 				replaceModel(mod, "[发起者]", "[" + name + "]");
 				replaceModel(mod, "[等级]", "[" + lev + "]");
 				replaceModel(mod, "[内容]", content);

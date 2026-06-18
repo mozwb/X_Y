@@ -56,7 +56,6 @@ namespace X_Y
 
 	using MovementSender = void *;	 // 发起者（窗口/任意对象）
 	using MovementReceiver = void *; // 接收者（任意对象）
-
 	struct XMovement
 	{
 		virtual ~XMovement() = default;
