@@ -7,8 +7,7 @@ namespace X_Y {
 		Reset();
 	}
     StopWatch::~StopWatch() {
-        std::cout << "析构";
-        XTRACE("耗时{}",this->Milliseconds())
+        // 析构留空 —— 日志由 ProfileScope 等 RAII 包装类统一处理
     }
     void StopWatch::Reset()
 	{
