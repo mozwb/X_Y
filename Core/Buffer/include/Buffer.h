@@ -7,39 +7,40 @@
 
 namespace X_Y {
 
-	// $$ 这个buffer，我只所以想写他，是因为目前的log模块无法拼接两个输入内容，所以我需要一个缓冲池，我把要输入的东西放到缓冲池，在XYLOG(buffer)打印
-	// $$ 另一方面是之后可能要用，可以让他存二进制数，然后我决定用什么方式解析比如是int还是char
-	// $$ hazel也有这个模块
-
-	// @@ 基于砚台需求实现的 Buffer：支持拷贝、移动、读写、子视图
+	// @@ 砚台注：用 Buffer 做日志的缓冲池 + 二进制数据容器
+	// @@ 改进后的 Buffer：支持拷贝、移动、读写、子视图
 	struct Buffer
 	{
 		uint8_t* Data = nullptr;
 		uint64_t Size = 0;
+		// ✅ 添加容量字段，支持自动扩容
+		uint64_t Capacity = 0;
 
 		Buffer() = default;
 
-		explicit Buffer(uint64_t size)
-			: Data(nullptr), Size(0)
+		// ✅ 不再要求初始 size，默认 64 字节起步
+		explicit Buffer(uint64_t initialCapacity)
 		{
-			Allocate(size);
+			Reserve(initialCapacity);
 		}
 
 		Buffer(const Buffer& other)
-			: Data(nullptr), Size(0)
+			: Data(nullptr), Size(0), Capacity(0)
 		{
 			if (other.Data && other.Size > 0)
 			{
-				Allocate(other.Size);
+				Reserve(other.Size);
 				memcpy(Data, other.Data, Size);
+				Size = other.Size;
 			}
 		}
 
 		Buffer(Buffer&& other) noexcept
-			: Data(other.Data), Size(other.Size)
+			: Data(other.Data), Size(other.Size), Capacity(other.Capacity)
 		{
 			other.Data = nullptr;
 			other.Size = 0;
+			other.Capacity = 0;
 		}
 
 		~Buffer()
@@ -54,8 +55,9 @@ namespace X_Y {
 				Release();
 				if (other.Data && other.Size > 0)
 				{
-					Allocate(other.Size);
-					memcpy(Data, other.Data, Size);
+					Reserve(other.Size);
+					memcpy(Data, other.Data, other.Size);
+					Size = other.Size;
 				}
 			}
 			return *this;
@@ -68,20 +70,49 @@ namespace X_Y {
 				Release();
 				Data = other.Data;
 				Size = other.Size;
+				Capacity = other.Capacity;
 				other.Data = nullptr;
 				other.Size = 0;
+				other.Capacity = 0;
 			}
 			return *this;
+		}
+
+		// ✅ 按需扩容（2 倍增长策略）
+		void Reserve(uint64_t newCapacity)
+		{
+			if (newCapacity <= Capacity)
+				return;
+
+			// 向上对齐到 16 字节，减少重分配
+			newCapacity = (newCapacity + 15) & ~15ULL;
+			uint8_t* newData = new uint8_t[newCapacity];
+			if (Data)
+			{
+				memcpy(newData, Data, Size);
+				delete[] Data;
+			}
+			Data = newData;
+			Capacity = newCapacity;
+		}
+
+		// ✅ 确保能写入 count 字节
+		void Ensure(uint64_t neededSize)
+		{
+			if (neededSize > Capacity)
+			{
+				uint64_t newCap = Capacity == 0 ? 64 : Capacity * 2;
+				while (newCap < neededSize)
+					newCap *= 2;
+				Reserve(newCap);
+			}
 		}
 
 		void Allocate(uint64_t size)
 		{
 			Release();
-			if (size > 0)
-			{
-				Data = new uint8_t[size];
-				Size = size;
-			}
+			Reserve(size);
+			Size = size;
 		}
 
 		void Release()
@@ -89,14 +120,16 @@ namespace X_Y {
 			delete[] Data;
 			Data = nullptr;
 			Size = 0;
+			Capacity = 0;
 		}
 
 		void ZeroInitialize()
 		{
 			if (Data)
-				memset(Data, 0, Size);
+				memset(Data, 0, Capacity);
 		}
 
+		// ✅ 写入时自动扩容
 		template<typename T>
 		T& Read(uint64_t offset = 0)
 		{
@@ -114,8 +147,27 @@ namespace X_Y {
 		template<typename T>
 		void Write(uint64_t offset, const T& value)
 		{
-			assert(offset + sizeof(T) <= Size);
+			uint64_t needed = offset + sizeof(T);
+			if (needed > Size)
+				Ensure(needed);
 			memcpy(Data + offset, &value, sizeof(T));
+			if (needed > Size)
+				Size = needed;
+		}
+
+		// ✅ 追加数据到末尾
+		void Append(const void* src, uint64_t len)
+		{
+			if (!src || len == 0) return;
+			Ensure(Size + len);
+			memcpy(Data + Size, src, len);
+			Size += len;
+		}
+
+		template<typename T>
+		void Append(const T& value)
+		{
+			Append(&value, sizeof(T));
 		}
 
 		Buffer View(uint64_t offset, uint64_t size) const
@@ -146,42 +198,45 @@ namespace X_Y {
 			return Buffer(*this);
 		}
 
-		// @@ Log 模块 To_Str() 使用，自动识别文本/二进制输出
+		// ✅ 直接打印内容，不加 "Buffer[size]:" 前缀
 		std::string toString() const
 		{
 			if (!Data || Size == 0)
-				return "Buffer: null";
+				return "";
 
-			std::ostringstream oss;
-			oss << "Buffer[" << Size << "]: ";
-
+			// 判断是否像文本
 			uint64_t printable = 0;
-			for (uint64_t i = 0; i < Size && i < 64; i++)
+			uint64_t sampleLen = Size < 128 ? Size : 128;
+			for (uint64_t i = 0; i < sampleLen; i++)
 				if (isprint(Data[i]) || Data[i] == '\n' || Data[i] == '\t')
 					printable++;
 
+			std::ostringstream oss;
 			if (printable * 2 > Size)
 			{
-				oss << "\"";
-				for (uint64_t i = 0; i < Size && i < 128; i++)
+				// 文本模式
+				uint64_t showLen = Size < 256 ? Size : 256;
+				for (uint64_t i = 0; i < showLen; i++)
 				{
 					if (Data[i] == '\n') oss << "\\n";
 					else if (Data[i] == '\t') oss << "\\t";
 					else if (isprint(Data[i])) oss << (char)Data[i];
 					else oss << '.';
 				}
-				oss << "\"";
-				if (Size > 128) oss << "...(" << Size << ")";
+				if (Size > 256) oss << "...";
 			}
 			else
 			{
-				for (uint64_t i = 0; i < Size && i < 32; i++)
+				// 十六进制模式
+				uint64_t showLen = Size < 32 ? Size : 32;
+				for (uint64_t i = 0; i < showLen; i++)
 				{
+					// ✅ snprintf 跨平台兼容
 					char buf[4];
-					sprintf_s(buf, "%02X ", Data[i]);
+					snprintf(buf, sizeof(buf), "%02X ", Data[i]);
 					oss << buf;
 				}
-				if (Size > 32) oss << "...(" << Size << " bytes)";
+				if (Size > 32) oss << "...";
 			}
 			return oss.str();
 		}
@@ -215,17 +270,18 @@ namespace X_Y {
 
 		explicit operator bool() const { return Data != nullptr; }
 
+		// @@ 日志输出
 		std::string toString() const
 		{
 			if (!Data || Size == 0)
-				return "BufferView: null";
+				return "";
 
 			std::ostringstream oss;
-			oss << "BufferView[" << Size << "]: ";
-			for (uint64_t i = 0; i < Size && i < 24; i++)
+			uint64_t showLen = Size < 24 ? Size : 24;
+			for (uint64_t i = 0; i < showLen; i++)
 			{
 				char buf[4];
-				sprintf_s(buf, "%02X ", Data[i]);
+				snprintf(buf, sizeof(buf), "%02X ", Data[i]);
 				oss << buf;
 			}
 			if (Size > 24) oss << "...";
