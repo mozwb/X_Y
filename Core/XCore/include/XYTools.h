@@ -1,49 +1,39 @@
-#pragma once
+﻿#pragma once
 #include<Log/include/XYLog.h>
 #include<Buffer/include/Buffer.h>
+#include<Timer/include/Timer.h>
 
-// ✅ 记录函数名 + 耗时
+namespace X_Y {
+
+	// 作用域性能分析 RAII 类：析构时自动打印函数名 + 耗时 + 自定义额外信息
+	struct ProfileScope {
+		StopWatch timer;
+		std::string funcName;
+		std::string extraInfo;
+
+		ProfileScope(const char* func) : funcName(func) {}
+
+		~ProfileScope() {
+			if (extraInfo.empty())
+				XTRACE("[{}] 耗时 {:.2f}ms", funcName, timer.Milliseconds());
+			else
+				XTRACE("[{}] 耗时 {:.2f}ms | {}", funcName, timer.Milliseconds(), extraInfo);
+		}
+
+		// 用 << 追加额外信息
+		ProfileScope& operator<<(const std::string& info) {
+			if (!extraInfo.empty()) extraInfo += " | ";
+			extraInfo += info;
+			return *this;
+		}
+	};
+
+}
+
+// 宏辅助：拼接 token
+#define XY_PASTE2(a, b) a##b
+#define XY_PASTE(a, b) XY_PASTE2(a, b)
+
+// 创建 ProfileScope 变量，自动注入当前函数名
 #define XY_PROFILE_FUNCTION() \
-		XTRACE("→ {} 进入", __FUNCTION__) \
-		X_Y::StopWatch XY_CONCAT(timer_, __LINE__); \
-		struct XY_CONCAT(profile_end_, __LINE__) { \
-			~XY_CONCAT(profile_end_, __LINE__)() { \
-				XTRACE("← {} 结束, 耗时{}ms", __FUNCTION__, XY_CONCAT(timer_, __LINE__).Milliseconds()); \
-			} \
-		} XY_CONCAT(profile_end_, __LINE__);
-
-// ✅ 辅助宏：拼接标识符（避免宏展开问题）
-#define XY_CONCAT(a, b) XY_CONCAT_INNER(a, b)
-#define XY_CONCAT_INNER(a, b) a##b
-
-// ✅ Buffer 内容拼接工具 — 把多个数据写入 Buffer
-// $$ 使用示例：XY_BUFFER(buf) << "hello" << 42 << 3.14f;
-struct BufferWriter
-{
-	X_Y::Buffer& buf;
-	BufferWriter(X_Y::Buffer& b) : buf(b) {}
-
-	BufferWriter& operator<<(const char* str)
-	{
-		buf.Append(str, strlen(str));
-		return *this;
-	}
-
-	BufferWriter& operator<<(const std::string& str)
-	{
-		buf.Append(str.data(), str.size());
-		return *this;
-	}
-
-	template<typename T>
-	BufferWriter& operator<<(const T& val)
-	{
-		std::ostringstream oss;
-		oss << val;
-		std::string s = oss.str();
-		buf.Append(s.data(), s.size());
-		return *this;
-	}
-};
-
-#define XY_BUFFER(buf) BufferWriter(buf)
+		X_Y::ProfileScope XY_PASTE(prof_, __LINE__)(__FUNCTION__)
