@@ -5,7 +5,7 @@
 
 namespace X_Y {
 
-	// $$ 改进后的 Buffer：支持拷贝、移动、读写、子视图
+	// @@ 改进后的 Buffer：支持拷贝、移动、读写、子视图
 	struct Buffer
 	{
 		uint8_t* Data = nullptr;
@@ -91,7 +91,6 @@ namespace X_Y {
 				memset(Data, 0, Size);
 		}
 
-		// 读写辅助
 		template<typename T>
 		T& Read(uint64_t offset = 0)
 		{
@@ -113,7 +112,6 @@ namespace X_Y {
 			memcpy(Data + offset, &value, sizeof(T));
 		}
 
-		// 子视图（不拥有内存）
 		Buffer View(uint64_t offset, uint64_t size) const
 		{
 			assert(offset + size <= Size);
@@ -123,7 +121,6 @@ namespace X_Y {
 			return result;
 		}
 
-		// 运算符重载
 		uint8_t& operator[](uint64_t index)
 		{
 			assert(index < Size);
@@ -138,14 +135,13 @@ namespace X_Y {
 
 		explicit operator bool() const { return Data != nullptr; }
 
-		// 工具方法
 		Buffer Copy() const
 		{
 			return Buffer(*this);
 		}
 	};
 
-	// $$ 不拥有内存的视图，适合传递子缓冲区
+	// @@ BufferView：不拥有内存的只读视图
 	struct BufferView
 	{
 		const uint8_t* Data = nullptr;
