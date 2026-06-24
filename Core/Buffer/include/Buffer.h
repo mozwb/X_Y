@@ -7,8 +7,11 @@
 
 namespace X_Y {
 
-	// @@ 砚台注：用 Buffer 做日志的缓冲池 + 二进制数据容器
-	// @@ 改进后的 Buffer：支持拷贝、移动、读写、子视图
+	// $$ 这个buffer，我只所以想写他，是因为目前的log模块无法拼接两个输入内容，所以我需要一个缓冲池，我把要输入的东西放到缓冲池，在XYLOG(buffer)打印
+	// $$ 另一方面是之后可能要用，可以让他存二进制数，然后我决定用什么方式解析比如是int还是char
+	// $$ hazel也有这个模块
+
+	// @@ 基于砚台需求实现的 Buffer：支持拷贝、移动、读写、子视图
 	struct Buffer
 	{
 		uint8_t* Data = nullptr;
@@ -152,7 +155,6 @@ namespace X_Y {
 			std::ostringstream oss;
 			oss << "Buffer[" << Size << "]: ";
 
-			// 判断是否像文本
 			uint64_t printable = 0;
 			for (uint64_t i = 0; i < Size && i < 64; i++)
 				if (isprint(Data[i]) || Data[i] == '\n' || Data[i] == '\t')
@@ -160,7 +162,6 @@ namespace X_Y {
 
 			if (printable * 2 > Size)
 			{
-				// 文本模式
 				oss << "\"";
 				for (uint64_t i = 0; i < Size && i < 128; i++)
 				{
@@ -174,7 +175,6 @@ namespace X_Y {
 			}
 			else
 			{
-				// 十六进制模式
 				for (uint64_t i = 0; i < Size && i < 32; i++)
 				{
 					char buf[4];
@@ -215,7 +215,6 @@ namespace X_Y {
 
 		explicit operator bool() const { return Data != nullptr; }
 
-		// @@ 日志输出
 		std::string toString() const
 		{
 			if (!Data || Size == 0)

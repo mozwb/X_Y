@@ -1,5 +1,6 @@
 ﻿#include"xypch.h"
 #include<Log/include/XYLog.h>
+#include<XCore/include/XYTools.h>
 //#include"Render/include/renderWin/renderWin.h"
 //#include"Render/include/render.h"
 
@@ -8,7 +9,7 @@
 //#include"GraphicsContext/include/GraphicsContext.h"
 //#include"glad/glad.h"
 void test() {
-   XY_PROFILE_FUNCTION
+   XY_PROFILE_FUNCTION()
    return;
 }
 int main(int argc, char* argv[]) {
