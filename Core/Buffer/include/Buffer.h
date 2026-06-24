@@ -2,9 +2,12 @@
 #include <cstdint>
 #include <cstring>
 #include <cassert>
+#include <sstream>
+#include <cctype>
 
 namespace X_Y {
 
+	// @@ 砚台注：用 Buffer 做日志的缓冲池 + 二进制数据容器
 	// @@ 改进后的 Buffer：支持拷贝、移动、读写、子视图
 	struct Buffer
 	{
@@ -139,6 +142,49 @@ namespace X_Y {
 		{
 			return Buffer(*this);
 		}
+
+		// @@ Log 模块 To_Str() 使用，自动识别文本/二进制输出
+		std::string toString() const
+		{
+			if (!Data || Size == 0)
+				return "Buffer: null";
+
+			std::ostringstream oss;
+			oss << "Buffer[" << Size << "]: ";
+
+			// 判断是否像文本
+			uint64_t printable = 0;
+			for (uint64_t i = 0; i < Size && i < 64; i++)
+				if (isprint(Data[i]) || Data[i] == '\n' || Data[i] == '\t')
+					printable++;
+
+			if (printable * 2 > Size)
+			{
+				// 文本模式
+				oss << "\"";
+				for (uint64_t i = 0; i < Size && i < 128; i++)
+				{
+					if (Data[i] == '\n') oss << "\\n";
+					else if (Data[i] == '\t') oss << "\\t";
+					else if (isprint(Data[i])) oss << (char)Data[i];
+					else oss << '.';
+				}
+				oss << "\"";
+				if (Size > 128) oss << "...(" << Size << ")";
+			}
+			else
+			{
+				// 十六进制模式
+				for (uint64_t i = 0; i < Size && i < 32; i++)
+				{
+					char buf[4];
+					sprintf_s(buf, "%02X ", Data[i]);
+					oss << buf;
+				}
+				if (Size > 32) oss << "...(" << Size << " bytes)";
+			}
+			return oss.str();
+		}
 	};
 
 	// @@ BufferView：不拥有内存的只读视图
@@ -168,6 +214,24 @@ namespace X_Y {
 		}
 
 		explicit operator bool() const { return Data != nullptr; }
+
+		// @@ 日志输出
+		std::string toString() const
+		{
+			if (!Data || Size == 0)
+				return "BufferView: null";
+
+			std::ostringstream oss;
+			oss << "BufferView[" << Size << "]: ";
+			for (uint64_t i = 0; i < Size && i < 24; i++)
+			{
+				char buf[4];
+				sprintf_s(buf, "%02X ", Data[i]);
+				oss << buf;
+			}
+			if (Size > 24) oss << "...";
+			return oss.str();
+		}
 	};
 
 }
