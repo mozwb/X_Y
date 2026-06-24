@@ -17,9 +17,9 @@ namespace X_Y {
 
 		~ProfileScope() {
 			if (extraInfo.empty())
-				XTRACE("[{}] 耗时 {:.2f}ms", funcName, timer.Milliseconds());
-			else
-				XTRACE("[{}] 耗时 {:.2f}ms | {}", funcName, timer.Milliseconds(), extraInfo);
+				XPINK("[{}] 耗时 {:.2f}ms", funcName, timer.Milliseconds())
+			else  
+				XPINK("[{}] 耗时 {:.2f}ms | {}", funcName, timer.Milliseconds(), extraInfo)
 		}
 
 		// @@ 用 << 链式追加额外信息，输出格式："[func] 耗时 xx.xxms | info1 | info2 | ..."
@@ -44,4 +44,4 @@ namespace X_Y {
 //       ...  // 自动打印 [Bar] 耗时 5.12ms | n=42
 //   }
 #define XY_PROFILE_FUNCTION() \
-		X_Y::ProfileScope XY_PASTE(prof_, __LINE__)(__FUNCTION__)
+		X_Y::ProfileScope XY_PASTE(prof_, __LINE__)(__FUNCTION__);

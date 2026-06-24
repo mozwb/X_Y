@@ -1,6 +1,6 @@
 ﻿#include"Render/include/OpenGL/OpenGLShader.h"
 #include<string>
-#include<Log/include/XYLog.h>
+#include"XCore/include/XYTools.h"
 #include <fstream>
 #include <unordered_map>
 #include <filesystem>
