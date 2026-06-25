@@ -42,15 +42,16 @@ inline X_Y::LOG logger("log");
 	#else
 	#define XY_DEBUGBREAK()
 	#endif
-
-	#define XY_CORE_ASSERT(condition, message) \
+// $$ 我把message变成了可变参数。有message时格式化为"[ASSERT FAILED]:{msg}"，无message时只打"[ASSERT FAILED]"
+	#define XY_CORE_ASSERT(condition, ...) \
 			if (!(condition)) { \
-				XFATAL("[ASSERT FAILED]:{}",message) \
+				/* 利用##__VA_ARGS__：无参数时吃掉前导逗号 */ \
+				XFATAL("[ASSERT FAILED]" __VA_OPT__(:) __VA_OPT__("{}") , ##__VA_ARGS__) \
 				XY_DEBUGBREAK(); \
 			}
-	#define XY_CORE_OUT(condition, message) \
+	#define XY_CORE_OUT(condition, ...) \
 			if (!(condition)) { \
-				XDEBUG("[ASSERT FAILED]:{}",message) \
+				XDEBUG("[ASSERT FAILED]" __VA_OPT__(:) __VA_OPT__("{}") , ##__VA_ARGS__) \
 			}
 
 
@@ -63,7 +64,7 @@ inline X_Y::LOG logger("log");
 	#define ERROR(...)
 	#define FATAL(...)
 
-	#define XY_CORE_ASSERT(condition, message)
+	#define XY_CORE_ASSERT(condition, ...)
 	#define XY_DEBUGBREAK()
 	#define XY_PROFILE_FUNCTION
 #endif
