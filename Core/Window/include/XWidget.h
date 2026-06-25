@@ -66,7 +66,8 @@ namespace X_Y {
 			//XWidget& operator=(XWidget&&) = delete;
 			template<typename T = GraphicsContext,class... Args>
 			void setGrContext(Args&& ... args) {
-				XY_CORE_ASSERT((std::is_base_of_v<GraphicsContext,T>),"T must inherit from GraphicsContext")
+				XY_CORE_ASSERT((std::is_base_of_v<GraphicsContext, T>), "T must inherit from GraphicsContext");
+
 				m_Context = CreateScope<T>(std::forward<Args>(args)...);
 			}
 			template<typename T = GraphicsContext>
