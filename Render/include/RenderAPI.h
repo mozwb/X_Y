@@ -17,6 +17,7 @@ namespace X_Y {
 
         virtual void DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0) = 0;
         virtual void DrawLines(const Ref<VertexArray>& vertexArray, uint32_t vertexCount) = 0;
+        virtual void DrawArrays(const Ref<VertexArray>& vertexArray, uint32_t vertexCount) = 0;
 
         virtual void Cleanup() = 0;            // 释放资源
         virtual void Clear() = 0;

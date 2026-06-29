@@ -27,7 +27,13 @@ namespace X_Y {
 
             static void DrawLines(const Ref<VertexArray>& vertexArray, uint32_t vertexCount)
             {
-                Render::instance()->getCurrentAPI()->DrawIndexed(vertexArray, vertexCount);
+                Render::instance()->getCurrentAPI()->DrawLines(vertexArray, vertexCount);
+            }
+
+
+            static void DrawArrays(const Ref<VertexArray>& vertexArray, uint32_t vertexCount)
+            {
+                Render::instance()->getCurrentAPI()->DrawArrays(vertexArray, vertexCount);
             }
 	private:
 		static RenderAPI* s_RendererAPI;
