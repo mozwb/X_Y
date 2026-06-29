@@ -33,7 +33,21 @@ namespace X_Y {
         while (!m_eventQueue.Empty()) {
             X_Y::XMovement* baseEvt = m_eventQueue.Pop();
             if (!baseEvt) continue;
-            baseEvt->DispatchEvent(static_cast<void*>(&m_dispatcher));
+
+            // 1. 先过层栈
+            for (auto* layer : m_LayerStack.GetLayers())
+            {
+                layer->OnEvent(baseEvt);
+                if (baseEvt->Handled)
+                    break;
+            }
+
+            // 2. 层栈没处理的，再走全局 dispatcher
+            if (!baseEvt->Handled)
+            {
+                baseEvt->DispatchEvent(static_cast<void*>(&m_dispatcher));
+            }
+
             delete baseEvt;
         }
     }

@@ -71,8 +71,10 @@ namespace X_Y {
 
 	void EditorCamera::OnEvent(Movement& e)
 	{
-		Dispatcher dispatcher(e);
-		dispatcher.Dispatch<MouseScrolled>(XY_BIND_EVENT_FN(EditorCamera::OnMouseScroll));
+		if (e.GetType() == MovementType::MouseScrolled)
+		{
+			OnMouseScroll(static_cast<MouseScrolled&>(e));
+		}
 	}
 
 	bool EditorCamera::OnMouseScroll(MouseScrolled& e)
