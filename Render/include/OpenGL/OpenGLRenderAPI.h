@@ -12,6 +12,10 @@ namespace X_Y {
         void SetViewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height) override;
         void SetClearColor(const RenderMath::Vec4& color) override;
         void SetLineWidth(float width) override;
+
+        void DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0) = 0;
+        void DrawLines(const Ref<VertexArray>& vertexArray, uint32_t vertexCount) = 0;
+        
         void Cleanup() override;
         void Clear() override;
         RApiType getType() override;

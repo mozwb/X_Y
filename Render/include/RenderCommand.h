@@ -11,7 +11,7 @@ namespace X_Y {
                 Render::instance()->getCurrentAPI()->SetViewport(x, y, width, height);
             }
 
-            static void SetClearColor(const glm::vec4& color)
+            static void SetClearColor(const RenderMath::Vec4& color)
             {
                 Render::instance()->getCurrentAPI()->SetClearColor(color);
             }
@@ -25,6 +25,15 @@ namespace X_Y {
             //{
             //    Render::instance()->getCurrentAPI()->DrawIndexed(vertexArray, indexCount);
             //}
+            static void DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0)
+            {
+                Render::instance()->getCurrentAPI()->DrawIndexed(vertexArray, indexCount);
+            }
+
+            static void DrawLines(const Ref<VertexArray>& vertexArray, uint32_t vertexCount)
+            {
+                Render::instance()->getCurrentAPI()->DrawIndexed(vertexArray, vertexCount);
+            }
 	private:
 		static RenderAPI* s_RendererAPI;
 	};
