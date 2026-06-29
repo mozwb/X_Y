@@ -72,7 +72,7 @@ protected:
         m_Shader->Bind();
         //m_VertexArray->Bind();
         //glDrawArrays(GL_TRIANGLES, 0, 3);
-        X_Y::RenderCommand::DrawIndexed(m_VertexArray);
+        X_Y::RenderCommand::DrawArrays(m_VertexArray,3);
     }
 
 private:

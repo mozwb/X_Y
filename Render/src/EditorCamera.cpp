@@ -21,7 +21,7 @@ namespace X_Y {
 		m_Position = CalculatePosition();
 
 		RenderMath::Quat orientation = GetOrientation();
-		m_ViewMatrix =	RenderMath::Ranslate(RenderMath::Mat4(1.0f), m_Position) * RenderMath::toMat4(orientation);
+		m_ViewMatrix =	RenderMath::Translate(RenderMath::Mat4(1.0f), m_Position) * RenderMath::toMat4(orientation);
 		m_ViewMatrix =RenderMath::Inverse(m_ViewMatrix);
 	}
 

@@ -51,7 +51,8 @@ workspace "X_Y"
 -- 引入模块
 
 include "Render"
-include "vendor/glad"  
+include "vendor/glad"
+include "vendor/imgui"  
 group "Core"
 include "Core/Log"
 include "Core/Input"
@@ -98,6 +99,7 @@ project "Test"
         "opengl32",
         "glad",
         "Timer",
-        "Buffer"
+        "Buffer",
+        "ImGui"
     }
 end

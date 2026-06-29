@@ -23,7 +23,7 @@ namespace X_Y {
 		MATH_SELF_API(Inverse, Inverse)
 		MATH_SELF_API(Rotate, Rotate)
 
-		MATH_SELF_API(Ranslate, Ranslate)
+		MATH_SELF_API(Translate, Translate)
 		MATH_SELF_API(toMat4, toMat4)
 	};
 }

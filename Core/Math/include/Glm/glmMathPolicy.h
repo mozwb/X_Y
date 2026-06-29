@@ -35,7 +35,6 @@
     MATH_FUNC(Mix,         glm::mix) \
     MATH_FUNC(Clamp,       glm::clamp)\
     MATH_FUNC(Value_ptr,   glm::value_ptr)\
-    MATH_FUNC(Ranslate,   glm::ranslate)\
     MATH_FUNC(toMat4,   glm::toMat4)
 
 
@@ -91,5 +90,5 @@ namespace X_Y {
   MATH_API( Clamp)\
   MATH_API(Value_ptr)\
   MATH_API(toMat4)\
-  MATH_API(Ranslate)
+
 
