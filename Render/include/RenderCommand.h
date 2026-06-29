@@ -20,11 +20,6 @@ namespace X_Y {
             {
                 Render::instance()->getCurrentAPI()->Clear();
             }
-
-            //static void DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0)
-            //{
-            //    Render::instance()->getCurrentAPI()->DrawIndexed(vertexArray, indexCount);
-            //}
             static void DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0)
             {
                 Render::instance()->getCurrentAPI()->DrawIndexed(vertexArray, indexCount);

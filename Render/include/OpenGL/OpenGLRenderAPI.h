@@ -13,9 +13,8 @@ namespace X_Y {
         void SetClearColor(const RenderMath::Vec4& color) override;
         void SetLineWidth(float width) override;
 
-        void DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0) = 0;
-        void DrawLines(const Ref<VertexArray>& vertexArray, uint32_t vertexCount) = 0;
-        
+        void DrawIndexed(const Ref<VertexArray>& vertexArray, uint32_t indexCount = 0) override;
+        void DrawLines(const Ref<VertexArray>& vertexArray, uint32_t vertexCount) override;
         void Cleanup() override;
         void Clear() override;
         RApiType getType() override;
