@@ -69,4 +69,19 @@ namespace X_Y {
         // 数字转两位字符串，自动前补0
         static std::string ToTwoDigit(int num);
     };
+    class Timestep
+    {
+    public:
+        Timestep(float time = 0.0f)
+            : m_Time(time)
+        {
+        }
+
+        operator float() const { return m_Time; }
+
+        float GetSeconds() const { return m_Time; }
+        float GetMilliseconds() const { return m_Time * 1000.0f; }
+    private:
+        float m_Time;
+    };
 }

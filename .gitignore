@@ -4,6 +4,8 @@
 **/bin-int/
 **/cmake/
 
+#忽略当前目录某文件
+./git_push.bat
 # 琉璃笔记（不纳入版本控制）
 _notes/
 

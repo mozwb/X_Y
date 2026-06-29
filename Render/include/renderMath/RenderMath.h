@@ -18,5 +18,12 @@ namespace X_Y {
 
 		MATH_SELF_API(Dot,Dot)
 		MATH_SELF_API(Value_ptr,Value_ptr)
+		MATH_SELF_API(Perspective, Perspective)
+		MATH_SELF_API(Radians, Radians)
+		MATH_SELF_API(Inverse, Inverse)
+		MATH_SELF_API(Rotate, Rotate)
+
+		MATH_SELF_API(Ranslate, Ranslate)
+		MATH_SELF_API(toMat4, toMat4)
 	};
 }
