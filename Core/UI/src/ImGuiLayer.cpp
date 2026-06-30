@@ -11,6 +11,9 @@ namespace X_Y {
 	static void RegisterWndProcHook()
 	{
 		WinCore::g_WndProcHook = [](HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) -> LRESULT {
+			// 让 ImGui 优先处理消息。它吃掉的（返回 true）直接拦截，
+			// 没吃的放行给 Window 模块转成 Movement。
+			// 然后在 ImGuiLayer::OnEvent 中用 WantCapture 做二次过滤。
 			if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam))
 				return true;
 			return false;
@@ -58,16 +61,14 @@ namespace X_Y {
 		if (!m_BlockEvents)
 			return;
 
-		//// 只有键鼠事件才可能被 ImGui 拦截，窗口关闭/缩放等不拦截
-		//if (auto* movement = dynamic_cast<Movement*>(e))
-		//{
-		//	if (movement->IsInCategory(MTMouse) || movement->IsInCategory(MTKeyboard))
-		//	{
-		//		ImGuiIO& io = ImGui::GetIO();
-		//		e->Handled |= io.WantCaptureMouse;
-		//		e->Handled |= io.WantCaptureKeyboard;
-		//	}
-		//}
+		ImGuiIO& io = ImGui::GetIO();
+		if (auto* movement = dynamic_cast<Movement*>(e))
+		{
+			if (movement->IsInCategory(MTMouse))
+				e->Handled |= io.WantCaptureMouse;
+			if (movement->IsInCategory(MTKeyboard))
+				e->Handled |= io.WantCaptureKeyboard;
+		}
 	}
 
 	void ImGuiLayer::Begin()
