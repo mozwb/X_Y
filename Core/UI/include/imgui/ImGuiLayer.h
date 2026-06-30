@@ -4,7 +4,7 @@
 namespace X_Y {
 	class ImGuiLayer : public Layer {
 	public:
-		ImGuiLayer() = default;
+		ImGuiLayer();
 		ImGuiLayer(void* hwnd);
 		~ImGuiLayer() = default;
 

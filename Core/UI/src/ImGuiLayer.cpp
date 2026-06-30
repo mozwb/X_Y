@@ -7,15 +7,26 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 
 namespace X_Y {
 
-	ImGuiLayer::ImGuiLayer(void* hwnd)
-		: Layer(), m_Hwnd(hwnd)
+	// 注册 WndProc hook：让 Window 模块把消息先给 ImGui 处理
+	static void RegisterWndProcHook()
 	{
-		// 注册 WndProc hook，让 Window 模块把消息先给 ImGui 处理
 		WinCore::g_WndProcHook = [](HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) -> LRESULT {
 			if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam))
 				return true;
 			return false;
 		};
+	}
+
+	ImGuiLayer::ImGuiLayer()
+		: Layer()
+	{
+		RegisterWndProcHook();
+	}
+
+	ImGuiLayer::ImGuiLayer(void* hwnd)
+		: Layer(), m_Hwnd(hwnd)
+	{
+		RegisterWndProcHook();
 	}
 
 	void ImGuiLayer::OnAttach()
