@@ -32,10 +32,12 @@ namespace X_Y {
 
 }
 
+
 // @@ 宏辅助：拼接 token
 #define XY_PASTE2(a, b) a##b
 #define XY_PASTE(a, b) XY_PASTE2(a, b)
 
+#ifdef ENABLEPROFILE
 // @@ 创建 ProfileScope 变量，变量名 = prof_ + __LINE__，防止嵌套冲突
 // @@ 示例：
 //   void Foo() { XY_PROFILE_FUNCTION(); ... }  // 自动打印 [Foo] 耗时 3.45ms
@@ -45,3 +47,7 @@ namespace X_Y {
 //   }
 #define XY_PROFILE_FUNCTION() \
 		X_Y::ProfileScope XY_PASTE(prof_, __LINE__)(__FUNCTION__);
+#else
+#define XY_PROFILE_FUNCTION()
+
+#endif

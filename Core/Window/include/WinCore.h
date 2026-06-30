@@ -20,6 +20,14 @@ namespace X_Y {
 
         inline LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
+
+
+          // 3. ImGui 输入优先处理（ImGui 吃了的消息不用转成 Movement）
+        #ifdef XY_IMGUI_ENABLED
+            extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+            if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam))
+                return true;
+        #endif
            BaseWin* pThis = nullptr;
             auto* app = Application::instance();
             // 1. 窗口创建时：绑定 C++ 对象与 HWND
@@ -35,6 +43,8 @@ namespace X_Y {
             Movement* movement=nullptr;
             KeyCode key = NULL;
             MouseCode mbutoon = NULL;
+
+
             // 2. 如果对象存在，把 Win32 消息转换成 MovementType 事件并转发
             if (pThis)
             {
@@ -59,7 +69,6 @@ namespace X_Y {
                 {
                     int width = LOWORD(wParam);
                     int height = HIWORD(wParam);
-                    // 这里可以把宽高打包进事件数据，比如用一个 struct 或者直接传参数
                      movement = new WindowResize(pThis,width,height);
                     app->GetEventQueue().Push(movement);
                     return 0;
@@ -78,7 +87,7 @@ namespace X_Y {
                     app->GetEventQueue().Push(movement);
                     return 0;
                 }
-                // 窗口焦点变化（简单处理为焦点获得/失去，你可以再细分）
+                // 窗口焦点变化
                 case WM_SETFOCUS:
                 {
                     movement = new WindowFouces(pThis);
@@ -154,9 +163,7 @@ namespace X_Y {
                 // 鼠标滚轮(垂直滚轮)
                 case WM_MOUSEWHEEL:
                 {
-                    // 1. 从 wParam 中取出滚轮的滚动量（单位是 WHEEL_DELTA）
                     int delta = GET_WHEEL_DELTA_WPARAM(wParam);
-                    // 2. 把 delta 转换成偏移量（通常除以 WHEEL_DELTA，即 ±120）
                     float yOffset = static_cast<float>(delta) / WHEEL_DELTA;
                     movement = new MouseScrolled(pThis,0.0,yOffset);
                     app->GetEventQueue().Push(movement);
@@ -165,12 +172,7 @@ namespace X_Y {
                 }
             }
 
-            // 3. ImGui 输入处理（需 #define XY_IMGUI_ENABLED，由 UI 模块负责）
-            #ifdef XY_IMGUI_ENABLED
-            extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-            if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam))
-                return true;
-            #endif
+     
 
             // 4. 未处理的消息 → 交给系统默认处理
             return DefWindowProc(hwnd, msg, wParam, lParam);

@@ -2,11 +2,11 @@
 #include<Log/include/XYLog.h>
 #include<XCore/include/XYTools.h>
 #include<Application/include/Application.h>
+#include<UI/include/imgui/ImGuiLayer.h>
 #include<Render/include/renderWin/renderWin.h>
 #include<Render/include/RenderCommand.h>
 #include<Render/include/renderMath/RenderMath.h>
 #include<glad/glad.h>
-#include<UI/include/imgui/imguibuild.h>
 
 // hardcoded shader sources
 static const char* s_TriangleVertexSrc =
@@ -45,6 +45,9 @@ public:
         X_Y::Application::instance()->GetEventQueue().Push(e);
         X_Y::Application::instance()->ProcessEvents();
 
+        // 窗口创建后才能拿到 HWND
+        m_ImGuiLayer.SetHwnd(GetNativeWindow());
+
         m_Shader = X_Y::Shader::Create("Triangle",
             s_TriangleVertexSrc, s_TriangleFragmentSrc);
 
@@ -63,6 +66,7 @@ public:
         m_VertexArray->AddVertexBuffer(m_VertexBuffer);
     }
 
+    X_Y::ImGuiLayer m_ImGuiLayer;
 protected:
     void onRender() override
     {
@@ -74,13 +78,12 @@ protected:
         X_Y::RenderCommand::DrawArrays(m_VertexArray,3);
 
         // ImGui 渲染
-        X_Y::ImGuiBuild::Render();
+        m_ImGuiLayer.End();
     }
 
-private:
     X_Y::Ref<X_Y::Shader> m_Shader;
-    X_Y::Ref<X_Y::VertexBuffer> m_VertexBuffer;
     X_Y::Ref<X_Y::VertexArray> m_VertexArray;
+    X_Y::Ref<X_Y::VertexBuffer> m_VertexBuffer;
 };
 
 int main(int argc, char* argv[])
@@ -91,23 +94,22 @@ int main(int argc, char* argv[])
     win.show();
     win.setup();
 
-    // ImGui 初始化
-    X_Y::ImGuiBuild::Init(win.GetNativeWindow());
+    // ImGuiLayer 挂入层栈（自动 OnAttach 初始化）
+    app.PushLayer(&win.m_ImGuiLayer);
 
     while (app.isRunning())
     {
-        X_Y::ImGuiBuild::NewFrame();
+        // ImGui 新帧
+        app.ProcessEvents();
+        win.m_ImGuiLayer.Begin();
 
         // 画 ImGui 控件
         ImGui::ShowDemoWindow();
 
-        app.pushEvents();
         win.Render();
-        app.ProcessEvents();
+        app.pushEvents();
     }
 
-    // ImGui 清理
-    X_Y::ImGuiBuild::Shutdown();
-
+    // Layer detach 时自动 OnDetach 清理 ImGui
     return 0;
 }
