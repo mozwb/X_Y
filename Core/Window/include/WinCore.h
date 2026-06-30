@@ -165,7 +165,14 @@ namespace X_Y {
                 }
             }
 
-            // 3. 未处理的消息 → 交给系统默认处理
+            // 3. ImGui 输入处理（需 #define XY_IMGUI_ENABLED，由 UI 模块负责）
+            #ifdef XY_IMGUI_ENABLED
+            extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+            if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam))
+                return true;
+            #endif
+
+            // 4. 未处理的消息 → 交给系统默认处理
             return DefWindowProc(hwnd, msg, wParam, lParam);
         }
        inline void InitGlobalWindowClass(HINSTANCE& hInstance)

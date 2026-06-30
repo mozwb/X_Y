@@ -6,6 +6,7 @@
 #include<Render/include/RenderCommand.h>
 #include<Render/include/renderMath/RenderMath.h>
 #include<glad/glad.h>
+#include<UI/include/imgui/imguibuild.h>
 
 // hardcoded shader sources
 static const char* s_TriangleVertexSrc =
@@ -70,9 +71,10 @@ protected:
         X_Y::RenderCommand::Clear();
 
         m_Shader->Bind();
-        //m_VertexArray->Bind();
-        //glDrawArrays(GL_TRIANGLES, 0, 3);
         X_Y::RenderCommand::DrawArrays(m_VertexArray,3);
+
+        // ImGui 渲染
+        X_Y::ImGuiBuild::Render();
     }
 
 private:
@@ -89,12 +91,23 @@ int main(int argc, char* argv[])
     win.show();
     win.setup();
 
+    // ImGui 初始化
+    X_Y::ImGuiBuild::Init(win.GetNativeWindow());
+
     while (app.isRunning())
     {
+        X_Y::ImGuiBuild::NewFrame();
+
+        // 画 ImGui 控件
+        ImGui::ShowDemoWindow();
+
         app.pushEvents();
         win.Render();
         app.ProcessEvents();
     }
+
+    // ImGui 清理
+    X_Y::ImGuiBuild::Shutdown();
 
     return 0;
 }

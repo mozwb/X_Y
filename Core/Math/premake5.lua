@@ -7,11 +7,11 @@ project "Math"
     {
         "include/**.h",
         "src/**.cpp",
-        "vendor/glm/**.hpp"
+        "%{wks.location}/vendor/glm/**.hpp"
     }
 
     includedirs
     {
         "include",
-        "vendor/glm"
+        "%{wks.location}/vendor/glm"
     }

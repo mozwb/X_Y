@@ -9,7 +9,7 @@ namespace X_Y {
 		using Base = BaseWin;
 		using MovementType = X_Y::MovementType;
 	
-		class XWidget :protected Base {
+		class XWidget :public Base {
 		public :
 			explicit XWidget(XWidget* parent=nullptr);
 			~XWidget(){destroy();}

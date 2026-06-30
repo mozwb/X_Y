@@ -51,8 +51,7 @@ workspace "X_Y"
 -- 引入模块
 
 include "Render"
-include "vendor/glad"
-include "vendor/imgui"  
+include "vendor/glad" 
 group "Core"
 include "Core/Log"
 include "Core/Input"
@@ -64,6 +63,7 @@ include "Core/Window"
 include "Core/Math"
 include "Core/Timer"
 include "Core/Buffer"
+include "Core/UI"
 group ""
 
 -- 测试项目
@@ -89,7 +89,9 @@ project "Test"
     -- ✅ 因为全局已经 includedirs "."，这里啥都不用写！
     includedirs { 
     "xypch",
-    "vendor/glad/include" }
+    "vendor/glad/include",
+    "vendor/imgui",
+    "vendor/imgui/backends" }
     links
     {
         "Window",
@@ -100,6 +102,6 @@ project "Test"
         "glad",
         "Timer",
         "Buffer",
-        "ImGui"
+        "UI"
     }
 end
