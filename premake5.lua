@@ -89,9 +89,7 @@ project "Test"
     -- ✅ 因为全局已经 includedirs "."，这里啥都不用写！
     includedirs { 
     "xypch",
-    "vendor/glad/include",
-    "vendor/imgui",
-    "vendor/imgui/backends" }
+    "vendor/glad/include" }
     links
     {
         "Window",

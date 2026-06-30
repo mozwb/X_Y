@@ -1,12 +1,8 @@
 ﻿#pragma once
-
-// 通知 Window 模块：ImGui 已启用，开启 WndProc hook
-#define XY_IMGUI_ENABLED
-
-#include<imgui.h>
-#include<backends/imgui_impl_win32.h>
-#include<backends/imgui_impl_opengl3.h>
-#include<Window/include/XWidget.h>
+#include "vendor/imgui/imgui.h"
+#include"vendor/imgui/backends/imgui_impl_win32.h"
+#include"vendor/imgui/backends/imgui_impl_opengl3.h"
+#include"Window/include/XWidget.h"
 namespace X_Y {
 namespace ImGuiBuild {
 

@@ -1,10 +1,21 @@
 ﻿#include<imgui/ImGuiLayer.h>
 #include<imgui_internal.h>
+#include<Window/include/WinCore.h>
+
+// ImGui_ImplWin32_WndProcHandler 声明在头文件中被 #if 0 禁用，需手动 extern
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
 namespace X_Y {
 
 	ImGuiLayer::ImGuiLayer(void* hwnd)
 		: Layer(), m_Hwnd(hwnd)
 	{
+		// 注册 WndProc hook，让 Window 模块把消息先给 ImGui 处理
+		WinCore::g_WndProcHook = [](HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) -> LRESULT {
+			if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam))
+				return true;
+			return false;
+		};
 	}
 
 	void ImGuiLayer::OnAttach()

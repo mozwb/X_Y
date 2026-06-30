@@ -10,25 +10,27 @@
 #ifdef XY_PLATFORM_WINDOWS
 #include<windows.h>
 #include <tchar.h>
-namespace X_Y {
-    namespace WinCore {
-        using BaseWin = X_Y::BaseWin;
+
+namespace X_Y::WinCore {
+    using BaseWin = X_Y::BaseWin;
         inline   WNDCLASSEX g_XYWindowClass = { 0 };
         inline  HINSTANCE g_hInstance = nullptr;
         inline  const TCHAR* g_szClassName = _T("X_YWindow");
         inline void SetHinstace(HINSTANCE& hInstance) { g_hInstance = hInstance;   }
 
-        inline LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
-        {
+    // 可选 WndProc hook：UI 模块可在初始化时注册
+    // 返回 true 表示消息已被处理，Window 不再转发
+    using WndProcHookFn = LRESULT (*)(HWND, UINT, WPARAM, LPARAM);
+    inline WndProcHookFn g_WndProcHook = nullptr;
+
+    inline LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+    {
 
 
-          // 3. ImGui 输入优先处理（ImGui 吃了的消息不用转成 Movement）
-        #ifdef XY_IMGUI_ENABLED
-            extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-            if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam))
-                return true;
-        #endif
-           BaseWin* pThis = nullptr;
+      // 3. 可选 hook（如 ImGui 输入优先处理）
+        if (g_WndProcHook && g_WndProcHook(hwnd, msg, wParam, lParam))
+            return true;
+        BaseWin* pThis = nullptr;
             auto* app = Application::instance();
             // 1. 窗口创建时：绑定 C++ 对象与 HWND
             if (msg == WM_NCCREATE) {
@@ -207,5 +209,5 @@ namespace X_Y {
             }
         }
     }
-}
+
 #endif // 

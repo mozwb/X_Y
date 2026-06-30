@@ -18,6 +18,7 @@ project "Window"
         "%{wks.location}/Core/GraphicsContext/include",
         "%{wks.location}/Core/Application/include"
     }
+
     links {
         "Log",
         "Input",
