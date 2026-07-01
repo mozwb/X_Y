@@ -30,6 +30,10 @@ namespace X_Y {
         void SetNHWD(NHWD& hwnd) { m_Nhwd = hwnd; }
         NHWD GetNHWD()const { return m_Nhwd; }
         NHWD GetNativeWindow()const { return GetNHWD();}
+
+        uint GetActualWidth() const { return m_ActualWidth; }
+        uint GetActualHeight() const { return m_ActualHeight; }
+        void SetActualSize(uint width, uint height) { m_ActualWidth = width; m_ActualHeight = height; }
     protected:
         bool Show(showtype nshow=SHOW);
         void Close();
@@ -39,5 +43,7 @@ namespace X_Y {
         virtual std::string toString() const { return "BaseWindow"; }
     private:
         NHWD m_Nhwd = nullptr;
+        uint m_ActualWidth = 0;
+        uint m_ActualHeight = 0;
     };
 }

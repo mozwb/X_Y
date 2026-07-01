@@ -32,11 +32,15 @@ namespace X_Y::WinCore {
             return true;// g_WndProcHook(hwnd, msg, wParam, lParam)返回的基本是0,所以这里基本不会触发，但是不影响
         BaseWin* pThis = nullptr;
             auto* app = Application::instance();
-            // 1. 窗口创建时：绑定 C++ 对象与 HWND
+            // 1. 窗口创建时：绑定 C++ 对象与 HWND，记录初始尺寸
             if (msg == WM_NCCREATE) {
                 pThis = (BaseWin*)((CREATESTRUCT*)lParam)->lpCreateParams;
                 SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pThis);
                 pThis->SetNHWD(hwnd);
+
+                RECT rect;
+                if (GetClientRect(hwnd, &rect))
+                    pThis->SetActualSize(rect.right, rect.bottom);
             }
             else {
                 // 其他消息：从窗口附加数据取出对象
@@ -71,7 +75,10 @@ namespace X_Y::WinCore {
                 {
                     int width = LOWORD(lParam);
                     int height = HIWORD(lParam);
-                     movement = new WindowResize(pThis,width,height);
+                    // 先更新实际尺寸，再派发事件（事件只用于通知）
+                    if (pThis)
+                        pThis->SetActualSize(width, height);
+                    movement = new WindowResize(pThis,width,height);
                     app->GetEventQueue().Push(movement);
                     return 0;
                 }

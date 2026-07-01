@@ -30,13 +30,6 @@ namespace X_Y {
                 connect(this, MovementType::WindowClose, this, &XWidget::destroy);
             }
 
-            // 监听窗口 resize，更新 m_width/m_height
-            Connect(this, MovementType::WindowResize, this, [this](const XMovement& e) {
-                auto& resize = dynamic_cast<const WindowResize&>(e);
-                m_width = resize.GetWidth();
-                m_height = resize.GetHeight();
-                XDEBUG("窗口resize: {}x{}", m_width, m_height)
-            });
         }
         bool XWidget::show(showtype nShow)
         {   
@@ -44,7 +37,7 @@ namespace X_Y {
             if (this->Show(nShow)) return true;
             // 2. 没有句柄 → 只创建一次！！！
             XINFO("窗口未创建，自动创建窗口: {}", m_title);
-            if (this->Create(m_title, m_width, m_height)) {
+            if (this->Create(m_title, GetActualWidth(), GetActualHeight())) {
                 return this->show(nShow);
             }
             XERROR("窗口创建失败")
@@ -56,8 +49,7 @@ namespace X_Y {
         }
 
         void XWidget::setSize(uint width, uint height) {
-            m_width = width;
-            m_height = height;
+            SetActualSize(width, height);
         }
         void XWidget::close() {
             XINFO("调用colse函数")

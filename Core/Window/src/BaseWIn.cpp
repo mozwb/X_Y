@@ -26,6 +26,8 @@ namespace X_Y {
 		if(m_Nhwd)  SetWindowTextA(m_Nhwd, title);
 	}
     bool BaseWin::Create(const char* title, uint width, uint height) {
+        if (width == 0) width = 800;
+        if (height == 0) height = 600;
         HINSTANCE hInstance = X_Y::WinCore::g_hInstance;
 
         // 1. 把 char* 变量安全转为宽字符串

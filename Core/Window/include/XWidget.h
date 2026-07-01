@@ -42,10 +42,10 @@ namespace X_Y {
 				return m_Context.get();
 			}
 			uint get_width() {
-				return m_width;
+				return GetActualWidth();
 			}
 			uint get_height() {
-				return m_height;
+				return GetActualHeight();
 			}
 			void setTitle(const char* title);
 			void setSize(uint width, uint height);
@@ -75,13 +75,11 @@ namespace X_Y {
 				setGrContext<T>(this->GetNativeWindow());
 				m_Context->Init();
 			}
-			bool create() {return this->Create(m_title, m_width, m_height);}
+			bool create() {return this->Create(m_title, GetActualWidth(), GetActualHeight());}
 		private:
 			XWidget* m_parent = nullptr;
 			Scope<GraphicsContext> m_Context;
 			const char* m_title = "X_Y";
-			uint m_width = 800;
-			uint m_height = 600;
 		};
 	}
 
