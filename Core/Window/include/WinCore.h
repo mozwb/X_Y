@@ -69,8 +69,8 @@ namespace X_Y::WinCore {
                     // 窗口大小改变
                 case WM_SIZE:
                 {
-                    int width = LOWORD(wParam);
-                    int height = HIWORD(wParam);
+                    int width = LOWORD(lParam);
+                    int height = HIWORD(lParam);
                      movement = new WindowResize(pThis,width,height);
                     app->GetEventQueue().Push(movement);
                     return 0;
