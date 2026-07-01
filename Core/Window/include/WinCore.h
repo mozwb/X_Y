@@ -29,7 +29,7 @@ namespace X_Y::WinCore {
 
       // 3. 可选 hook（如 ImGui 输入优先处理）
         if (g_WndProcHook && g_WndProcHook(hwnd, msg, wParam, lParam))
-            return true;
+            return true;// g_WndProcHook(hwnd, msg, wParam, lParam)返回的基本是0,所以这里基本不会触发，但是不影响
         BaseWin* pThis = nullptr;
             auto* app = Application::instance();
             // 1. 窗口创建时：绑定 C++ 对象与 HWND

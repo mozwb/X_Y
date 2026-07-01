@@ -63,6 +63,7 @@ include "Core/Window"
 include "Core/Math"
 include "Core/Timer"
 include "Core/Buffer"
+include "Core/FilesSystem"
 include "Core/UI"
 group ""
 
@@ -100,6 +101,7 @@ project "Test"
         "glad",
         "Timer",
         "Buffer",
-        "UI"
+        "UI",
+        "FilesSystem"
     }
 end

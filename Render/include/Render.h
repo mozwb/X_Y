@@ -29,7 +29,7 @@ namespace X_Y {
     private:
         struct SceneData
         {
-            RenderMath::Vec4 ViewProjectionMatrix;
+            RenderMath::Mat4 ViewProjectionMatrix;
         };
         RenderAPI* m_LastSubmittedAPI = nullptr;
         std::unordered_map<GraphicsType, Scope<RenderAPI>> m_RenderAPIs; 

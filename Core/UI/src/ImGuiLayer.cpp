@@ -11,11 +11,11 @@ namespace X_Y {
 	static void RegisterWndProcHook()
 	{
 		WinCore::g_WndProcHook = [](HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) -> LRESULT {
-			// 让 ImGui 优先处理消息。它吃掉的（返回 true）直接拦截，
-			// 没吃的放行给 Window 模块转成 Movement。
-			// 然后在 ImGuiLayer::OnEvent 中用 WantCapture 做二次过滤。
-			if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam))
-				return true;
+			// ImGui_ImplWin32_WndProcHandler 内部所有分支都 return 0，
+			// 所以我们不在 WndProc 层拦截任何消息。所有消息都会
+			// 正常入队成 Movement，在 ImGuiLayer::OnEvent 中
+			// 用 WantCaptureMouse/Keyboard 做二次过滤。
+			ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam);
 			return false;
 		};
 	}

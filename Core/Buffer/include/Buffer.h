@@ -131,17 +131,29 @@ namespace X_Y {
 
 		// ✅ 写入时自动扩容
 		template<typename T>
+		T* As(uint64_t offset = 0)
+		{
+			assert(offset + sizeof(T) <= (Size > 0 ? Size : Capacity));
+			return reinterpret_cast<T*>(Data + offset);
+		}
+
+		template<typename T>
+		const T* As(uint64_t offset = 0) const
+		{
+			assert(offset + sizeof(T) <= (Size > 0 ? Size : Capacity));
+			return reinterpret_cast<const T*>(Data + offset);
+		}
+
+		template<typename T>
 		T& Read(uint64_t offset = 0)
 		{
-			assert(offset + sizeof(T) <= Size);
-			return *(T*)(Data + offset);
+			return *As<T>(offset);
 		}
 
 		template<typename T>
 		const T& Read(uint64_t offset = 0) const
 		{
-			assert(offset + sizeof(T) <= Size);
-			return *(T*)(Data + offset);
+			return *As<T>(offset);
 		}
 
 		template<typename T>
