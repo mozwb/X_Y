@@ -29,6 +29,14 @@ namespace X_Y {
                 //主窗口逻辑
                 connect(this, MovementType::WindowClose, this, &XWidget::destroy);
             }
+
+            // 监听窗口 resize，更新 m_width/m_height
+            Connect(this, MovementType::WindowResize, this, [this](const XMovement& e) {
+                auto& resize = dynamic_cast<const WindowResize&>(e);
+                m_width = resize.GetWidth();
+                m_height = resize.GetHeight();
+                XDEBUG("窗口resize: {}x{}", m_width, m_height)
+            });
         }
         bool XWidget::show(showtype nShow)
         {   

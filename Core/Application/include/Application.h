@@ -124,6 +124,28 @@ namespace X_Y {
             };
         Connect(sender, type, receiver, std::move(handler));
     }
+
+    /*摘自Copilot的总结：
+    •	Connect（大写）
+•	模板定义：template<typename EnumT> void Connect(MovementSender sender, EnumT type, MovementReceiver receiver, MovementHandler handler)
+•	最底层直接走 MovementDispatcherConnect<EnumT>(...)，接收一个 MovementHandler（即 stdfunction<void(const XMovement&)>）。
+•	适合注册任意可调用对象（lambda、std::bind、函数对象、静态函数等）。
+•	注册时你需要自己写 handler 的参数和转换（例如 const XMovement&），并且传入 receiver（通常为 this）以便后续 disconnect。
+•	connect（小写）
+•	是对 Connect 的便利封装，提供了多个重载来接受成员函数指针：
+•	void (R::* slotFunc)(const XMovement&)
+•	void (R::* slotFunc)(XMovement*)
+•	void (R::* slotFunc)()
+•	内部把成员函数包装成 MovementHandler（通过 lambda 捕获 receiver 并在回调中调用成员函数），然后调用 Connect(...)。
+•	方便把某对象的成员函数直接绑定为回调，不需要自己写 MovementHandler。
+关键影响
+•	如果要传入带捕获的 lambda（如 [this](Movement& e){...}），现有的小写 connect 没有接受普通 lambda 的重载，需要用大写 Connect 并传入 MovementHandler（并把参数类型改为 const XMovement&）。
+•	使用小写 connect 时，disconnect 可以通过传入 receiver 指针方便地解绑对应绑定（因为封装里把 receiver 传给 Connect）。用大写 Connect 同样可以把 receiver 传入，但要注意 handler 的捕获不要导致悬 dangling 指针。
+建议
+•	绑定成员函数：用小写 connect（更简洁、类型安全）。
+•	绑定 lambda / 自定义函数对象：用大写 Connect（传 MovementHandler），并确保 handler 参数类型为 const XMovement&（或按 dispatcher 期望的类型）
+    
+    */
 #else
     ERROR("仅支持windows系统")
 #endif
