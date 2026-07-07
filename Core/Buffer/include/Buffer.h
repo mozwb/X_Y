@@ -29,11 +29,12 @@ namespace X_Y {
 
 		Buffer(const Buffer& other)
 			: Data(nullptr), Size(0), Capacity(0)
+			, bFreeInstead(false)  // 拷贝分配走 new[]，必须 false
 		{
 			if (other.Data && other.Size > 0)
 			{
 				Reserve(other.Size);
-				memcpy(Data, other.Data, Size);
+				memcpy(Data, other.Data, other.Size);
 				Size = other.Size;
 			}
 		}
@@ -58,6 +59,7 @@ namespace X_Y {
 			if (this != &other)
 			{
 				Release();
+				bFreeInstead = false;  // 拷贝分配走 new[]
 				if (other.Data && other.Size > 0)
 				{
 					Reserve(other.Size);
@@ -97,10 +99,11 @@ namespace X_Y {
 			if (Data)
 			{
 				memcpy(newData, Data, Size);
-				delete[] Data;
+				Release();  // 用 Release 统一释放，兼容 malloc/new[]
 			}
 			Data = newData;
 			Capacity = newCapacity;
+			bFreeInstead = false;  // Reserve 用 new[]
 		}
 
 		// ✅ 确保能写入 count 字节
