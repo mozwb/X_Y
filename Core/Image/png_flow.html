@@ -1,0 +1,286 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PNG 解码流程</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f8fafc;
+    --fg: #172033;
+    --muted: #5b6475;
+    --line: #64748b;
+    --neutral: #e2e8f0;
+    --input: #bfdbfe;
+    --process: #c7d2fe;
+    --storage: #99f6e4;
+    --external: #fde68a;
+    --risk: #fecaca;
+    --special: #fed7aa;
+    --accent: #a5b4fc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f172a;
+      --fg: #e5e7eb;
+      --muted: #a3adbd;
+      --line: #94a3b8;
+      --neutral: #334155;
+      --input: #1d4ed8;
+      --process: #4338ca;
+      --storage: #0f766e;
+      --external: #92400e;
+      --risk: #991b1b;
+      --special: #92400e;
+      --accent: #4f46e5;
+    }
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font:
+      13px/1.4 ui-sans-serif,
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      sans-serif;
+  }
+  main {
+    max-width: 1100px;
+    margin: 24px auto;
+    padding: 0 16px;
+  }
+  svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  .title { font-size: 18px; font-weight: 650; fill: var(--fg); }
+  .label { font-size: 13px; font-weight: 600; fill: var(--fg); }
+  .small { font-size: 11px; fill: var(--muted); }
+  .node { stroke: var(--line); stroke-width: 1; rx: 6; ry: 6; }
+  .neutral { fill: var(--neutral); }
+  .input { fill: var(--input); }
+  .process { fill: var(--process); }
+  .storage { fill: var(--storage); }
+  .external { fill: var(--external); }
+  .risk { fill: var(--risk); }
+  .special { fill: var(--special); }
+  .edge { stroke: var(--line); stroke-width: 1.5; fill: none; }
+  .zone { fill: none; stroke: var(--line); stroke-width: 1; stroke-dasharray: 6 5; opacity: 0.8; }
+</style>
+<main>
+<svg viewBox="0 0 1060 780" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="var(--line)"/>
+    </marker>
+    <marker id="arrow-accent" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="var(--accent)"/>
+    </marker>
+  </defs>
+
+  <!-- ==== 第 1 阶段：PNG 文件解析 ==== -->
+  <text x="30" y="28" class="title">PNG 解码完整流程</text>
+
+  <!-- 阶段标签 -->
+  <text x="30" y="58" class="label" fill="var(--input)">阶段 1 ── PNG 文件解析</text>
+
+  <!-- PNG 文件 -->
+  <rect x="30" y="70" width="110" height="44" class="node input"/>
+  <text x="85" y="96" class="label" text-anchor="middle">PNG 文件</text>
+
+  <!-- 读签名 -->
+  <rect x="200" y="70" width="120" height="44" class="node process"/>
+  <text x="260" y="96" class="label" text-anchor="middle">读 Signature</text>
+  <path d="M140,92 H200" class="edge" marker-end="url(#arrow)"/>
+
+  <!-- 读 IHDR -->
+  <rect x="380" y="70" width="120" height="44" class="node process"/>
+  <text x="440" y="96" class="label" text-anchor="middle">读 IHDR Chunk</text>
+  <path d="M320,92 H380" class="edge" marker-end="url(#arrow)"/>
+
+  <!-- IHDR 内容 -->
+  <rect x="550" y="60" width="180" height="64" class="node neutral"/>
+  <text x="640" y="80" class="small" text-anchor="middle">Width / Height (4+4 字节)</text>
+  <text x="640" y="94" class="small" text-anchor="middle">BitDepth / ColorType</text>
+  <text x="640" y="108" class="small" text-anchor="middle">Compression / Filter / Interlace</text>
+  <path d="M500,92 H550" class="edge" marker-end="url(#arrow)"/>
+
+  <!-- 遍历 Chunk -->
+  <rect x="200" y="160" width="160" height="44" class="node process"/>
+  <text x="280" y="186" class="label" text-anchor="middle">遍历剩余 Chunk</text>
+
+  <!-- 循环收集 IDAT -->
+  <rect x="420" y="160" width="180" height="44" class="node input"/>
+  <text x="510" y="186" class="label" text-anchor="middle">收集所有 IDAT 数据</text>
+  <path d="M360,182 H420" class="edge" marker-end="url(#arrow)"/>
+
+  <!-- 遇 IEND 结束 -->
+  <rect x="660" y="160" width="140" height="44" class="node risk"/>
+  <text x="730" y="182" class="label" text-anchor="middle">遇 IEND → 停止</text>
+  <path d="M600,182 H660" class="edge" marker-end="url(#arrow)"/>
+
+  <!-- 连接 IHDR 到遍历 -->
+  <path d="M640,124 V130 H280 V160" class="edge" marker-end="url(#arrow)"/>
+
+  <text x="280" y="155" class="small" text-anchor="middle">每个 Chunk: [Len][Type][Data][CRC]</text>
+
+  <!-- ==== 第 2 阶段：Deflate 解压缩 ==== -->
+  <text x="30" y="240" class="label" fill="var(--process)">阶段 2 ── Deflate 解压缩（RF 1951）</text>
+
+  <!-- 虚线框 -->
+  <rect x="30" y="252" width="1000" height="210" class="zone"/>
+  <text x="50" y="272" class="small">IDAT（zlib 格式）</text>
+
+  <!-- zlib wrapper → skip it -->
+  <rect x="50" y="285" width="130" height="40" class="node neutral"/>
+  <text x="115" y="305" class="small" text-anchor="middle">跳过 zlib 头 (CMF+FLG, 2B)</text>
+  <text x="115" y="319" class="small" text-anchor="middle">忽略尾部 Adler32 (4B)</text>
+
+  <!-- deflate blocks -->
+  <rect x="50" y="355" width="130" height="40" class="node process"/>
+  <text x="115" y="379" class="label" text-anchor="middle">Deflate Blocks</text>
+  <path d="M115,325 V355" class="edge" marker-end="url(#arrow)"/>
+
+  <!-- BFINAL -->
+  <rect x="240" y="340" width="120" height="36" class="node external"/>
+  <text x="300" y="362" class="label" text-anchor="middle">BFINAL (1 bit)</text>
+  <path d="M180,375 H240" class="edge" marker-end="url(#arrow)"/>
+
+  <!-- BTYPE -->
+  <rect x="240" y="390" width="120" height="36" class="node external"/>
+  <text x="300" y="412" class="label" text-anchor="middle">BTYPE (2 bits)</text>
+  <path d="M180,375 H240 V408" class="edge" marker-end="url(#arrow)"/>
+
+  <!-- 三种 BTYPE -->
+  <rect x="420" y="270" width="130" height="44" class="node neutral"/>
+  <text x="485" y="291" class="small" text-anchor="middle">00 = 未压缩</text>
+  <text x="485" y="305" class="small" text-anchor="middle">（LEN + NLEN + 原始数据）</text>
+  <path d="M240,372 V285 H420" class="edge" marker-end="url(#arrow)"/>
+
+  <rect x="420" y="335" width="130" height="44" class="node process"/>
+  <text x="485" y="356" class="small" text-anchor="middle">01 = 固定 Huffman</text>
+  <text x="485" y="370" class="small" text-anchor="middle">（标准表查表）</text>
+  <path d="M240,390 H320 V350 H420" class="edge" marker-end="url(#arrow)"/>
+
+  <rect x="420" y="400" width="130" height="44" class="node process"/>
+  <text x="485" y="421" class="small" text-anchor="middle">10 = 动态 Huffman</text>
+  <text x="485" y="435" class="small" text-anchor="middle">（先解码码表）</text>
+  <path d="M240,420 H420" class="edge" marker-end="url(#arrow)"/>
+
+  <!-- Huffman 解码 -->
+  <rect x="610" y="335" width="190" height="44" class="node process"/>
+  <text x="705" y="353" class="small" text-anchor="middle">BitReader LSB-first 逐位读</text>
+  <text x="705" y="368" class="small" text-anchor="middle">→ Huffman 或 Canonical 表解码</text>
+
+  <path d="M550,357 H610" class="edge" marker-end="url(#arrow)"/>
+  <path d="M550,422 H610" class="edge" marker-end="url(#arrow)"/>
+
+  <!-- LZ77 解压 -->
+  <rect x="610" y="400" width="190" height="44" class="node storage"/>
+  <text x="705" y="418" class="small" text-anchor="middle">LZ77 重构</text>
+  <text x="705" y="432" class="small" text-anchor="middle">Literal → 直接输出</text>
+  <text x="705" y="446" class="small" text-anchor="middle">Length+Distance → 回引用</text>
+  <path d="M705,379 V400" class="edge" marker-end="url(#arrow)"/>
+
+  <!-- 输出 filtered 数据 -->
+  <rect x="860" y="355" width="150" height="44" class="node storage"/>
+  <text x="935" y="371" class="small" text-anchor="middle">输出：</text>
+  <text x="935" y="387" class="small" text-anchor="middle">Filtered 像素数据</text>
+  <path d="M800,377 H860" class="edge" marker-end="url(#arrow)"/>
+
+  <!-- ==== 第 3 阶段：PNG Filter 反转 ==== -->
+  <text x="30" y="500" class="label" fill="var(--storage)">阶段 3 ── PNG Filter 反转</text>
+
+  <!-- 扫描线结构 -->
+  <rect x="30" y="515" width="200" height="44" class="node neutral"/>
+  <text x="130" y="533" class="small" text-anchor="middle">每行结构：[FilterByte(1)][像素数据]</text>
+  <text x="130" y="549" class="small" text-anchor="middle">FilterByte = 0~4</text>
+
+  <!-- 5 种 Filter -->
+  <rect x="300" y="500" width="120" height="32" class="node external"/>
+  <text x="360" y="520" class="small" text-anchor="middle">0 = None</text>
+  <path d="M230,537 H300" class="edge" marker-end="url(#arrow)"/>
+
+  <rect x="300" y="540" width="120" height="32" class="node external"/>
+  <text x="360" y="560" class="small" text-anchor="middle">1 = Sub</text>
+  <path d="M230,537 H300 V556" class="edge" marker-end="url(#arrow)"/>
+
+  <rect x="300" y="580" width="120" height="32" class="node external"/>
+  <text x="360" y="600" class="small" text-anchor="middle">2 = Up</text>
+  <path d="M230,537 H300 V596" class="edge" marker-end="url(#arrow)"/>
+
+  <rect x="460" y="500" width="120" height="32" class="node external"/>
+  <text x="520" y="520" class="small" text-anchor="middle">3 = Average</text>
+  <path d="M420,516 H460" class="edge" marker-end="url(#arrow)"/>
+
+  <rect x="460" y="540" width="120" height="32" class="node external"/>
+  <text x="520" y="560" class="small" text-anchor="middle">4 = Paeth</text>
+  <path d="M420,532 H460 V556" class="edge" marker-end="url(#arrow)"/>
+
+  <!-- 具体公式 -->
+  <rect x="640" y="480" width="200" height="110" class="node process"/>
+  <text x="740" y="498" class="small" text-anchor="middle">Sub:  cur[i] += cur[i-bpp]</text>
+  <text x="740" y="515" class="small" text-anchor="middle">Up:   cur[i] += prev[i]</text>
+  <text x="740" y="532" class="small" text-anchor="middle">Avg:  cur[i] += (L+R)/2</text>
+  <text x="740" y="549" class="small" text-anchor="middle">Paeth: cur[i] += paeth(A,B,C)</text>
+  <text x="740" y="570" class="small" text-anchor="middle">bpp = bytesPerPixel</text>
+  <text x="740" y="584" class="small" text-anchor="middle">prev[0] 为全 0 行</text>
+
+  <path d="M580,516 H640" class="edge" marker-end="url(#arrow)"/>
+  <path d="M580,556 H640" class="edge" marker-end="url(#arrow)"/>
+
+  <!-- 最终输出 -->
+  <rect x="640" y="620" width="200" height="50" class="node input"/>
+  <text x="740" y="644" class="label" text-anchor="middle">最终 RGBA 像素数据</text>
+  <text x="740" y="660" class="small" text-anchor="middle">可用于 OpenGL 上传纹理</text>
+  <path d="M740,590 V620" class="edge" marker-end="url(#arrow)"/>
+
+  <!-- 流程标题 -->
+  <rect x="860" y="68" width="150" height="44" class="node special"/>
+  <text x="935" y="90" class="label" text-anchor="middle">代码模块划分</text>
+
+  <rect x="860" y="130" width="150" height="55" class="node neutral"/>
+  <text x="935" y="149" class="small" text-anchor="middle">pngdec.c</text>
+  <text x="935" y="164" class="small" text-anchor="middle">签名 / Chunk / IHDR</text>
+  <text x="935" y="178" class="small" text-anchor="middle">Filter 反转</text>
+
+  <rect x="860" y="200" width="150" height="55" class="node neutral"/>
+  <text x="935" y="219" class="small" text-anchor="middle">BitReader</text>
+  <text x="935" y="234" class="small" text-anchor="middle">位读取器（LSB-first）</text>
+
+  <rect x="860" y="270" width="150" height="55" class="node neutral"/>
+  <text x="935" y="289" class="small" text-anchor="middle">HuffmanTable</text>
+  <text x="935" y="304" class="small" text-anchor="middle">规范 Huffman 表构建</text>
+  <text x="935" y="318" class="small" text-anchor="middle">+ 解码</text>
+
+  <rect x="860" y="340" width="150" height="55" class="node neutral"/>
+  <text x="935" y="359" class="small" text-anchor="middle">Inflater</text>
+  <text x="935" y="374" class="small" text-anchor="middle">Deflate 解压</text>
+  <text x="935" y="388" class="small" text-anchor="middle">LZ77 还原</text>
+
+  <!-- 侧边箭头 -->
+  <path d="M935,112 V130" class="edge" marker-end="url(#arrow)"/>
+  <path d="M935,185 V200" class="edge" marker-end="url(#arrow)"/>
+  <path d="M935,255 V270" class="edge" marker-end="url(#arrow)"/>
+  <path d="M935,325 V340" class="edge" marker-end="url(#arrow)"/>
+
+  <!-- 我们的架构 -->
+  <rect x="860" y="440" width="150" height="70" class="node process"/>
+  <text x="935" y="460" class="small" text-anchor="middle">🟣 我们的架构</text>
+  <text x="935" y="478" class="small" text-anchor="middle">核心层：纯 C</text>
+  <text x="935" y="493" class="small" text-anchor="middle">PNGDecode 单函数</text>
+  <text x="935" y="507" class="small" text-anchor="middle">上层：C++ Image 封装</text>
+
+  <rect x="860" y="620" width="150" height="50" class="node storage"/>
+  <text x="935" y="640" class="small" text-anchor="middle">OpenGLTexture2D</text>
+  <text x="935" y="656" class="small" text-anchor="middle">glTexImage2D 上传</text>
+
+  <path d="M935,510 V550" class="edge" marker-end="url(#arrow)"/>
+  <path d="M840,645 H640" class="edge" marker-end="url(#arrow)"/>
+
+  <text x="280" y="710" class="small" text-anchor="middle">注：完整代码仅 ~420 行纯 C，无任何外部依赖。参考自 Corg-Labs/pngdecoder</text>
+</svg>
+</main>

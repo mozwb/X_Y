@@ -65,6 +65,7 @@ include "Core/Timer"
 include "Core/Buffer"
 include "Core/FilesSystem"
 include "Core/UI"
+include "Core/Image"
 group ""
 
 -- 测试项目

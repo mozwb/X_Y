@@ -30,6 +30,11 @@ namespace X_Y {
                 connect(this, MovementType::WindowClose, this, &XWidget::destroy);
             }
 
+            // 窗口 resize 时打印日志
+            Connect(this, MovementType::WindowResize, this, [this](const XMovement& e) {
+                auto& resize = dynamic_cast<const WindowResize&>(e);
+                XDEBUG("窗口resize: {}x{}", resize.GetWidth(), resize.GetHeight());
+            });
         }
         bool XWidget::show(showtype nShow)
         {   
