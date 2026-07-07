@@ -1,4 +1,4 @@
-/*
+﻿/*
  * __pngdec.c — PNG decoder (pure C, no external dependencies)
  *
  * Implements:
@@ -41,6 +41,7 @@ typedef struct
     int nbits;     /* valid bits in accumulator */
 } BitReader;
 // 初始化：绑定数据，重置状态
+
 static void br_init(BitReader *br, const uint8_t *buf, size_t len)
 {
     br->buf = buf;
@@ -49,6 +50,7 @@ static void br_init(BitReader *br, const uint8_t *buf, size_t len)
     br->bits = 0;
     br->nbits = 0;
 }
+
 // 填充位累加器，尽量保证 nbits >= 24
 static void br_fill(BitReader *br)
 {
@@ -148,11 +150,9 @@ static int huff_decode(BitReader *br, const HuffTable *h)
     return -1;
 }
 
-/* ════════════════════════════════════════════════════════════
-   DEFLATE decompressor
-   ════════════════════════════════════════════════════════════ */
+//DEFLATE decompressor
 
-/* Fixed literal/length codes (RFC 1951 §3.2.6) */
+// Fixed literal/length codes (RFC 1951 §3.2.6) 
 static void make_fixed_tables(HuffTable *lit, HuffTable *dist)
 {
     uint8_t ll[288], dl[32];

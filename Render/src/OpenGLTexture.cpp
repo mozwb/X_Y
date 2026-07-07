@@ -1,4 +1,4 @@
-#include "Render/include/OpenGL/OpenGLTexture.h"
+﻿#include "Render/include/OpenGL/OpenGLTexture.h"
 #include "Image/include/Image.h"
 #include "Log/include/XYlog.h"
 
@@ -65,7 +65,7 @@ namespace X_Y {
 		glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
 		m_IsLoaded = true;
-		X_DEBUG("OpenGLTexture2D: created empty texture {0}x{1}", m_Width, m_Height);
+		XDEBUG("OpenGLTexture2D: created empty texture {0}x{1}", m_Width, m_Height);
 	}
 
 	/* ────────────────────────────────────────────────
@@ -77,7 +77,7 @@ namespace X_Y {
 		Image img(path);
 		if (!img.IsLoaded())
 		{
-			XY_CORE_ERROR("OpenGLTexture2D: failed to load image: {0}", path);
+			XFATAL("OpenGLTexture2D: failed to load image: {0}", path);
 			m_RendererID = 0;
 			m_Width = 0;
 			m_Height = 0;
@@ -102,7 +102,7 @@ namespace X_Y {
 			m_DataFormat = GL_RGBA;
 			break;
 		default:
-			XY_CORE_ERROR("OpenGLTexture2D: unsupported channel count {0}: {1}", img.GetChannels(), path);
+			XFATAL("OpenGLTexture2D: unsupported channel count {0}: {1}", img.GetChannels(), path);
 			m_IsLoaded = false;
 			return;
 		}
@@ -132,7 +132,7 @@ namespace X_Y {
 		}
 
 		m_IsLoaded = true;
-		X_DEBUG("OpenGLTexture2D: loaded texture from {0}: {1}x{2}x{3}",
+		XDEBUG("OpenGLTexture2D: loaded texture from {0}: {1}x{2}x{3}",
 			path, m_Width, m_Height, img.GetChannels());
 	}
 

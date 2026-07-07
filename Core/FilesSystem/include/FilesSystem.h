@@ -3,6 +3,7 @@
 #include<filesystem>
 namespace X_Y {
 	class FilesSystem {
+	public:
 		static Buffer ReadFileBinary(const std::filesystem::path& filepath);
 		static bool WriteFileBinary(const std::filesystem::path& filepath, const Buffer& buffer);
 

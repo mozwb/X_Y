@@ -1,5 +1,5 @@
-/*
- * __pngdec.h / __pngdec.c — PNG decoder (pure C, no external dependencies)
+﻿/*
+ * __pngdec.h / __pngdec.c 鈥?PNG decoder (pure C, no external dependencies)
  *
  * Based on Corg-Labs/pngdecoder, rewritten for understanding.
  *
@@ -31,30 +31,30 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* ── 解码结果状态 ──────────────────────────────────── */
+/* 鈹€鈹€ 瑙ｇ爜缁撴灉鐘舵€?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
 enum PNG_Error
 {
-    PNG_OK = 0,              /* 成功 */
-    PNG_ERR_SIGNATURE = 1,   /* 文件不是 PNG（前8字节不对） */
-    PNG_ERR_NO_IHDR = 2,     /* 没找到 IHDR 块 */
-    PNG_ERR_NO_IDAT = 3,     /* 没有图像数据 */
-    PNG_ERR_TRUNCATED = 4,   /* 文件被截断了，数据不够 */
-    PNG_ERR_UNSUPPORT = 5,   /* 不支持的格式（位深、色彩类型、交织等） */
-    PNG_ERR_MEMORY = 6,      /* 内存不够 */
-    PNG_ERR_BAD_DATA = 7,    /* 数据损坏（解压失败等） */
-    PNG_ERR_BAD_HUFFMAN = 8, /* 哈夫曼码表错误 */
+    PNG_OK = 0,              /* 鎴愬姛 */
+    PNG_ERR_SIGNATURE = 1,   /* 鏂囦欢涓嶆槸 PNG锛堝墠8瀛楄妭涓嶅锛?*/
+    PNG_ERR_NO_IHDR = 2,     /* 娌℃壘鍒?IHDR 鍧?*/
+    PNG_ERR_NO_IDAT = 3,     /* 娌℃湁鍥惧儚鏁版嵁 */
+    PNG_ERR_TRUNCATED = 4,   /* 鏂囦欢琚埅鏂簡锛屾暟鎹笉澶?*/
+    PNG_ERR_UNSUPPORT = 5,   /* 涓嶆敮鎸佺殑鏍煎紡锛堜綅娣便€佽壊褰╃被鍨嬨€佷氦缁囩瓑锛?*/
+    PNG_ERR_MEMORY = 6,      /* 鍐呭瓨涓嶅 */
+    PNG_ERR_BAD_DATA = 7,    /* 鏁版嵁鎹熷潖锛堣В鍘嬪け璐ョ瓑锛?*/
+    PNG_ERR_BAD_HUFFMAN = 8, /* 鍝堝か鏇肩爜琛ㄩ敊璇?*/
 };
 
-/* ── 解码函数 ──────────────────────────────────────── */
+/* 鈹€鈹€ 瑙ｇ爜鍑芥暟 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ */
 /*
- * png_data      - 完整 PNG 文件的二进制数据
- * png_len       - 数据长度
- * out_rgba      - [输出] 解码后的像素数据，用完后需要 free()
- * out_width     - [输出] 图片宽度
- * out_height    - [输出] 图片高度
- * out_channels  - [输出] 通道数（3=RGB, 4=RGBA）
+ * png_data      - 瀹屾暣 PNG 鏂囦欢鐨勪簩杩涘埗鏁版嵁
+ * png_len       - 鏁版嵁闀垮害
+ * out_rgba      - [杈撳嚭] 瑙ｇ爜鍚庣殑鍍忕礌鏁版嵁锛岀敤瀹屽悗闇€瑕?free()
+ * out_width     - [杈撳嚭] 鍥剧墖瀹藉害
+ * out_height    - [杈撳嚭] 鍥剧墖楂樺害
+ * out_channels  - [杈撳嚭] 閫氶亾鏁帮紙3=RGB, 4=RGBA锛?
  *
- * 返回：PNG_OK 成功，其他值见 enum PNG_Error
+ * 杩斿洖锛歅NG_OK 鎴愬姛锛屽叾浠栧€艰 enum PNG_Error
  */
 int png_decode(const unsigned char *png_data, size_t png_len,
                unsigned char **out_rgba,

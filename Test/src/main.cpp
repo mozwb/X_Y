@@ -6,6 +6,10 @@
 #include<Render/include/renderWin/renderWin.h>
 #include<Render/include/RenderCommand.h>
 #include<Render/include/renderMath/RenderMath.h>
+#include<Render/include/Texture.h>
+#include<Image/include/Image.h>
+#include<Buffer/include/Buffer.h>
+#include<FilesSystem/include/FilesSystem.h>
 #include<glad/glad.h>
 
 // hardcoded shader sources
@@ -64,9 +68,61 @@ public:
 
         m_VertexArray = X_Y::VertexArray::Create();
         m_VertexArray->AddVertexBuffer(m_VertexBuffer);
+
+        // ── 测试 PNG 加载 ──
+        LoadTestPNG();
+    }
+
+    void LoadTestPNG()
+    {
+        std::string pngPath = "test_png.png";
+
+        // 测试 1：Image 从文件路径构造
+        X_Y::Image imgFromPath(pngPath);
+        if (imgFromPath.IsLoaded())
+        {
+            XINFO("✅ Image from path: {0}x{1}x{2} ({3} bytes)",
+                imgFromPath.GetWidth(), imgFromPath.GetHeight(),
+                imgFromPath.GetChannels(), imgFromPath.GetDataSize());
+        }
+        else
+        {
+            XERROR("❌ Image from path failed");
+        }
+
+        // 测试 2：Image 从内存 Buffer 构造
+        X_Y::Buffer fileData = X_Y::FilesSystem::ReadFileBinary(pngPath);
+        if (fileData)
+        {
+            X_Y::Image imgFromMem(fileData);
+            if (imgFromMem.IsLoaded())
+            {
+                XINFO("✅ Image from memory: {0}x{1}x{2} ({3} bytes)",
+                    imgFromMem.GetWidth(), imgFromMem.GetHeight(),
+                    imgFromMem.GetChannels(), imgFromMem.GetDataSize());
+            }
+            else
+            {
+                XERROR("❌ Image from memory failed");
+            }
+        }
+
+        // 测试 3：Texture2D::Create(path) — 自动走 Image 层
+        m_TestTexture = X_Y::Texture2D::Create(pngPath);
+        if (m_TestTexture && m_TestTexture->IsLoaded())
+        {
+            XINFO("✅ Texture2D from path: {0}x{1} (ID={2})",
+                m_TestTexture->GetWidth(), m_TestTexture->GetHeight(),
+                m_TestTexture->GetRendererID());
+        }
+        else
+        {
+            XERROR("❌ Texture2D from path failed");
+        }
     }
 
     X_Y::ImGuiLayer m_ImGuiLayer;
+    X_Y::Ref<X_Y::Texture2D> m_TestTexture;
 protected:
     void onRender() override
     {
@@ -104,6 +160,16 @@ int main(int argc, char* argv[])
         win.m_ImGuiLayer.Begin();
 
         // 画 ImGui 控件
+        if (win.m_TestTexture && win.m_TestTexture->IsLoaded())
+        {
+            ImGui::Begin("PNG Test");
+            ImGui::Text("Texture: %dx%d",
+                win.m_TestTexture->GetWidth(),
+                win.m_TestTexture->GetHeight());
+            ImGui::Image((ImTextureID)(uint64_t)win.m_TestTexture->GetRendererID(),
+                ImVec2(200, 200));
+            ImGui::End();
+        }
         ImGui::ShowDemoWindow();
 
         win.Render();

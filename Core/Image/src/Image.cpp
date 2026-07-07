@@ -1,5 +1,8 @@
-#include "Image.h"
+﻿#include "Image.h"
+
+extern "C" {
 #include "__pngdec.h"
+}
 
 #include "Log/include/XYlog.h"
 #include "FilesSystem/include/FilesSystem.h"
@@ -15,7 +18,7 @@ namespace X_Y {
 		if (!fileData)
 		{
 			m_Error = ImageError::FileNotFound;
-			XY_CORE_ERROR("Image: failed to read file: {0}", filepath.string());
+			XFATAL("Image: failed to read file: {0}", filepath.string());
 			return;
 		}
 		DecodeFromBuffer(fileData);
@@ -106,7 +109,7 @@ namespace X_Y {
 		if (result != PNG_OK)
 		{
 			m_Error = ImageError::DecodeFailed;
-			XY_CORE_ERROR("Image: png_decode failed with error code {0}", result);
+			XFATAL("Image: png_decode failed with error code {0}", result);
 			return;
 		}
 
@@ -123,7 +126,7 @@ namespace X_Y {
 		m_Loaded   = true;
 		m_Error    = ImageError::None;
 
-		X_DEBUG("Image: loaded {0}x{1}x{2} ({3} bytes)",
+		XDEBUG("Image: loaded {0}x{1}x{2} ({3} bytes)",
 			w, h, ch, pixelSize);
 	}
 
