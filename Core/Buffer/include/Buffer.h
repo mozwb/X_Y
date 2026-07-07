@@ -15,6 +15,9 @@ namespace X_Y {
 		uint64_t Size = 0;
 		// ✅ 添加容量字段，支持自动扩容
 		uint64_t Capacity = 0;
+		// ✅ 内存来源标记：true 表示用 free() 释放（来自 malloc/calloc）
+		//   false 表示用 delete[] 释放（来自 new[]）
+		bool bFreeInstead = false;
 
 		Buffer() = default;
 
@@ -37,10 +40,12 @@ namespace X_Y {
 
 		Buffer(Buffer&& other) noexcept
 			: Data(other.Data), Size(other.Size), Capacity(other.Capacity)
+			, bFreeInstead(other.bFreeInstead)
 		{
 			other.Data = nullptr;
 			other.Size = 0;
 			other.Capacity = 0;
+			other.bFreeInstead = false;
 		}
 
 		~Buffer()
@@ -71,9 +76,11 @@ namespace X_Y {
 				Data = other.Data;
 				Size = other.Size;
 				Capacity = other.Capacity;
+				bFreeInstead = other.bFreeInstead;
 				other.Data = nullptr;
 				other.Size = 0;
 				other.Capacity = 0;
+				other.bFreeInstead = false;
 			}
 			return *this;
 		}
@@ -117,10 +124,17 @@ namespace X_Y {
 
 		void Release()
 		{
-			delete[] Data;
+			if (Data)
+			{
+				if (bFreeInstead)
+					free(Data);
+				else
+					delete[] Data;
+			}
 			Data = nullptr;
 			Size = 0;
 			Capacity = 0;
+			bFreeInstead = false;
 		}
 
 		void ZeroInitialize()

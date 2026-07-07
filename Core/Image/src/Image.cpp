@@ -112,24 +112,10 @@ namespace X_Y {
 
 		/* ── 将解码结果移入 Buffer，由 Buffer 管理生命周期 ── */
 		uint64_t pixelSize = (uint64_t)w * h * ch;
-		m_Pixels.Data     = rgba;        // png_decode 用 malloc 分配的，Buffer 不会 delete[]
+		m_Pixels.Data     = rgba;
 		m_Pixels.Size     = pixelSize;
-		m_Pixels.Capacity = pixelSize;   // 刚好一个 malloc 块
-
-		/* ⚠️ 注意：png_decode 用 malloc，Buffer 析构用 delete[]。
-		 * 我们需要把 malloc 的内存转到 new[]，否则未定义行为。
-		 * 见下方注释。*/
-		if (rgba)
-		{
-			/* 迂回：从 malloc 转成 new[] */
-			uint8_t* owned = new uint8_t[pixelSize];
-			memcpy(owned, rgba, (size_t)pixelSize);
-			free(rgba);
-
-			m_Pixels.Data = owned;
-			m_Pixels.Size = pixelSize;
-			m_Pixels.Capacity = pixelSize;
-		}
+		m_Pixels.Capacity = pixelSize;
+		m_Pixels.bFreeInstead = true;  // malloc 来的，用 free() 释放
 
 		m_Width    = w;
 		m_Height   = h;
