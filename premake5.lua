@@ -103,6 +103,7 @@ project "Test"
         "Timer",
         "Buffer",
         "UI",
-        "FilesSystem"
+        "FilesSystem",
+        "Image"
     }
 end
