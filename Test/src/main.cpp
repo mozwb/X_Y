@@ -10,6 +10,7 @@
 #include<Image/include/Image.h>
 #include<Buffer/include/Buffer.h>
 #include<FilesSystem/include/FilesSystem.h>
+#include<Model/include/ModelLoader.h>
 #include<glad/glad.h>
 
 // hardcoded shader sources
@@ -71,6 +72,9 @@ public:
 
         // ── 测试 PNG 加载 ──
         LoadTestPNG();
+
+        // ── 测试 OBJ 加载 ──
+        LoadTestModel();
     }
 
     void LoadTestPNG()
@@ -123,6 +127,78 @@ public:
 
     X_Y::ImGuiLayer m_ImGuiLayer;
     X_Y::Ref<X_Y::Texture2D> m_TestTexture;
+
+    void LoadTestModel()
+    {
+        X_Y::Model::Model model;
+
+        // 测试 1: sample.obj (顶点+面, 无vt/vn)
+        {
+            std::string err;
+            if (X_Y::Model::LoadObj("assets/sample.obj", model, err))
+            {
+                XINFO("sample.obj: {0} vertices, {1} normals, {2} texcoords, {3} meshes",
+                    model.vertices.size() / 3,
+                    model.normals.size() / 3,
+                    model.texcoords.size() / 2,
+                    model.meshes.size());
+                for (auto& m : model.meshes)
+                {
+                    XINFO("   Mesh '{0}': {1} indices ({2} triangles)",
+                        m.name, m.indices.size(), m.indices.size() / 3);
+                }
+            }
+            else
+            {
+                XERROR("sample.obj: {0}", err);
+            }
+        }
+
+        // 测试 2: teapot.obj
+        {
+            std::string err;
+            if (X_Y::Model::LoadObj("assets/teapot.obj", model, err))
+            {
+                XINFO("teapot.obj: {0} vertices, {1} normals, {2} texcoords, {3} meshes",
+                    model.vertices.size() / 3,
+                    model.normals.size() / 3,
+                    model.texcoords.size() / 2,
+                    model.meshes.size());
+                for (auto& m : model.meshes)
+                {
+                    XINFO("   Mesh '{0}': {1} indices ({2} triangles)",
+                        m.name, m.indices.size(), m.indices.size() / 3);
+                }
+            }
+            else
+            {
+                XERROR("teapot.obj: {0}", err);
+            }
+        }
+
+        // 测试 3: trumpet.obj
+        {
+            std::string err;
+            if (X_Y::Model::LoadObj("assets/trumpet.obj", model, err))
+            {
+                XINFO("trumpet.obj: {0} vertices, {1} normals, {2} texcoords, {3} meshes",
+                    model.vertices.size() / 3,
+                    model.normals.size() / 3,
+                    model.texcoords.size() / 2,
+                    model.meshes.size());
+                for (auto& m : model.meshes)
+                {
+                    XINFO("   Mesh '{0}': {1} indices ({2} triangles)",
+                        m.name, m.indices.size(), m.indices.size() / 3);
+                }
+            }
+            else
+            {
+                XERROR("trumpet.obj: {0}", err);
+            }
+        }
+    }
+
 protected:
     void onRender() override
     {

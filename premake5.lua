@@ -66,6 +66,7 @@ include "Core/Buffer"
 include "Core/FilesSystem"
 include "Core/UI"
 include "Core/Image"
+include "Core/Model"
 group ""
 
 -- 测试项目
@@ -104,6 +105,7 @@ project "Test"
         "Buffer",
         "UI",
         "FilesSystem",
-        "Image"
+        "Image",
+        "Model"
     }
 end
