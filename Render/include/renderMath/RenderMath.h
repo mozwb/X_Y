@@ -25,5 +25,7 @@ namespace X_Y {
 
 		MATH_SELF_API(Translate, Translate)
 		MATH_SELF_API(toMat4, toMat4)
+		MATH_SELF_API(LookAt, LookAt)
+		MATH_SELF_API(Scale, Scale)
 	};
 }
