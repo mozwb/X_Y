@@ -6,7 +6,7 @@
 #endif
 namespace X_Y {
 
-	Buffer FilesSystem::ReadFileBinary(const std::filesystem::path& filepath)
+	Buffer FilesSystem::ReadFileBinary(const File& filepath)
 	{
 		std::ifstream stream(filepath, std::ios::binary | std::ios::ate);
 
@@ -34,7 +34,7 @@ namespace X_Y {
 		return buffer;
 	}
 
-	bool FilesSystem::WriteFileBinary(const std::filesystem::path& filepath, const Buffer& buffer)
+	bool FilesSystem::WriteFileBinary(const File& filepath, const Buffer& buffer)
 	{
 		std::ofstream stream(filepath, std::ios::binary | std::ios::trunc);
 

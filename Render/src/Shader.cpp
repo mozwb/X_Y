@@ -2,6 +2,7 @@
 #include"Render/include/RenderAPI.h"
 #include"Render/include/Render.h"
 #include"Render/include/OpenGL/OpenGlShader.h"
+#include <filesystem>
 namespace X_Y {
 	Ref<Shader> Shader::Create(const std::string& filepath)
 	{
@@ -53,6 +54,20 @@ namespace X_Y {
 		auto shader = Shader::Create(filepath);
 		Add(name, shader);
 		return shader;
+	}
+
+	void ShaderLibrary::LoadDirectory(const std::string& directory)
+	{
+		namespace fs = std::filesystem;
+		for (const auto& entry : fs::directory_iterator(directory))
+		{
+			if (entry.path().extension() == ".glsl")
+			{
+				std::string path = entry.path().string();
+				std::string name = entry.path().stem().string();
+				Load(name, path);
+			}
+		}
 	}
 
 	Ref<Shader> ShaderLibrary::Get(const std::string& name)

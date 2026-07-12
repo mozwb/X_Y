@@ -34,7 +34,7 @@ namespace X_Y {
 		explicit Image(const Buffer& fileData);
 
 		/* ── 从文件路径构造 ── */
-		explicit Image(const std::filesystem::path& filepath);
+		explicit Image(const File& filepath);
 
 		Image() = default;
 		Image(Image&& other) noexcept;

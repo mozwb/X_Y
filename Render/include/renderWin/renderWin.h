@@ -14,6 +14,7 @@ namespace X_Y {
 		RenderWin(XWidget* parent=nullptr);
 		~RenderWin() = default;
 		void RenderInit();
+		//发送消息给Render
 		void emit(RenderEvent* e);
 	};
 }

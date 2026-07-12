@@ -1,13 +1,6 @@
 ﻿#include"renderWin/renderWin.h"
 namespace X_Y {
-	RenderWin::RenderWin(XWidget* parent): XWidget(parent){
-        connect(
-            this,
-            RenderType::RenderStart,
-            Render::instance(),
-            &Render::submitEvent
-        );
-	}
+	RenderWin::RenderWin(XWidget* parent): XWidget(parent){}
     void RenderWin::RenderInit() {
 
         RenderStart* e = new RenderStart(this, 
@@ -15,7 +8,19 @@ namespace X_Y {
         );
         if (e&&this->get_context()) {
             XDEBUG("RenderStart发送")
-            this->emit(e);
+            auto dispatcher = X_Y::MovementDispatcher();
+			dispatcher.Connect(
+				this,
+				RenderType::RenderStart,
+				Render::instance(),
+				[this](const XMovement& e) {
+					auto& renderStart = dynamic_cast<const RenderStart&>(e);
+					XDEBUG("RenderStart接收")
+						Render::instance()->submitEvent(const_cast<RenderStart*>(&renderStart));
+				}
+			);
+            e->DispatchEvent(static_cast<void*>(&dispatcher));
+            delete e;
         }
     }
     void RenderWin::emit(RenderEvent* e) {

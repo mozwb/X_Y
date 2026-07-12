@@ -39,6 +39,17 @@ struct GPUMeshData {
     std::vector<uint32_t> Indices;    ///< triangle list 索引
 };
 
+/// @brief 一个 mesh 的完整 GPU 数据（带名字方便识别）
+struct GPUMeshResult {
+    std::string Name;
+    GPUMeshData Data;
+};
+
+/// @brief 一个完整模型的 GPU 数据（包含所有 mesh）
+struct GPUModel {
+    std::vector<GPUMeshResult> Meshes;
+};
+
 /// @brief 从 Model 的某个 Mesh 生成 GPU 可用的顶点/索引数据
 ///
 /// @param model        源模型数据（平铺属性数组）
@@ -129,6 +140,35 @@ inline bool PrepareMesh(const Model& model,
 
         unique_map[key] = new_index;
         out_data.Indices.push_back(new_index);
+    }
+
+    return true;
+}
+
+/// @brief 一步搞定：Load .obj → Prepare 所有 Mesh → 输出 GPU Model
+inline bool LoadAndPrepare(const std::string& filepath,
+                           GPUModel& out_model,
+                           std::string& err)
+{
+    Model model;
+    if (!LoadObj(filepath, model, err))
+        return false;
+
+    if (model.meshes.empty())
+    {
+        err = "No meshes in file";
+        return false;
+    }
+
+    out_model.Meshes.clear();
+    out_model.Meshes.reserve(model.meshes.size());
+
+    for (const auto& mesh : model.meshes)
+    {
+        GPUMeshData data;
+        if (!PrepareMesh(model, mesh, data, err))
+            return false;
+        out_model.Meshes.push_back({ mesh.name, std::move(data) });
     }
 
     return true;

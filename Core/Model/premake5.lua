@@ -9,6 +9,9 @@ project "Model"
         "src/**.cpp"
     }
 
+    filter "files:**/ModelGenerator.cpp"
+        -- 需要 FilesSystem::WriteFileBinary，无额外依赖
+
     includedirs
     {
         "include"

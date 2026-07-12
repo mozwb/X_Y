@@ -33,10 +33,15 @@ namespace X_Y {
 		void Add(const Ref<Shader>& shader);
 		Ref<Shader> Load(const std::string& filepath);
 		Ref<Shader> Load(const std::string& name, const std::string& filepath);
+		/// 加载目录下所有 .glsl 文件，按文件名（不含扩展名）注册
+		void LoadDirectory(const std::string& directory);
 
 		Ref<Shader> Get(const std::string& name);
 
 		bool Exists(const std::string& name) const;
+
+		/// 遍历所有已注册的 shader 名称
+		const auto& GetAll() const { return m_Shaders; }
 	private:
 		std::unordered_map<std::string, Ref<Shader>> m_Shaders;
 	};
