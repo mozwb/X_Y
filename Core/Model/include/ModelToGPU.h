@@ -34,20 +34,20 @@ inline constexpr uint32_t kVertexStride =
 // 不需要改任何硬编码数字。
 
 /// @brief GPU-ready 数据块：平铺 float 数组 + uint32_t 索引
-struct GPUMeshData {
+struct TOGPUMeshData {
     std::vector<float> Vertices;      ///< interleaved 顶点数据
     std::vector<uint32_t> Indices;    ///< triangle list 索引
 };
 
 /// @brief 一个 mesh 的完整 GPU 数据（带名字方便识别）
-struct GPUMeshResult {
+struct TOGPUMeshResult {
     std::string Name;
-    GPUMeshData Data;
+    TOGPUMeshData Data;
 };
 
 /// @brief 一个完整模型的 GPU 数据（包含所有 mesh）
-struct GPUModel {
-    std::vector<GPUMeshResult> Meshes;
+struct TOGPUModel {
+    std::vector<TOGPUMeshResult> Meshes;
 };
 
 /// @brief 从 Model 的某个 Mesh 生成 GPU 可用的顶点/索引数据
@@ -60,7 +60,7 @@ struct GPUModel {
 // 在头文件中提供内联实现，避免链接时找不到符号的问题。
 inline bool PrepareMesh(const Model& model,
                         const Mesh& mesh,
-                        GPUMeshData& out_data,
+                        TOGPUMeshData& out_data,
                         std::string& err)
 {
     out_data.Vertices.clear();
@@ -147,7 +147,7 @@ inline bool PrepareMesh(const Model& model,
 
 /// @brief 一步搞定：Load .obj → Prepare 所有 Mesh → 输出 GPU Model
 inline bool LoadAndPrepare(const std::string& filepath,
-                           GPUModel& out_model,
+                           TOGPUModel& out_model,
                            std::string& err)
 {
     Model model;
@@ -165,7 +165,7 @@ inline bool LoadAndPrepare(const std::string& filepath,
 
     for (const auto& mesh : model.meshes)
     {
-        GPUMeshData data;
+        TOGPUMeshData data;
         if (!PrepareMesh(model, mesh, data, err))
             return false;
         out_model.Meshes.push_back({ mesh.name, std::move(data) });

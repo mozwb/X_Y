@@ -80,13 +80,11 @@ private:
                 return false;
             }
         }
-
         if (!X_Y::Model::LoadAndPrepare("assets/box.obj", m_Model, err))
         {
             XERROR("LoadAndPrepare failed: {}", err);
             return false;
         }
-
         return true;
     }
     void DrawShaderUI()
@@ -109,7 +107,7 @@ private:
 
     X_Y::ImGuiLayer* m_ImGuiLayer = nullptr;
     X_Y::Ref<X_Y::Shader> m_Shader;
-	X_Y::Model::GPUModel m_Model;
+	X_Y::Model::TOGPUModel m_Model;
     inline static X_Y::ShaderLibrary s_ShaderLib;
     inline static std::vector<std::string> s_ShaderNames;
 };

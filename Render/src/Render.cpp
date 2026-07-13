@@ -1,6 +1,7 @@
 ﻿#include "Render.h"
 
 namespace X_Y {
+    Scope<Render::SceneData> Render::s_SceneData = CreateScope<Render::SceneData>();
     void Render::submitEvent(XMovement* e) {
         if (!e) return;
         XDEBUG("submit执行")
@@ -34,5 +35,26 @@ namespace X_Y {
             XDEBUG("切换窗口上下文")
                 GCT->MakeCurrent();
         }
+    }
+    void Render::Submit(const Ref<Shader>& shader, const Ref<VertexArray>& vertexArray, const glm::mat4& transform)
+    {
+        shader->Bind();
+        shader->SetMat4("u_ViewProjection", s_SceneData->ViewProjectionMatrix);
+        shader->SetMat4("u_Transform", transform);
+
+        vertexArray->Bind();
+        RenderCommand::DrawIndexed(vertexArray);
+    }
+
+    void Render::BeginScene(const Camera& camera, const RenderMath::Mat4& view)
+    {
+        s_SceneData->ViewProjectionMatrix = camera.GetProjection() * view;
+    }
+    void Render::EndScene()
+    {
+    }
+    void Render::OnWindowResize(uint32_t width, uint32_t height)
+    {
+        RenderCommand::SetViewport(0, 0, width, height);
     }
 }
