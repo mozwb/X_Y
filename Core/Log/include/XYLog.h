@@ -1,18 +1,20 @@
 ﻿#pragma once
 #ifdef XY_DEBUG
 #include"LogConfigure.h"
-#include"LogDeviceExt.h"
 namespace X_Y {
 	template<typename T> using LogBase = LogConfigure::LogConfigure<T>;
 	using	LogConfigure::DEVICE;
+	using	LogConfigure::LFile;
+	//建议一个类当作一个对象，否则可能模板会冲突
 	struct LOG : public LogBase<LOG> {
 		using LogBase<LOG>::LogBase;
 		LOG_LEVEL_EXT(Pink)
 		LOG_LEVEL_API(Pink)
-		LOG(str name): LogBase<LOG>(name) {
+		LOG(str name) : LogBase<LOG>(name) {
 			Pink::setModel("%255:105:180%[位置][日期][时间][发起者][等级]:[内容]%#");
+			this->add(new DEVICE());
+			this->add(new LFile("log.txt", std::ios::trunc));
 		}
-
 	};
 }
 inline X_Y::LOG logger("log");
@@ -42,7 +44,7 @@ inline X_Y::LOG logger("log");
 	#else
 	#define XY_DEBUGBREAK()
 	#endif
-// 简单的宏重载：根据参数个数选择带消息或不带消息的实现（兼容 MSVC/GCC/Clang）
+
 #define XY_PP_GET_MACRO(_1,_2,NAME,...) NAME
 
 #define XY_CORE_ASSERT_1(condition) \
@@ -75,57 +77,3 @@ inline X_Y::LOG logger("log");
 	#define XY_DEBUGBREAK()
 	#define XY_PROFILE_FUNCTION
 #endif
-//使用示例
-//
-//struct MyLogger : public X_Y::LogBase<MyLogger> {
-//	using X_Y::LogBase<MyLogger>::LogBase;
-//};
-//
-//struct XLogger : public X_Y::LogBase<XLogger> {
-//	using X_Y::LogBase<XLogger>::LogBase;
-//	LOG_LEVEL_EXT(Oh)
-//		LOG_LEVEL_API(Oh)
-//		template<typename ...Args>
-//	XLogger(Args ...args) : X_Y::LogBase<XLogger>(args ...) {
-//		Oh::setModel("%255:0:255%[位置][日期][时间][发起者][等级]:[内容]%#");
-// 	str format(str mod, str lev, str content, str file, str line, str func) {
-//		//重写这个可以自定义模板匹配方式
-//}
-//str PiPei(str s, vec<str> args) {
-//	//重写这个可以自定义参数匹配模式
-//}
-// 
-//	}
-//};
-//struct NewDEvice : public X_Y::DEVICE {
-//	std::string toString() const override {
-//		return "NewDevice";
-//	}
-//	void Log(const std::string& message)const override {
-//		std::cout << "NewDevice Log: " << message << std::endl;
-//	}
-//};
-//int main() {
-//	X_Y::LOG a("LOG");
-//
-//	MyLogger logger("MyLogger");
-//	XLogger xlogger("XLogger");
-//	std::cout << MyLogger::Trace::getModel() << std::endl;
-//	std::cout << XLogger::Oh::getModel() << std::endl;
-//	std::cout << XLogger::Oh::toString() << std::endl;
-//	std::cout << xlogger << std::endl;
-//	xlogger.log<XLogger::Oh>("Hello, %!", "World");
-//
-//	logger.add(new NewDEvice());
-//
-//	INFO("aaaa")
-//		TRACE("aaaa")
-//		DEBUG("aaaa")
-//		WARN("aaaa")
-//
-//		ERROR("aaaa")
-//		FATAL("aaaa")
-//
-//
-//		return 0;
-//}

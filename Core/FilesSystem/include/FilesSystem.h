@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include"Buffer/include/Buffer.h"
 #include<filesystem>
+#include <fstream>
 #include <regex>
 namespace X_Y {
     using File = std::filesystem::path;
@@ -20,8 +21,8 @@ namespace X_Y {
 #endif
     };
 
-    /// @brief 路径对象，类似 Python 的 pathlib.Path
-    ///        每个 XPath 代表一个文件或目录路径，操作作用于自身
+    // @brief 路径对象，类似 Python 的 pathlib.Path
+    //        每个 XPath 代表一个文件或目录路径，操作作用于自身
     class XPath {
     public:
         XPath() = default;

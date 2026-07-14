@@ -1,0 +1,100 @@
+[38;2;80;220;100m[D:\workbench\X_Y\APP\Widget\src\Entry.cpp:15:WinMain][2026-07-14][17:47:17][log][INFO]:³ÌÐòÔËÐÐµ½Èë¿Ú[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\Widget\include\WinCore.h:210:X_Y::WinCore::RegisterWinClass][2026-07-14][17:47:17][log][INFO]:hInstance:NO_TO_STRING[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:9:X_Y::XWidget::XWidget][2026-07-14][17:47:17][log][DEBUG]:XWidget ¹¹ÔìÖ´ÐÐ£¬parent=0[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:97:X_Y::MovementDispatcher::Connect][2026-07-14][17:47:17][log][DEBUG]:Èë¶Ó¼ÓÒ»£»X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:97:X_Y::MovementDispatcher::Connect][2026-07-14][17:47:17][log][DEBUG]:Èë¶Ó¼ÓÒ»£»X_Y::MovementType)[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:44:X_Y::XWidget::show][2026-07-14][17:47:17][log][INFO]:´°¿ÚÎ´´´½¨£¬×Ô¶¯´´½¨´°¿Ú: Model Viewer[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\Widget\src\BaseWIn.cpp:55:X_Y::BaseWin::Create][2026-07-14][17:47:17][log][INFO]:hwnd:17894408[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\GraphicsContext\src\GraphicsContext.cpp:50:X_Y::OpenglGrContext::Init][2026-07-14][17:47:17][log][INFO]:OpenGL ÉÏÏÂÎÄ³õÊ¼»¯³É¹¦[0m
+[38;2;90;180;255m[D:\workbench\X_Y\Render\Render\src\RenderWin.cpp:10:X_Y::RenderWin::RenderInit][2026-07-14][17:47:17][log][DEBUG]:RenderStart·¢ËÍ[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:97:X_Y::MovementDispatcher::Connect][2026-07-14][17:47:17][log][DEBUG]:Èë¶Ó¼ÓÒ»£»X_Y::RenderType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\Render\Render\src\RenderWin.cpp:18:X_Y::RenderWin::RenderInit::<lambda_1>::operator ()][2026-07-14][17:47:17][log][DEBUG]:RenderStart½ÓÊÕ[0m
+[38;2;90;180;255m[D:\workbench\X_Y\Render\Render\src\Render.cpp:11:X_Y::Render::submitEvent][2026-07-14][17:47:17][log][DEBUG]:submitÖ´ÐÐ[0m
+[38;2;90;180;255m[D:\workbench\X_Y\Render\Render\src\Render.cpp:20:X_Y::Render::submitEvent][2026-07-14][17:47:17][log][DEBUG]:µ±Ç°APIÀàÐÍ:X_Y::GraphicsType) [0m
+[38;2;90;180;255m[D:\workbench\X_Y\Render\Render\src\Render.cpp:24:X_Y::Render::submitEvent][2026-07-14][17:47:17][log][DEBUG]:´´½¨ÐÂ RenderAPI[0m
+[38;2;90;180;255m[D:\workbench\X_Y\Render\Render\src\RenderAPI.cpp:5:X_Y::RenderAPI::Create][2026-07-14][17:47:17][log][DEBUG]:RenderAPI´´½¨[0m
+[38;2;90;180;255m[D:\workbench\X_Y\Render\Render\include\renderEvent\RenderEvent.h:17:X_Y::RenderEvent::DispatchEvent][2026-07-14][17:47:17][log][DEBUG]:ÊÂ¼þ´¦Àí³É¹¦RenderStart[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\UI\src\ImGuiLayer.cpp:46:X_Y::ImGuiLayer::OnAttach][2026-07-14][17:47:17][log][INFO]:ImGui ÒÑ³õÊ¼»¯[0m
+[38;2;255;210;0m[D:\workbench\X_Y\Render\Render\src\OpenGLShader.cpp:36:X_Y::OpenGLShader::OpenGLShader][2026-07-14][17:47:17][log][WARN]:Shader creation took 24.3954 ms[0m
+[38;2;255;210;0m[D:\workbench\X_Y\Render\Render\src\OpenGLShader.cpp:36:X_Y::OpenGLShader::OpenGLShader][2026-07-14][17:47:17][log][WARN]:Shader creation took 0.278 ms[0m
+[38;2;90;180;255m[D:\workbench\X_Y\Render\Render\src\Render.cpp:161:X_Y::Render::CreateMesh][2026-07-14][17:47:17][log][DEBUG]:Render::CreateMesh: handle=1, 18 unique verts, 18 indices[0m
+[38;2;80;220;100m[D:\workbench\X_Y\Test\src\ModelViewer.h:133:ModelViewer::loadBox][2026-07-14][17:47:17][log][INFO]:loadBox: handle=1, 18 unique verts, 18 indices[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:17][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowFocus[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:36:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-07-14][17:47:17][log][DEBUG]:´°¿Úresize: 1264x681[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:323:X_Y::Movement::DispatchEvent][2026-07-14][17:47:17][log][DEBUG]:ÊÂ¼þ´¦Àí³É¹¦WindowResize[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:17][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:18][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜWindowMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\Movements.h:327:X_Y::Movement::DispatchEvent][2026-07-14][17:47:19][log][DEBUG]:ÊÂ¼þ´¦ÀíÊ§°ÜMouseMoved[0m

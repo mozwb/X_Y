@@ -1,7 +1,6 @@
 ﻿#include"xypch.h"
 #include "Log/include/XYLog.h"
 #include"ModelViewer.h"
-
 int main(int argc, char* argv[])
 {
     X_Y::Application app(argc, argv);

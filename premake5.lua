@@ -7,15 +7,18 @@ workspace "X_Y"
     cppdialect "C++20"
     staticruntime "On"
 
-    -- ✅ 全局包含：整个解决方案根目录（所有项目自动生效！）
+    -- �?全局包含：整个解决方案根目录（所有项目自动生效！�?
       includedirs
     {
-        ".",            -- 你的引擎根目录
+        ".",            -- 你的引擎根目�?
         "vendor",
-        "Core"
+        "Core",
+        "APP",
+        "Widget",
+        "Render"
     }
 
-    -- ✅ Test 设为启动项目
+    -- �?Test 设为启动项目
     if test_enabled then
         startproject "Test"
     end
@@ -40,35 +43,47 @@ workspace "X_Y"
         symbols "Off"
     
     filter "system:Windows"
-        defines "XY_PLATFORM_WINDOWS"  -- Windows 专属宏
+        defines {
+            "XY_PLATFORM_WINDOWS"
+        }
     filter "system:Linux"
-        defines "XY_PLATFORM_LINUX"    -- Linux 专属宏
+        defines "XY_PLATFORM_LINUX"
     filter "system:macosx"
-        defines "XY_PLATFORM_MAC"      -- macOS 专属宏    
+        defines "XY_PLATFORM_MAC"
 
     filter {}
 
 -- 引入模块
+group "Vendor"
+include "vendor/glad"
+group ""
 
-include "Render"
-include "vendor/glad" 
 group "Core"
 include "Core/Log"
 include "Core/Input"
-include "Core/Movement"
-include "Core/GraphicsContext"
 include "Core/XCore"
-include "Core/Application"
-include "Core/Window"
-include "Core/Math"
+include "Core/XMath"
 include "Core/Timer"
 include "Core/Buffer"
 include "Core/FilesSystem"
-include "Core/UI"
 include "Core/Image"
-include "Core/Model"
+include "Core/Middle"  
 group ""
 
+
+group "APP"
+include "APP/Application"
+include "APP/Movement"
+include "APP/GraphicsContext"
+include "APP/UI"
+include "APP/Widget"
+group ""
+
+
+group "Render"
+include "Render/Render"
+include "Render/Model" 
+group ""
 -- 测试项目
 if test_enabled then
 project "Test"
@@ -89,13 +104,13 @@ project "Test"
         "xypch/xypch.cpp",
     }
 
-    -- ✅ 因为全局已经 includedirs "."，这里啥都不用写！
+    -- �?因为全局已经 includedirs "."，这里啥都不用写�?
     includedirs { 
     "xypch",
     "vendor/glad/include" }
     links
     {
-        "Window",
+        "Widget",
         "Application",
         "GraphicsContext",
         "Render",
@@ -106,6 +121,7 @@ project "Test"
         "UI",
         "FilesSystem",
         "Image",
-        "Model"
+        "Model",
+        "Middle",
     }
 end

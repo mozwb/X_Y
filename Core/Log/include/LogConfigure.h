@@ -96,11 +96,11 @@ public: \
 			}
 		};
 
-		struct File :public DEVICE {
+		struct LFile :public DEVICE {
 			// 成员变量
 			std::string _filename;
 			std::ofstream file;
-			File(
+			LFile(
 				const std::string& filename,
 				std::ios_base::openmode mode = std::ios::out
 			)
@@ -198,7 +198,7 @@ void log##LevelName(std::string content, Args&&... args) { \
 
 				LogConfigure() {
 				name = "DefaultLogger";
-				this->add(new DEVICE());
+				//this->add(new DEVICE());
 				Trace::setModel("%180:180:180%[位置][日期][时间][发起者][等级]:[内容]%#");
 				Debug::setModel("%90:180:255%[位置][日期][时间][发起者][等级]:[内容]%#");
 				Info::setModel("%80:220:100%[位置][日期][时间][发起者][等级]:[内容]%#");
@@ -210,7 +210,7 @@ void log##LevelName(std::string content, Args&&... args) { \
 			LogConfigure(str name)
 				: name(name)
 			{
-				this->add(new DEVICE());
+				//this->add(new DEVICE());
 				Trace::setModel("%180:180:180%[位置][日期][时间][发起者][等级]:[内容]%#");
 				Debug::setModel("%90:180:255%[位置][日期][时间][发起者][等级]:[内容]%#");
 				Info::setModel("%80:220:100%[位置][日期][时间][发起者][等级]:[内容]%#");

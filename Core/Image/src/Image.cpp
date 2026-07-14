@@ -8,10 +8,6 @@ extern "C" {
 #include "FilesSystem/include/FilesSystem.h"
 
 namespace X_Y {
-
-	/* ────────────────────────────────────────────────
-	 *  构造函数：从文件路径
-	 * ──────────────────────────────────────────────── */
 	Image::Image(const File& filepath)
 	{
 		Buffer fileData = FilesSystem::ReadFileBinary(filepath);
