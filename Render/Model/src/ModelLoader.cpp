@@ -1,311 +1,219 @@
 ﻿#include "Model/include/ModelLoader.h"
 #include "Core/FilesSystem/include/FilesSystem.h"
-
-#include <cstdio>
-#include <cstring>
 #include <sstream>
 #include <string>
 #include <vector>
+#include <cstring>
 
 namespace X_Y::Model {
 
 // ----------------------------------------------------------------
-// Internal helpers
+// 逐行解析 OBJ（用 sscanf / stringstream，不靠指针跳转）
 // ----------------------------------------------------------------
 
-static inline bool isWhitespace(char c) {
-    return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+static std::vector<std::string> split(const std::string& s, char delim)
+{
+    std::vector<std::string> parts;
+    std::istringstream iss(s);
+    std::string token;
+    while (std::getline(iss, token, delim))
+    {
+        if (!token.empty())
+            parts.push_back(token);
+    }
+    return parts;
 }
 
-static inline bool isEndOfLine(char c) {
-    return c == '\n' || c == '\r' || c == '\0';
+// 将 OBJ 1-based 索引转为 0-based。
+// objIdx <= 0 (未设置/无效) 时返回 -1；
+// objIdx > 0 时返回 objIdx - 1（1-based → 0-based）；
+// objIdx < 0 时（相对索引）返回 count + objIdx。
+static int resolveIdx(int objIdx, int count)
+{
+    if (objIdx > 0)  return objIdx - 1;
+    if (objIdx == 0 || objIdx == -1)  return -1;  // OBJ 里 0 非法，-1 表示未设置
+    if (objIdx < 0)  return count + objIdx;        // 相对索引
+    return -1;
 }
 
-/// Skip whitespace, return pointer to first non-whitespace (or '\0')
-static const char* skipWhitespace(const char* p) {
-    while (*p && isWhitespace(*p)) ++p;
-    return p;
-}
-
-/// Skip to end of line, return pointer to '\0' or next line
-static const char* skipLine(const char* p) {
-    while (*p && *p != '\n' && *p != '\r') ++p;
-    if (*p == '\r') ++p;
-    if (*p == '\n') ++p;
-    return p;
-}
-
-/// Parse a float from string, advance p past it.
-/// Returns false on failure.
-static bool parseFloat(const char*& p, float& out) {
-    p = skipWhitespace(p);
-    char* end = nullptr;
-    out = static_cast<float>(std::strtod(p, &end));
-    if (end == p) return false; // no digits consumed
-    p = end;
-    return true;
-}
-
-/// Parse an int from string, advance p past it.
-/// Returns false on failure.
-static bool parseInt(const char*& p, int& out) {
-    p = skipWhitespace(p);
-    // OBJ indices can be negative (relative indexing)
-    char* end = nullptr;
-    out = static_cast<int>(std::strtol(p, &end, 10));
-    if (end == p) return false;
-    p = end;
-    return true;
-}
-
-/// Convert 1-based OBJ index to 0-based.
-/// If index > 0: 1-based → 0-based (subtract 1)
-/// If index < 0: relative to current count (negative)
-/// If index == 0: invalid OBJ, treat as error
-static int resolveIndex(int idx, int count) {
-    if (idx > 0)  return idx - 1;
-    if (idx < 0)  return count + idx; // relative: count + negative
-    return -1; // 0 is invalid in OBJ
-}
-
-// ----------------------------------------------------------------
-// Core parser
-// ----------------------------------------------------------------
-
-bool LoadObjFromMemory(const char* data, size_t size, Model& out_model, std::string& err) {
+bool LoadObjFromMemory(const char* data, size_t size, Model& out_model, std::string& err)
+{
     out_model.Clear();
 
-    const char* end = data + size;
-    const char* p = data;
+    std::string content(data, size);
+    std::istringstream stream(content);
+    std::string line;
 
-    // Temporary storage for face parsing
     std::vector<int> face_v, face_vt, face_vn;
-
-    // Current mesh
     Mesh current_mesh;
     bool has_mesh = false;
 
     auto flushMesh = [&]() {
-        if (has_mesh && !current_mesh.indices.empty()) {
-            if (current_mesh.name.empty()) {
+        if (has_mesh && !current_mesh.indices.empty())
+        {
+            if (current_mesh.name.empty())
                 current_mesh.name = "default";
-            }
             out_model.meshes.push_back(std::move(current_mesh));
         }
         current_mesh = Mesh();
         has_mesh = false;
     };
 
-    while (p < end && *p) {
-        // Skip empty lines and comments
-        if (*p == '#' || isEndOfLine(*p)) {
-            p = skipLine(p);
+    while (std::getline(stream, line))
+    {
+        // 去除首尾空白
+        auto trimStart = line.find_first_not_of(" \t\r");
+        if (trimStart == std::string::npos)
             continue;
-        }
+        line = line.substr(trimStart);
 
-        // First character determines the type
-        // We need at least 2 characters to distinguish 'v' vs 'vn'/'vt'
-        if (p + 1 >= end) break;
+        if (line.empty() || line[0] == '#')
+            continue;
 
-        const char* line_start = p;
+        // 按空格分割第一个 token
+        auto firstSpace = line.find_first_of(" \t");
+        std::string type = (firstSpace == std::string::npos) ? line : line.substr(0, firstSpace);
+        std::string rest  = (firstSpace == std::string::npos) ? "" : line.substr(firstSpace + 1);
 
-        switch (*p) {
-        case 'v': {
-            // v, vn, vt
-            char type = p[1];
-            if (isWhitespace(type) || isEndOfLine(type)) {
-                // 'v' - vertex position: x y z [w]
-                p = skipWhitespace(p + 1);
-                float x, y, z;
-                if (!parseFloat(p, x) || !parseFloat(p, y) || !parseFloat(p, z)) {
-                    // skip malformed line
-                    p = skipLine(line_start);
-                    continue;
-                }
+        if (type == "v")
+        {
+            float x, y, z;
+            if (sscanf_s(rest.c_str(), "%f %f %f", &x, &y, &z) >= 3)
+            {
                 out_model.vertices.push_back(x);
                 out_model.vertices.push_back(y);
                 out_model.vertices.push_back(z);
-            } else if (type == 'n') {
-                // 'vn' - normal: nx ny nz
-                p = skipWhitespace(p + 2);
-                float nx, ny, nz;
-                if (!parseFloat(p, nx) || !parseFloat(p, ny) || !parseFloat(p, nz)) {
-                    p = skipLine(line_start);
-                    continue;
-                }
+            }
+        }
+        else if (type == "vn")
+        {
+            float nx, ny, nz;
+            if (sscanf_s(rest.c_str(), "%f %f %f", &nx, &ny, &nz) >= 3)
+            {
                 out_model.normals.push_back(nx);
                 out_model.normals.push_back(ny);
                 out_model.normals.push_back(nz);
-            } else if (type == 't') {
-                // 'vt' - texcoord: u v [w]
-                p = skipWhitespace(p + 2);
-                float u, v;
-                if (!parseFloat(p, u) || !parseFloat(p, v)) {
-                    p = skipLine(line_start);
-                    continue;
-                }
+            }
+        }
+        else if (type == "vt")
+        {
+            float u, v;
+            if (sscanf_s(rest.c_str(), "%f %f", &u, &v) >= 2)
+            {
                 out_model.texcoords.push_back(u);
                 out_model.texcoords.push_back(v);
             }
-            // skip remaining tokens on the line (w component, etc.)
-            p = skipLine(p);
-            break;
         }
-
-        case 'f': {
-            // 'f' - face: v1/vt1/vn1 v2/vt2/vn2 ...
-            if (!isWhitespace(p[1]) && p[1] != '\0') {
-                // 'f' prefixes something else like 'f' in a word, skip
-                p = skipLine(p);
-                break;
-            }
-
-            if (!has_mesh) {
+        else if (type == "f")
+        {
+            if (!has_mesh)
                 has_mesh = true;
-            }
 
-            p = skipWhitespace(p + 1);
+            std::vector<std::string> tokens = split(rest, ' ');
             face_v.clear();
             face_vt.clear();
             face_vn.clear();
 
-            // Parse all vertex references on this line
-            while (*p && !isEndOfLine(*p)) {
-                p = skipWhitespace(p);
-                if (isEndOfLine(*p)) break;
-
-                // Parse triple: v, v/vt, v/vt/vn, v//vn
+            for (const auto& tok : tokens)
+            {
                 int vi = 0, ti = -1, ni = -1;
 
-                // First number is always the vertex index
-                if (!parseInt(p, vi)) break;
-
-                if (*p == '/') {
-                    ++p; // skip '/'
-                    // texcoord index (may be empty: v//vn)
-                    if (*p != '/') {
-                        int parsed_ti = 0;
-                        if (parseInt(p, parsed_ti)) {
-                            ti = parsed_ti;
-                        }
-                    }
-                    if (*p == '/') {
-                        ++p; // skip '/'
-                        // normal index
-                        if (!isEndOfLine(*p) && *p != ' ' && *p != '\t') {
-                            int parsed_ni = 0;
-                            if (parseInt(p, parsed_ni)) {
-                                ni = parsed_ni;
-                            }
-                        }
-                    }
+                // 先尝试 v//vn (格式: 5//1)
+                if (sscanf_s(tok.c_str(), "%d//%d", &vi, &ni) >= 2)
+                {
+                    // 成功，vi 和 ni 已设置，ti 保持 -1
+                }
+                // 再尝试 v/vt/vn, v/vt, v (格式: 5/1/1, 5/1, 5)
+                else if (sscanf_s(tok.c_str(), "%d/%d/%d", &vi, &ti, &ni) >= 1)
+                {
+                    // 至少 vi 已设置
+                }
+                else
+                {
+                    continue; // 所有格式都解析失败，跳过该 token
                 }
 
-                int vert_count = static_cast<int>(out_model.vertices.size() / 3);
-                int tex_count  = static_cast<int>(out_model.texcoords.size() / 2);
-                int norm_count = static_cast<int>(out_model.normals.size() / 3);
+                int vertCount = (int)(out_model.vertices.size() / 3);
+                int texCount  = (int)(out_model.texcoords.size() / 2);
+                int normCount = (int)(out_model.normals.size() / 3);
 
-                face_v.push_back(resolveIndex(vi, vert_count));
-                face_vt.push_back(resolveIndex(ti, tex_count));
-                face_vn.push_back(resolveIndex(ni, norm_count));
-
-                // Skip trailing spaces before next token
-                p = skipWhitespace(p);
+                face_v.push_back(resolveIdx(vi, vertCount));
+                face_vt.push_back(resolveIdx(ti, texCount));
+                face_vn.push_back(resolveIdx(ni, normCount));
             }
 
-            // Triangulate the face
-            size_t verts = face_v.size();
-            if (verts >= 3) {//仅使用于凸面的裁剪
-                // Fan triangulation: (0,1,2), (0,2,3), (0,3,4), ...
-                for (size_t i = 1; i + 1 < verts; ++i) {
-                    // Triangle: face[0], face[i], face[i+1]
-                    current_mesh.indices.push_back({face_v[0], face_vt[0], face_vn[0]});
-                    current_mesh.indices.push_back({face_v[i], face_vt[i], face_vn[i]});
-                    current_mesh.indices.push_back({face_v[i + 1], face_vt[i + 1], face_vn[i + 1]});
+            // triangulate
+            size_t n = face_v.size();
+            if (n >= 3)
+            {
+                for (size_t i = 1; i + 1 < n; ++i)
+                {
+                    current_mesh.indices.push_back({ face_v[0], face_vt[0], face_vn[0] });
+                    current_mesh.indices.push_back({ face_v[i], face_vt[i], face_vn[i] });
+                    current_mesh.indices.push_back({ face_v[i+1], face_vt[i+1], face_vn[i+1] });
                 }
             }
-
-            p = skipLine(p);
-            break;
         }
-
-        case 'g': // group name
-        case 'o': { // object name
-            if (!isWhitespace(p[1]) && p[1] != '\0') {
-                p = skipLine(p);
-                break;
-            }
-            if (has_mesh && !current_mesh.indices.empty()) {
+        else if (type == "g" || type == "o")
+        {
+            if (has_mesh && !current_mesh.indices.empty())
+            {
                 out_model.meshes.push_back(std::move(current_mesh));
                 current_mesh = Mesh();
             }
 
-            p = skipWhitespace(p + 1);
-            const char* name_start = p;
-            while (*p && !isWhitespace(*p) && !isEndOfLine(*p)) ++p;
-            if (name_start < p) {
-                current_mesh.name.assign(name_start, p);
-            } else if (*p == 'g') {
-                current_mesh.name = "default";
+            // 提取 name
+            auto nameStart = rest.find_first_not_of(" \t");
+            if (nameStart != std::string::npos)
+            {
+                auto nameEnd = rest.find_first_of(" \t", nameStart);
+                current_mesh.name = rest.substr(nameStart, nameEnd - nameStart);
             }
-            // 'o' without a name is fine, will use "default"
             has_mesh = true;
-            p = skipLine(p);
-            break;
         }
-
-        case 'u': {
-            // 'usemtl' - skip material switches for now
-            // If we encounter usemtl, flush current mesh and start a new one
-            if (p[1] == 's' && p[2] == 'e' && p[3] == 'm' && p[4] == 't' && p[5] == 'l' &&
-                (isWhitespace(p[6]) || p[6] == '\0')) {
-                if (has_mesh && !current_mesh.indices.empty()) {
-                    out_model.meshes.push_back(std::move(current_mesh));
-                    current_mesh = Mesh();
-                }
-                // Extract material name as mesh name
-                p = skipWhitespace(p + 6);
-                const char* mtl_start = p;
-                while (*p && !isWhitespace(*p) && !isEndOfLine(*p)) ++p;
-                if (mtl_start < p) {
-                    current_mesh.name.assign(mtl_start, p);
-                }
-                has_mesh = true;
+        else if (type == "usemtl")
+        {
+            if (has_mesh && !current_mesh.indices.empty())
+            {
+                out_model.meshes.push_back(std::move(current_mesh));
+                current_mesh = Mesh();
             }
-            p = skipLine(p);
-            break;
+            // 材质名作为 mesh 名
+            auto nameStart = rest.find_first_not_of(" \t");
+            if (nameStart != std::string::npos)
+                current_mesh.name = rest.substr(nameStart);
+            has_mesh = true;
         }
-
-        case 's': // smoothing group - skip
-        case '#': // comment
-        case 'm': // mtllib - skip
-        default:
-            p = skipLine(p);
-            break;
+        else
+        {
+            // mtllib, s 等跳过
         }
     }
 
-    // Flush last mesh
-    if (has_mesh && !current_mesh.indices.empty()) {
-        if (current_mesh.name.empty()) {
+    // flush last
+    if (has_mesh && !current_mesh.indices.empty())
+    {
+        if (current_mesh.name.empty())
             current_mesh.name = "default";
-        }
         out_model.meshes.push_back(std::move(current_mesh));
     }
 
-    // If no meshes were created but we have vertices, create a default mesh
-    if (out_model.meshes.empty() && !out_model.vertices.empty()) {
-        Mesh default_mesh;
-        default_mesh.name = "default";
-        out_model.meshes.push_back(std::move(default_mesh));
+    // 如果没有任何 mesh 但有顶点，创建默认 mesh
+    if (out_model.meshes.empty() && !out_model.vertices.empty())
+    {
+        Mesh def;
+        def.name = "default";
+        out_model.meshes.push_back(std::move(def));
     }
 
     return true;
 }
 
-bool LoadObj(const std::string& filepath, Model& out_model, std::string& err) {
+bool LoadObj(const std::string& filepath, Model& out_model, std::string& err)
+{
     Buffer buf = FilesSystem::ReadFileBinary(filepath);
-    if (!buf.Size) {
+    if (!buf.Size)
+    {
         err = "Failed to read file: " + filepath;
         return false;
     }
@@ -318,4 +226,5 @@ bool LoadObj(const std::string& filepath, Model& out_model, std::string& err) {
     );
 }
 
-} // namespace X_Y::Model
+} 
+// namespace X_Y::Model

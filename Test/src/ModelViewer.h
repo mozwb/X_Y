@@ -49,7 +49,7 @@ private:
     void onRender() override
     {
         X_Y::Render::SetClearColor(
-            X_Y::RenderMath::Vec4(0.15f, 0.15f, 0.2f, 1.0f));
+        X_Y::RenderMath::Vec4(0.15f, 0.15f, 0.2f, 1.0f));
         X_Y::Render::Clear();
 
         // ── ImGui ──
@@ -77,6 +77,10 @@ private:
                 X_Y::RenderMath::Mat4(1.0f),
                 X_Y::RenderMath::Vec3(1.0f));
 
+            // 切换 shader 后设置各自特有的 uniform
+            m_Shader->Bind();
+            m_Shader->SetFloat4("u_Color", m_Color);
+
             X_Y::Render::BeginScene(camera, view);
             X_Y::Render::Submit(m_Shader, m_BoxHandle, model);
             X_Y::Render::EndScene();
@@ -87,7 +91,7 @@ private:
     {
         std::string err;
 
-        // 没有才生成
+        // 确保 box.obj 存在
         if (!X_Y::FilesSystem::FileExists("assets/box.obj"))
         {
             if (!X_Y::Model::GenerateBoxOBJ(1.0f, 1.0f, 1.0f, "assets/box.obj", err))
@@ -97,12 +101,35 @@ private:
             }
         }
 
-        // 加载 .obj
+        // 走 OBJ 解析路径（诊断问题）
         X_Y::Model::Model model;
         if (!X_Y::Model::LoadObj("assets/box.obj", model, err))
         {
             XERROR("LoadObj failed: {}", err);
             return false;
+        }
+
+        XINFO("=== OBJ 解析诊断 ===");
+        XINFO("顶点数: {} ({} pos floats)", model.vertices.size() / 3, model.vertices.size());
+        XINFO("法线数: {} ({} normal floats)", model.normals.size() / 3, model.normals.size());
+        XINFO("纹理数: {}", model.texcoords.size() / 2);
+        XINFO("Mesh 数量: {}", model.meshes.size());
+        for (size_t m = 0; m < model.meshes.size(); ++m)
+        {
+            auto& mesh = model.meshes[m];
+            XINFO("  Mesh[{}] '{}': {} 个 Index 对象 ({} 个三角)",
+                m, mesh.name.c_str(), mesh.indices.size(), mesh.indices.size() / 3);
+            // 打印所有 Index 内容
+            for (size_t i = 0; i < mesh.indices.size(); ++i) {
+                auto& idx = mesh.indices[i];
+                XINFO("    idx[{}]: v={} vt={} vn={}", i, idx.vertex, idx.texcoord, idx.normal);
+            }
+            //// 打印前 12 个 Index 内容（旧）
+            //for (size_t i = 0; i < std::min(size_t(12), mesh.indices.size()); ++i) { (void)i; } // 占位
+            //{
+            //    auto& idx = mesh.indices[i];
+            //    XINFO("    idx[{}]: v={} vt={} vn={}", i, idx.vertex, idx.texcoord, idx.normal);
+            //}
         }
 
         if (model.meshes.empty())
@@ -111,7 +138,7 @@ private:
             return false;
         }
 
-        // 转成通用 MeshData
+        // 转成 MeshData
         X_Y::MeshData meshData;
         if (!model.ConvertMeshToData(0, meshData, err))
         {
@@ -127,10 +154,12 @@ private:
             return false;
         }
 
-        XINFO("loadBox: handle={}, {} unique verts, {} indices",
+        XINFO("loadBox: handle={}, {} verts, {} indices ({} triangles)",
             m_BoxHandle,
             meshData.Vertices.size() / meshData.VertexStride,
-            meshData.Indices.size());
+            meshData.Indices.size(),
+            meshData.Indices.size() / 3);
+
         return true;
     }
 
@@ -154,7 +183,11 @@ private:
 
     X_Y::ImGuiLayer* m_ImGuiLayer = nullptr;
     X_Y::Ref<X_Y::Shader> m_Shader;
+    
     int m_BoxHandle = -1;  ///< Render 返回的 GPU mesh handle
+
+    X_Y::RenderMath::Vec4 m_Color = { 1.0f, 0.8f, 0.2f, 1.0f };  // 默认 FlatColor 颜色
+
     inline static X_Y::ShaderLibrary s_ShaderLib;
     inline static std::vector<std::string> s_ShaderNames;
 };

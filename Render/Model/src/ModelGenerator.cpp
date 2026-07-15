@@ -90,4 +90,6 @@ bool GenerateBoxOBJ(float width, float height, float depth,
     return true;
 }
 
+
+
 } // namespace X_Y::Model

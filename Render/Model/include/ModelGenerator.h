@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <string>
 
@@ -13,5 +13,4 @@ namespace X_Y::Model {
 /// @return true 成功
 bool GenerateBoxOBJ(float width, float height, float depth,
                     const std::string& outputPath, std::string& err);
-
 } // namespace X_Y::Model
