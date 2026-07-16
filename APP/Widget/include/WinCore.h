@@ -22,11 +22,16 @@ namespace X_Y::WinCore {
     // 返回 true 表示消息已被处理，Window 不再转发
     using WndProcHookFn = LRESULT (*)(HWND, UINT, WPARAM, LPARAM);
     inline WndProcHookFn g_WndProcHook = nullptr;
+    inline WndProcHookFn g_ContainerHook = nullptr;
 
     inline LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
-
-
+        // 2. UI hook（绘制相关）
+        if (g_ContainerHook) {
+            LRESULT uiResult = g_ContainerHook(hwnd, msg, wParam, lParam);
+            if (uiResult == 0) // 返回 0 表示已处理
+                return 0;
+        }
       // 3. 可选 hook（如 ImGui 输入优先处理）
         if (g_WndProcHook && g_WndProcHook(hwnd, msg, wParam, lParam))
             return true;// g_WndProcHook(hwnd, msg, wParam, lParam)返回的基本是0,所以这里基本不会触发，但是不影响
@@ -90,12 +95,12 @@ namespace X_Y::WinCore {
                     app->GetEventQueue().Push(movement);
                     return 0;
                 }
-                case WM_PAINT:
-                {
-                    movement = new WindowPaint(pThis);
-                    app->GetEventQueue().Push(movement);
-                    return 0;
-                }
+                //case WM_PAINT:
+                //{
+                //    movement = new WindowPaint(pThis);
+                //    app->GetEventQueue().Push(movement);
+                //    return 0;
+                //}
                 // 窗口焦点变化
                 case WM_SETFOCUS:
                 {

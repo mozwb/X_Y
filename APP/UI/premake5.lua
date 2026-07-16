@@ -24,7 +24,18 @@ project "UI"
         "include",
         "%{wks.location}/vendor/imgui",
         "%{wks.location}/vendor/imgui/backends",
-        "%{wks.location}/vendor/glad/include"
+        "%{wks.location}/vendor/glad/include",
+        "%{wks.location}/APP/Widget/include",
+        "%{wks.location}/APP/Movement/include",
+        "%{wks.location}/APP/Application/include",
+        "%{wks.location}/Core/Log/include",
+        "%{wks.location}/Core/XCore/include",
+        "%{wks.location}/Core/Input/include"
+    }
+
+    links
+    {
+        "Widget"
     }
 
     filter "system:windows"
