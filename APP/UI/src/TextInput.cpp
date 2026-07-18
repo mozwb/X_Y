@@ -56,14 +56,12 @@ namespace X_Y {
             case VK_DELETE:
                 if (m_CursorPos < (int)m_Text.size()) {
                     m_Text.erase(m_CursorPos, 1);
-                    TriggerChange();
                 }
                 break;
             case VK_BACK:
                 if (m_CursorPos > 0) {
                     m_CursorPos--;
                     m_Text.erase(m_CursorPos, 1);
-                    TriggerChange();
                 }
                 break;
         }
@@ -75,7 +73,6 @@ namespace X_Y {
         if (ch >= 32 && ch <= 126) {
             m_Text.insert(m_CursorPos, 1, (char)ch);
             m_CursorPos++;
-            TriggerChange();
         }
     }
 

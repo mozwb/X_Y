@@ -109,6 +109,23 @@ namespace X_Y::WinCore {
                     return 0;
                 }
 
+                // 标题栏拖动开始
+                case WM_NCLBUTTONDOWN:
+                {
+                    if (wParam == HTCAPTION) {
+                        movement = new WindowDragBegin(pThis);
+                        app->GetEventQueue().Push(movement);
+                    }
+                    break;  // 不拦截，让 DefWindowProc 处理默认拖动
+                }
+                // 拖动 / 大小调整结束
+                case WM_EXITSIZEMOVE:
+                {
+                    movement = new WindowDragEnd(pThis);
+                    app->GetEventQueue().Push(movement);
+                    return 0;
+                }
+
                     // 键盘按下
                 case WM_KEYDOWN:
                 case WM_SYSKEYDOWN:

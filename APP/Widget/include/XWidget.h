@@ -41,10 +41,10 @@ namespace X_Y {
 			GraphicsContext* get_context() {
 				return m_Context.get();
 			}
-			uint get_width() {
+			uint get_width()const {
 				return GetActualWidth();
 			}
-			uint get_height() {
+			uint get_height()const {
 				return GetActualHeight();
 			}
 			void setTitle(const char* title);

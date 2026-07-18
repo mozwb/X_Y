@@ -98,4 +98,18 @@ namespace X_Y {
 		MOVEMENT_CLASS_CATEGORY(MTWindow)
 		
 	};
+	class WindowDragBegin : public Movement
+	{
+	public:
+		WindowDragBegin(MovementSender s) :Movement(s) {}
+		MOVEMENT_CLASS_TYPE(WindowDragBegin)
+		MOVEMENT_CLASS_CATEGORY(MTWindow)
+	};
+	class WindowDragEnd : public Movement
+	{
+	public:
+		WindowDragEnd(MovementSender s) :Movement(s) {}
+		MOVEMENT_CLASS_TYPE(WindowDragEnd)
+		MOVEMENT_CLASS_CATEGORY(MTWindow)
+	};
 }

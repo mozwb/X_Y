@@ -43,7 +43,9 @@ namespace X_Y
 		MouseButtonPressed,
 		MouseButtonReleased,
 		MouseMoved,
-		MouseScrolled
+		MouseScrolled,
+		WindowDragBegin,
+		WindowDragEnd
 
 	};
 #define MOVEMENT_CLASS_TYPE(type)                                             \

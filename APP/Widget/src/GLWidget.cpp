@@ -31,7 +31,7 @@ namespace X_Y {
     bool GLWidget::initOpenGL()
     {
         // 1. 获取当前窗口的 DC
-        m_hDC = GetDC(GetNHWD());  // 假设 XWidget 提供 winId() 返回 HWND
+        m_hDC = GetDC(GetNHWD());  // 假设 XWidget 提供 winId() 返回 NWHD
 
         if (!m_hDC) {
             return false;
