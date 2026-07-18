@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Widget/include/XWidget.h"
 #include "Canvas.h"
 #include "Widget/include/WinCore.h"
