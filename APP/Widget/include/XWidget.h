@@ -1,85 +1,74 @@
 ﻿#pragma once
-#include"Movement/include/movements.h"
-#include"BaseWin.h"
-#include<string>
-#include<GraphicsContext/include/GraphicsContext.h>
-#include<Log/include/XYLog.h>
+#include "Movement/include/movements.h"
+#include "Movement/include/AppMovement.h"
+#include"Application/include/Application.h"
+#include "BaseWin.h"
+#include <string>
+#include <GraphicsContext/include/GraphicsContext.h>
+#include <Log/include/XYLog.h>
+
 namespace X_Y {
-	
-		using Base = BaseWin;
-		using MovementType = X_Y::MovementType;
-	
-		class XWidget :public Base {
-		public :
-			explicit XWidget(XWidget* parent=nullptr);
-			~XWidget(){destroy();}
 
-			//show中执行创建，才有窗口指针
-			//除非主动调用create，否则应该show完之后在执行其他步骤
-			bool show(showtype nShow=SHOW);
-			void close();
-			void destroy();
-			//切断与父类相关的所有回调
-			void disconnectPa();
-			//让自己变成独立窗口
-			void releaseSelf();
+    using Base = BaseWin;
+    using MovementType = X_Y::MovementType;
 
-			void  Render() {
-				XY_CORE_ASSERT(m_Context, "上下文不能为空");
-				if (!m_Context->IsCurrent())
-					if(!m_Context->MakeCurrent())
-						XY_CORE_ASSERT(false, "MakeCurrent失败");
-				this->onRender();
-				m_Context->SwapBuffers();
-			}
+    class XWidget : public Base {
+    public:
+        explicit XWidget(XWidget* parent = nullptr);
+        ~XWidget() { destroy(); }
 
-			virtual void onRender() {};
-			std::string getname() { return toString();}
-			std::string toString()const override{
-				return m_title;
-			}
-			GraphicsContext* get_context() {
-				return m_Context.get();
-			}
-			uint get_width()const {
-				return GetActualWidth();
-			}
-			uint get_height()const {
-				return GetActualHeight();
-			}
-			void setTitle(const char* title);
-			void setSize(uint width, uint height);
-			XWidget* getParent() const { return m_parent; }
+        // ── 窗口生命周期（带事件连接） ──────────────
+        bool show(ShowCmd nShow = ShowCmd::Show);
+        void destroy();
+        void disconnectPa();
+        void releaseSelf();
 
-			void SwapBuffers() {
-				m_Context->SwapBuffers();
-			}
+        // ── 渲染（可选 OpenGL） ──────────────────────
+        void Render() {
+            XY_CORE_ASSERT(m_Context, "上下文不能为空");
+            if (!m_Context->IsCurrent())
+                if (!m_Context->MakeCurrent())
+                    XY_CORE_ASSERT(false, "MakeCurrent失败");
+            this->onRender();
+            m_Context->SwapBuffers();
+        }
+        virtual void onRender() {}
 
+        void SwapBuffers() { if (m_Context) m_Context->SwapBuffers(); }
 
+        GraphicsContext* get_context() { return m_Context.get(); }
 
-			// C++11及以后：直接删除拷贝构造、拷贝赋值
-			XWidget(const XWidget&) = delete;
-			XWidget& operator=(const XWidget&) = delete;
+        // 创建 OpenGL 上下文（通过工厂，隐藏平台细节）
+        void createGraphicsContext(GraphicsType type = GraphicsType::OpenGL) {
+            m_Context.reset(GraphicsContextFactory::Create(GetNativeHandle(), type));
+            if (m_Context) m_Context->Init();
+        }
 
-			// 要不要移动看需求，也可以一起禁掉
-			//XWidget(XWidget&&) = delete;
-			//XWidget& operator=(XWidget&&) = delete;
-			template<typename T = GraphicsContext,class... Args>
-			void setGrContext(Args&& ... args) {
-				XY_CORE_ASSERT((std::is_base_of_v<GraphicsContext, T>), "T must inherit from GraphicsContext");
+        // ── 窗口属性 ────────────────────────────────
+        bool create() {
+            return this->Create(m_title, GetActualWidth(), GetActualHeight(),
+                                m_WindowStyle, m_ParentHwnd);
+        }
+        void setTitle(const char* title);
+        void setSize(uint width, uint height);
+        uint get_width() const { return GetActualWidth(); }
+        uint get_height() const { return GetActualHeight(); }
+        std::string getname() { return toString(); }
+        std::string toString() const override { return m_title; }
 
-				m_Context = CreateScope<T>(std::forward<Args>(args)...);
-			}
-			template<typename T = GraphicsContext>
-			void createContext() {
-				setGrContext<T>(this->GetNativeWindow());
-				m_Context->Init();
-			}
-			bool create() {return this->Create(m_title, GetActualWidth(), GetActualHeight());}
-		private:
-			XWidget* m_parent = nullptr;
-			Scope<GraphicsContext> m_Context;
-			const char* m_title = "X_Y";
-		};
-	}
+        XWidget* getParent() const { return m_parent; }
+        void SetWindowStyle(WindowStyleFlag style) { m_WindowStyle = style; }
+        void SetParentHwnd(void* hwnd) { m_ParentHwnd = hwnd; }
 
+        XWidget(const XWidget&) = delete;
+        XWidget& operator=(const XWidget&) = delete;
+
+    private:
+        XWidget* m_parent = nullptr;
+        Scope<GraphicsContext> m_Context;
+        const char* m_title = "X_Y";
+        WindowStyleFlag m_WindowStyle = WindowStyleFlag::None;
+        void* m_ParentHwnd = nullptr;
+    };
+
+}

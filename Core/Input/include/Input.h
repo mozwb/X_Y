@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include <stdint.h>
 namespace X_Y {
 	namespace Input_t {
 		using KeyCode  =unsigned int;

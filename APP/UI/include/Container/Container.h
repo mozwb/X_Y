@@ -1,7 +1,6 @@
-﻿#pragma once
+#pragma once
 #include "Widget/include/XWidget.h"
-#include "Canvas.h"
-#include "Widget/include/WinCore.h"
+#include "Widget/include/Canvas.h"
 #include <vector>
 
 namespace X_Y {
@@ -18,14 +17,13 @@ namespace X_Y {
         void ClearComponents();
 
     protected:
+        // 平台绘制回调
+        void OnPaint(Canvas* canvas) override;
+
+        // 组件绘制（基类版本）
         virtual void OnPaint(Canvas& canvas);
         Component* HitTest(int x, int y);
         std::vector<Component*> m_Components;
-
-    private:
-#ifdef XY_PLATFORM_WINDOWS
-        static LRESULT CALLBACK ContainerWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-#endif
     };
 
 }

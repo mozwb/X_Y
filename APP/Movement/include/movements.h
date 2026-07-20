@@ -35,7 +35,7 @@ namespace X_Y
 		WindowResize,
 		WindowFocus,
 		WindowMoved,
-		WindowDestory,
+		WindowDestroy,
 		WindowPaint,
 		KeyPressed,
 		KeyReleased,

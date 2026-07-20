@@ -36,10 +36,29 @@ Docker::~Docker()
 
 void Docker::Dock(XWidget* panel, const std::string& title, Area area)
 {
+    if (!panel) return;
+
+    // 解除原来的 parent 关系
     if (panel->getParent()) {
         panel->releaseSelf();
     }
-    Panel(area)->AddPanel(panel, title);
+
+    DockPanel* targetPanel = Panel(area);
+
+    // 确保目标 DockPanel 已创建 HWND
+    if (targetPanel && !targetPanel->GetNativeHandle()) {
+        targetPanel->SetParentHwnd(GetNativeHandle());
+        targetPanel->setSize(100, 100);
+        targetPanel->show(ShowCmd::Show);
+    }
+
+    if (panel && targetPanel && targetPanel->GetNativeHandle()) {
+        panel->SetParent(targetPanel->GetNativeHandle());
+    }
+
+    // 添加到 tab 管理器
+    targetPanel->AddPanel(panel, title);
+
     RecalcLayout();
 }
 
@@ -62,9 +81,9 @@ void Docker::RecalcLayout()
         if (topH < 40) topH = 40;
         topPn->setSize(w, topH);
         topPn->MoveAndResize(0, 0, w, topH);
-        topPn->show(SHOW);
+        topPn->show(ShowCmd::Show);
     } else if (topPn) {
-        topPn->show(HIDE);
+        topPn->show(ShowCmd::Hide);
     }
 
     if (bottomPn && !bottomPn->IsEmpty()) {
@@ -72,9 +91,9 @@ void Docker::RecalcLayout()
         if (bottomH < 40) bottomH = 40;
         bottomPn->setSize(w, bottomH);
         bottomPn->MoveAndResize(0, h - bottomH, w, bottomH);
-        bottomPn->show(SHOW);
+        bottomPn->show(ShowCmd::Show);
     } else if (bottomPn) {
-        bottomPn->show(HIDE);
+        bottomPn->show(ShowCmd::Hide);
     }
 
     int innerY = topH;
@@ -86,9 +105,9 @@ void Docker::RecalcLayout()
         if (leftW < 60) leftW = 60;
         leftPn->setSize(leftW, innerH);
         leftPn->MoveAndResize(0, innerY, leftW, innerH);
-        leftPn->show(SHOW);
+        leftPn->show(ShowCmd::Show);
     } else if (leftPn) {
-        leftPn->show(HIDE);
+        leftPn->show(ShowCmd::Hide);
     }
 
     if (rightPn && !rightPn->IsEmpty()) {
@@ -96,9 +115,9 @@ void Docker::RecalcLayout()
         if (rightW < 60) rightW = 60;
         rightPn->setSize(rightW, innerH);
         rightPn->MoveAndResize(w - rightW, innerY, rightW, innerH);
-        rightPn->show(SHOW);
+        rightPn->show(ShowCmd::Show);
     } else if (rightPn) {
-        rightPn->show(HIDE);
+        rightPn->show(ShowCmd::Hide);
     }
 
     if (centerPn) {
@@ -106,7 +125,7 @@ void Docker::RecalcLayout()
         if (cw < 100) cw = 100;
         centerPn->setSize(cw, innerH);
         centerPn->MoveAndResize(leftW, innerY, cw, innerH);
-        centerPn->show(SHOW);
+        centerPn->show(ShowCmd::Show);
     }
 }
 

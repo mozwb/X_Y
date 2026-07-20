@@ -20,7 +20,7 @@ namespace X_Y {
         bool IsReadOnly() const { return m_ReadOnly; }
 
         void OnPaint(Canvas& canvas) override;
-        void OnKeyDown(int vk) override;
+        void OnKeyDown(Input_t::KeyCode key) override;
         void OnChar(wchar_t ch) override;
 
     private:

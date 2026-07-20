@@ -63,12 +63,12 @@ namespace X_Y {
 			MOVEMENT_CLASS_CATEGORY(MTWindow)
 			
 	};
-	class WindowDestory : public Movement
+	class WindowDestroy : public Movement
 	{
 	public:
-		WindowDestory(MovementSender s) :Movement(s) {}
+		WindowDestroy(MovementSender s) :Movement(s) {}
 
-		MOVEMENT_CLASS_TYPE(WindowDestory)
+		MOVEMENT_CLASS_TYPE(WindowDestroy)
 			MOVEMENT_CLASS_CATEGORY(MTWindow)
 			
 	};

@@ -2,6 +2,7 @@
 #include "Log/include/XYLog.h"
 #include "UI/include/dock/Docker.h"
 
+
 int main(int argc, char* argv[])
 {
     X_Y::Application app(argc, argv);

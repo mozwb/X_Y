@@ -20,7 +20,7 @@ void DockLayer::OnEvent(XMovement* event)
 
     // 忽略没有有效窗口的 sender
     auto* senderWidget = static_cast<XWidget*>(event->sender);
-    if (!senderWidget || !senderWidget->GetNativeWindow())
+    if (!senderWidget || !senderWidget->GetNativeHandle())
         return;
 
     auto* mov = dynamic_cast<Movement*>(event);

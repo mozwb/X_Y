@@ -1,4 +1,5 @@
 ﻿#include "Component/TextInput.h"
+#include"Input/include/MapCode.h"
 
 namespace X_Y {
 
@@ -37,28 +38,29 @@ namespace X_Y {
         }
     }
 
-    void TextInput::OnKeyDown(int vk) {
+    void TextInput::OnKeyDown(Input_t::KeyCode key) {
+        using namespace Input_t;
         if (m_ReadOnly) return;
 
-        switch (vk) {
-            case VK_LEFT:
+        switch (key) {
+            case Key::Left:
                 if (m_CursorPos > 0) m_CursorPos--;
                 break;
-            case VK_RIGHT:
+            case Key::Right:
                 if (m_CursorPos < (int)m_Text.size()) m_CursorPos++;
                 break;
-            case VK_HOME:
+            case Key::Home:
                 m_CursorPos = 0;
                 break;
-            case VK_END:
+            case Key::End:
                 m_CursorPos = (int)m_Text.size();
                 break;
-            case VK_DELETE:
+            case Key::Delete:
                 if (m_CursorPos < (int)m_Text.size()) {
                     m_Text.erase(m_CursorPos, 1);
                 }
                 break;
-            case VK_BACK:
+            case Key::Backspace:
                 if (m_CursorPos > 0) {
                     m_CursorPos--;
                     m_Text.erase(m_CursorPos, 1);

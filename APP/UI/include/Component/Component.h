@@ -1,5 +1,6 @@
-#pragma once
-#include "Container/Canvas.h"
+﻿#pragma once
+#include "Widget/include/Canvas.h"
+#include "Input/include/Input.h"
 
 namespace X_Y {
 
@@ -26,7 +27,7 @@ namespace X_Y {
         void SetFocused(bool f) { m_Focused = f; }
         bool IsFocused() const { return m_Focused; }
 
-        virtual void OnKeyDown(int vk) {}
+        virtual void OnKeyDown(Input_t::KeyCode key) {}
         virtual void OnChar(wchar_t ch) {}
 
         virtual void OnPaint(Canvas& canvas) = 0;

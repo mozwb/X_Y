@@ -2,6 +2,16 @@
 
 namespace X_Y {
 
+// ── 颜色常量（RGB 顺序：0xRRGGBB） ──────────────
+namespace {
+    constexpr uint32_t Color_BG          = 0x282828;  // RGB(40,40,40)
+    constexpr uint32_t Color_TabBar      = 0x323237;  // RGB(50,50,55)
+    constexpr uint32_t Color_TabActive   = 0x464650;  // RGB(70,70,80)
+    constexpr uint32_t Color_TabText     = 0xB4B4B4;  // RGB(180,180,180)
+    constexpr uint32_t Color_TabTextActive = 0xFFFFFF; // RGB(255,255,255)
+    constexpr uint32_t Color_TabSep      = 0x3C3C41;  // RGB(60,60,65)
+}
+
 // ════════════════════════════════════════════════════════════
 // DockPanel
 // ════════════════════════════════════════════════════════════
@@ -9,6 +19,13 @@ namespace X_Y {
 DockPanel::DockPanel(XWidget* parent)
     : Container(parent)
 {
+    // DockPanel 是嵌入的子窗口
+
+    SetWindowStyle(WindowStyleFlag::Child | WindowStyleFlag::Visible |
+                   WindowStyleFlag::ClipChildren | WindowStyleFlag::ClipSiblings);
+    if (parent && parent->GetNativeHandle()) {
+        SetParentHwnd(parent->GetNativeHandle());
+    }
 }
 
 DockPanel::~DockPanel()
@@ -64,7 +81,7 @@ void DockPanel::ActivateTab(int idx)
     m_ActiveTab = idx;
     for (int i = 0; i < (int)m_Tabs.size(); ++i) {
         if (m_Tabs[i].Panel)
-            m_Tabs[i].Panel->show(i == idx ? SHOW : HIDE);
+            m_Tabs[i].Panel->show(i == idx ? ShowCmd::Show : ShowCmd::Hide);
     }
 }
 
@@ -103,26 +120,27 @@ void DockPanel::OnPaint(Canvas& canvas)
 {
     int w = get_width();
     int h = get_height();
+
     // ── 背景 ──────────────────────────────────────────
-    canvas.FillRect(0, 0, w, h, RGB(40, 40, 40));
+    canvas.FillRect(0, 0, w, h, Color_BG);
 
     // ── Tab 标签栏 ────────────────────────────────────
-    canvas.FillRect(0, 0, w, c_TabH, RGB(50, 50, 55));
+    canvas.FillRect(0, 0, w, c_TabH, Color_TabBar);
 
     int x = c_Pad;
     for (int i = 0; i < (int)m_Tabs.size(); ++i) {
         bool active = (i == m_ActiveTab);
         if (active)
-            canvas.FillRect(x, 0, c_TabW, c_TabH, RGB(70, 70, 80));
+        canvas.FillRect(x, 0, c_TabW, c_TabH, Color_TabActive);
         canvas.DrawText(x + 4, 4, m_Tabs[i].Title.c_str(),
-                        active ? RGB(255, 255, 255) : RGB(180, 180, 180));
+                        active ? Color_TabTextActive : Color_TabText);
         x += c_TabW + c_Pad;
     }
 
     // ── tab 栏底部分隔线 ──────────────────────────────
-    canvas.FillRect(0, c_TabH, w, 1, RGB(60, 60, 65));
+    canvas.FillRect(0, c_TabH, w, 1, Color_TabSep);
 
-    // ── 子 Component（委托给 Container 基类绘制） ────
+    // ── 子 Component ──────────────────────────────────
     Container::OnPaint(canvas);
 }
 

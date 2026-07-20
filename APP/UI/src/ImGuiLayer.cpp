@@ -1,6 +1,6 @@
 ﻿#include<imgui/ImGuiLayer.h>
 #include<imgui_internal.h>
-#include<Widget/include/WinCore.h>
+#include<Widget/include/Win32/Win32Globals.h>
 
 // ImGui_ImplWin32_WndProcHandler 声明在头文件中被 #if 0 禁用，需手动 extern
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -10,7 +10,7 @@ namespace X_Y {
 	// 注册 WndProc hook：让 Window 模块把消息先给 ImGui 处理
 	static void RegisterWndProcHook()
 	{
-		WinCore::g_WndProcHook = [](HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) -> LRESULT {
+		Win32::g_WndProcHook = [](HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) -> LRESULT {
 			// ImGui_ImplWin32_WndProcHandler 内部所有分支都 return 0，
 			// 所以我们不在 WndProc 层拦截任何消息。所有消息都会
 			// 正常入队成 Movement，在 ImGuiLayer::OnEvent 中

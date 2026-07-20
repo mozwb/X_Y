@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include"Log/include/XYLog.h"
 #include"Movement/include/Movements.h"
+#include<memory>
 namespace X_Y {
 #ifdef XY_PLATFORM_WINDOWS    
     //这个管理了程序运行周期，接受win32消息转化系统事件，可以仿照这个写渲染层或者其他层
@@ -14,7 +15,8 @@ namespace X_Y {
         bool Running = true;
         bool FirstWin = false;
         //如果你需要打包一些逻辑，你可以写层栈，从而减轻事件分发器压力
-        LayerStack m_LayerStack;  
+        LayerStack m_LayerStack;
+        std::unique_ptr<class PlatformLoop> m_PlatformLoop;
 
     public:
         // 1.构造、析构放protected，允许子类继承构造，禁止外部new
