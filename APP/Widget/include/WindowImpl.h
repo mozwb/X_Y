@@ -87,6 +87,9 @@ namespace X_Y {
         virtual void ScreenToClient(int& x, int& y) const = 0;
         virtual void ClientToScreen(int& x, int& y) const = 0;
 
+        // ── 重绘请求 ──────────────────────────────
+        virtual void RequestRepaint() = 0;
+
         // ── 鼠标 & 光标 ───────────────────────────
         
         virtual void CaptureMouse() = 0;

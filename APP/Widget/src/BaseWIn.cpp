@@ -85,6 +85,10 @@ void BaseWin::MoveAndResize(int x, int y, int w, int h, bool noZOrder) {
     if (m_Impl) m_Impl->MoveAndResize(x, y, w, h, noZOrder);
 }
 
+void BaseWin::RequestRepaint() {
+    if (m_Impl) m_Impl->RequestRepaint();
+}
+
 void BaseWin::GetMouseScreenPos(int& x, int& y) {
     WindowImpl::GetMouseScreenPos(x, y);
 }

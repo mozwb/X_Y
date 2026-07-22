@@ -1,9 +1,12 @@
-﻿#pragma once
+#pragma once
 
 #include "UI/include/Container/Container.h"
 #include "UI/include/dock/DockPanel.h"
+#include "UI/include/Component/Overlay.h"
 #include "XCore/include/XYCore.h"
 #include <string>
+#include <thread>
+#include <atomic>
 
 namespace X_Y {
 
@@ -25,12 +28,25 @@ public:
     void RecalcLayout();
     Area HitTestArea(int clientX, int clientY) const;
 
-    // 供 DockLayer 调用的停靠指示器（后续扩展）
-    // void ShowDropIndicator(Area area);
+    // 停靠预览指示器（五个区域同时显示）
+    void ShowDropPreviews();
+    void HideDropPreviews();
+
+    // 拖拽检测线程（系统拖拽模态循环中轮询鼠标位置）
+    void StartDragMonitor();
+    void StopDragMonitor();
+
+    // 由 DockLayer 设置拖拽状态
+    void SetDragPreviewMode(bool on) { m_IsDragPreview = on; }
 
 private:
     Scope<DockPanel> m_Panels[5];
     DockLayer*       m_Layer = nullptr;
+    Scope<Overlay>   m_Previews[5];
+
+    std::thread m_DragThread;
+    std::atomic<bool> m_DragMonitoring{ false };
+    bool m_IsDragPreview = false;
 
     DockPanel* Panel(Area a) const { return m_Panels[(int)a].get(); }
 };

@@ -1,6 +1,7 @@
 #include "dock/Docker.h"
 #include "dock/DockLayer.h"
 #include "Application/include/Application.h"
+#include "Widget/include/BaseWin.h"
 
 namespace X_Y {
 
@@ -17,6 +18,18 @@ Docker::Docker(const std::string& title, int w, int h, XWidget* parent)
     m_Panels[(int)Bottom] = CreateScope<DockPanel>(this);
     m_Panels[(int)Center] = CreateScope<DockPanel>(this);
 
+    // 停靠预览指示器 — 五个区域各一个 Overlay
+    const auto areas = { Top, Left, Center, Right, Bottom };
+    for (auto a : areas) {
+        auto& ov = m_Previews[(int)a];
+        ov = CreateScope<Overlay>();
+        ov->SetVisible(false);
+        ov->SetColor(0x40FF3333);
+        ov->SetBorderColor(0x80FF3333);
+        ov->SetBorderWidth(2);
+        AddComponent(ov.get());
+    }
+
     m_Layer = new DockLayer(this);
     Application::instance()->PushLayer(m_Layer);
 
@@ -26,6 +39,8 @@ Docker::Docker(const std::string& title, int w, int h, XWidget* parent)
 
 Docker::~Docker()
 {
+    StopDragMonitor();
+
     if (m_Layer) {
         Application::instance()->PopLayer(m_Layer);
         delete m_Layer;
@@ -147,6 +162,105 @@ Docker::Area Docker::HitTestArea(int clientX, int clientY) const
         return Right;
 
     return Center;
+}
+
+// ── 停靠预览 ────────────────────────────────────────
+
+static void GetAreaRect(Docker* docker, Docker::Area area, int& x, int& y, int& w, int& h)
+{
+    int dw = docker->GetActualWidth();
+    int dh = docker->GetActualHeight();
+    if (dw <= 0 || dh <= 0) return;
+
+    const float RATIO = 0.20f;
+    int edge = (int)(dh * RATIO);
+    if (edge < 40) edge = 40;
+
+    switch (area) {
+    case Docker::Top:
+        x = 0; y = 0; w = dw; h = edge;
+        break;
+    case Docker::Bottom:
+        x = 0; y = dh - edge; w = dw; h = edge;
+        break;
+    case Docker::Left: {
+        int ew = (int)(dw * RATIO);
+        if (ew < 60) ew = 60;
+        x = 0; y = edge; w = ew; h = dh - 2 * edge;
+        break;
+    }
+    case Docker::Right: {
+        int ew = (int)(dw * RATIO);
+        if (ew < 60) ew = 60;
+        x = dw - ew; y = edge; w = ew; h = dh - 2 * edge;
+        break;
+    }
+    case Docker::Center:
+    default: {
+        int ew = (int)(dw * RATIO);
+        if (ew < 60) ew = 60;
+        int ewy = edge;
+        x = ew; y = ewy; w = dw - 2 * ew; h = dh - 2 * ewy;
+        break;
+    }
+    }
+}
+
+void Docker::ShowDropPreviews()
+{
+    const auto areas = { Top, Left, Center, Right, Bottom };
+    for (auto a : areas) {
+        auto& ov = m_Previews[(int)a];
+        if (!ov) continue;
+        int x, y, w, h;
+        GetAreaRect(this, a, x, y, w, h);
+        ov->SetRect(x, y, w, h);
+        ov->SetVisible(true);
+    }
+    RequestRepaint();
+}
+
+void Docker::HideDropPreviews()
+{
+    for (auto& ov : m_Previews) {
+        if (ov) ov->SetVisible(false);
+    }
+    RequestRepaint();
+}
+
+// ── 拖拽检测线程 ───────────────────────────────────────
+
+void Docker::StartDragMonitor()
+{
+    if (m_DragMonitoring) return;
+    m_DragMonitoring = true;
+
+    m_DragThread = std::thread([this]() {
+        while (m_DragMonitoring)
+        {
+            if (m_IsDragPreview)
+            {
+                int mx, my;
+                BaseWin::GetMouseScreenPos(mx, my);
+                BaseWin* winUnder = BaseWin::GetWindowAt(mx, my);
+
+                if (winUnder == this) {
+                    ShowDropPreviews();
+                } else {
+                    HideDropPreviews();
+                }
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+    });
+}
+
+void Docker::StopDragMonitor()
+{
+    m_DragMonitoring = false;
+    if (m_DragThread.joinable())
+        m_DragThread.join();
 }
 
 } // namespace X_Y

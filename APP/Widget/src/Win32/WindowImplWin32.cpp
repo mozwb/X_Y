@@ -144,6 +144,10 @@ public:
         ::SetWindowPos(m_Hwnd, nullptr, x, y, w, h, flags);
     }
 
+    void RequestRepaint() override {
+        if (m_Hwnd) ::InvalidateRect(m_Hwnd, nullptr, TRUE);
+    }
+
 private:
     HWND m_Hwnd = nullptr;
 };
