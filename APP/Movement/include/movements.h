@@ -203,15 +203,15 @@ namespace X_Y
 		{
 			uint32_t typeId = GetTypeId<EMT>();
 			uint32_t typeVal = static_cast<uint32_t>(type);
-			if (DispatchEvent(typeId, typeVal, event))
-			{
-				return true;
-			}
-			else
-			{
-				return false;
-			}
-			// return DispatchEvent(typeId, typeVal, event);
+			//if (DispatchEvent(typeId, typeVal, event))
+			//{
+			//	return true;
+			//}
+			//else
+			//{
+			//	return false;
+			//}
+			 return DispatchEvent(typeId, typeVal, event);
 		}
 
 	private:
@@ -322,11 +322,11 @@ namespace X_Y
 			}
 			if (flag)
 			{
-				XDEBUG("事件处理成功{}", this->GetName())
+				XDEBUG("事件处理成功{}", reinterpret_cast<uintptr_t>(this->sender),this->GetName())
 			}
 			else
 			{
-				XDEBUG("事件处理失败{}", this->GetName())
+				XDEBUG("事件处理失败{}", reinterpret_cast<uintptr_t>(this->sender),this->GetName())
 			}
 			return flag;
 		}

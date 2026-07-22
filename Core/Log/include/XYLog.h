@@ -68,11 +68,9 @@ inline X_Y::LOG logger("log");
 	#define LOG(logger, LEVEL, ...)
 	#define INFO(...)
 	#define TRACE(...)
-	#define TRACE(...)\
 	#define DEBUG(...)
 	#define ERROR(...)
 	#define FATAL(...)
-
 	#define XY_CORE_ASSERT(condition, ...)
 	#define XY_DEBUGBREAK()
 	#define XY_PROFILE_FUNCTION
