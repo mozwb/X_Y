@@ -35,6 +35,8 @@ namespace X_Y {
         void SetCursorStyle(CursorStyle style);
         void MoveAndResize(int x, int y, int w, int h, bool noZOrder = true);
 
+		void RequestRepaint();
+
         static void GetMouseScreenPos(int& x, int& y);
         static BaseWin* GetWindowAt(int screenX, int screenY);
         virtual void OnPaint(Canvas* canvas) {}  // 平台绘制回调

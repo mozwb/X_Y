@@ -1,4 +1,4 @@
-#include "dock/DockLayer.h"
+﻿#include "dock/DockLayer.h"
 #include "dock/Docker.h"
 #include "Movement/include/AppMovement.h"
 #include "Movement/include/MouseMovement.h"
@@ -79,4 +79,5 @@ void DockLayer::OnEvent(XMovement* event)
     }
 }
 
-} // namespace X_Y
+}
+// namespace X_Y

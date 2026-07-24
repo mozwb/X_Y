@@ -1,4 +1,4 @@
-#include "dock/Docker.h"
+﻿#include "dock/Docker.h"
 #include "dock/DockLayer.h"
 #include "Application/include/Application.h"
 #include "Widget/include/BaseWin.h"
@@ -263,4 +263,5 @@ void Docker::StopDragMonitor()
         m_DragThread.join();
 }
 
-} // namespace X_Y
+} 
+// namespace X_Y

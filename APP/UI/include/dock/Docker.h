@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "UI/include/Container/Container.h"
 #include "UI/include/dock/DockPanel.h"
@@ -51,4 +51,5 @@ private:
     DockPanel* Panel(Area a) const { return m_Panels[(int)a].get(); }
 };
 
-} // namespace X_Y
+} 
+// namespace X_Y
