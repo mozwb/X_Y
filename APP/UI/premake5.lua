@@ -30,12 +30,14 @@ project "UI"
         "%{wks.location}/APP/Application/include",
         "%{wks.location}/Core/Log/include",
         "%{wks.location}/Core/XCore/include",
-        "%{wks.location}/Core/Input/include"
+        "%{wks.location}/Core/Input/include",
+        "%{wks.location}/Core/Timer/include"
     }
 
     links
     {
-        "Widget"
+        "Widget",
+        "Timer"
     }
 
     filter "system:windows"

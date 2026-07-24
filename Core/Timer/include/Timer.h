@@ -1,6 +1,10 @@
 ﻿#pragma once
 #include<chrono>
 #include<functional>
+#include<thread>
+#include<atomic>
+#include<mutex>
+#include<condition_variable>
 namespace X_Y {
 	class StopWatch {
     public:
@@ -69,6 +73,50 @@ namespace X_Y {
         // 数字转两位字符串，自动前补0
         static std::string ToTwoDigit(int num);
     };
+    // ════════════════════════════════════════════════════════════
+    // Ticker — 周期定时器，独立线程回调
+    // 用于需要定期轮询或执行任务的场景
+    // ════════════════════════════════════════════════════════════
+    class Ticker {
+    public:
+        Ticker() = default;
+        ~Ticker();
+
+        // 禁止拷贝
+        Ticker(const Ticker&) = delete;
+        Ticker& operator=(const Ticker&) = delete;
+
+        // ── 启动与结束 ──
+        void Start(int intervalMs, std::function<void()> callback);
+        void Stop();           // 请求停止，不等
+        void Join();           // 等线程完全结束
+
+        // ── 临时控制 ──
+        void Pause();          // 暂停 callback，线程还在
+        void Resume();         // 恢复 callback
+        void Restart();                                          // 重启（用已有参数）
+        void Restart(int intervalMs, std::function<void()> callback); // 重启并换参数
+
+        // ── 放生 ──
+        void Detach();
+
+        // ── 状态 ──
+        bool IsRunning() const { return m_Running.load(); }
+        bool IsPaused() const { return m_Paused.load(); }
+        bool IsJoinable() const { return m_Thread.joinable(); }
+
+    private:
+        void ThreadLoop(int intervalMs, std::function<void()> callback);
+
+        std::thread m_Thread;
+        std::atomic<bool> m_Running{ false };
+        std::atomic<bool> m_Paused{ false };
+        std::mutex m_Mutex;
+        std::condition_variable m_CV;
+        int m_IntervalMs = 0;
+        std::function<void()> m_Callback;
+    };
+
     class Timestep
     {
     public:

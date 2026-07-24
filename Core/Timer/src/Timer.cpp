@@ -143,4 +143,78 @@ namespace X_Y {
     {
         return ToString(Now());
     }
+
+    // ════════════════════════════════════════════════════════════
+    // Ticker
+    // ════════════════════════════════════════════════════════════
+
+    Ticker::~Ticker() {
+        Stop();
+        Join();
+    }
+
+    void Ticker::Start(int intervalMs, std::function<void()> callback) {
+        Stop();
+        Join();
+
+        m_IntervalMs = intervalMs;
+        m_Callback = std::move(callback);
+        m_Running = true;
+        m_Paused = false;
+        m_Thread = std::thread(&Ticker::ThreadLoop, this, m_IntervalMs, m_Callback);
+    }
+
+    void Ticker::Stop() {
+        m_Running = false;
+        m_CV.notify_one();
+    }
+
+    void Ticker::Join() {
+        if (m_Thread.joinable()) {
+            m_Thread.join();
+        }
+    }
+
+    void Ticker::Pause() {
+        m_Paused = true;
+    }
+
+    void Ticker::Resume() {
+        m_Paused = false;
+    }
+
+    void Ticker::Restart() {
+        if (m_Callback) {
+            Stop();
+            Join();
+            Start(m_IntervalMs, m_Callback);
+        }
+    }
+
+    void Ticker::Restart(int intervalMs, std::function<void()> callback) {
+        Stop();
+        Join();
+        Start(intervalMs, std::move(callback));
+    }
+
+    void Ticker::Detach() {
+        m_Running = false;
+        if (m_Thread.joinable()) {
+            m_Thread.detach();
+        }
+    }
+
+    void Ticker::ThreadLoop(int intervalMs, std::function<void()> callback) {
+        while (m_Running) {
+            std::unique_lock<std::mutex> lock(m_Mutex);
+            m_CV.wait_for(lock, std::chrono::milliseconds(intervalMs),
+                [this]() { return !m_Running; });
+            lock.unlock();
+
+            if (!m_Running) break;
+            if (m_Paused) continue;
+
+            callback();
+        }
+    }
 }

@@ -4,9 +4,8 @@
 #include "UI/include/dock/DockPanel.h"
 #include "UI/include/Component/Overlay.h"
 #include "XCore/include/XYCore.h"
+#include "Timer/include/Timer.h"
 #include <string>
-#include <thread>
-#include <atomic>
 
 namespace X_Y {
 
@@ -32,7 +31,7 @@ public:
     void ShowDropPreviews();
     void HideDropPreviews();
 
-    // 拖拽检测线程（系统拖拽模态循环中轮询鼠标位置）
+    // 拖拽检测定时器（系统拖拽模态循环中轮询鼠标位置）
     void StartDragMonitor();
     void StopDragMonitor();
 
@@ -40,13 +39,14 @@ public:
     void SetDragPreviewMode(bool on) { m_IsDragPreview = on; }
 
 private:
+    void PollMousePosition();
+
     Scope<DockPanel> m_Panels[5];
     DockLayer*       m_Layer = nullptr;
     Scope<Overlay>   m_Previews[5];
 
-    std::thread m_DragThread;
-    std::atomic<bool> m_DragMonitoring{ false };
-    bool m_IsDragPreview = false;
+    Ticker m_DragTicker;
+    bool   m_IsDragPreview = false;
 
     DockPanel* Panel(Area a) const { return m_Panels[(int)a].get(); }
 };

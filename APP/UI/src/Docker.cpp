@@ -39,7 +39,7 @@ Docker::Docker(const std::string& title, int w, int h, XWidget* parent)
 
 Docker::~Docker()
 {
-    StopDragMonitor();
+    m_DragTicker.Stop();
 
     if (m_Layer) {
         Application::instance()->PopLayer(m_Layer);
@@ -228,39 +228,44 @@ void Docker::HideDropPreviews()
     RequestRepaint();
 }
 
-// ── 拖拽检测线程 ───────────────────────────────────────
+// ── 拖拽检测定时器 ───────────────────────────────────────
+
+void Docker::PollMousePosition()
+{
+    if (!m_IsDragPreview) return;
+
+    // 获取鼠标屏幕坐标
+    int mx, my;
+    BaseWin::GetMouseScreenPos(mx, my);
+
+    // 转成相对于 Docker 窗口的客户区坐标
+    int clientX = mx, clientY = my;
+    ScreenToClient(clientX, clientY);
+
+    // 检查是否在 Docker 窗口区域内
+    int w = GetActualWidth();
+    int h = GetActualHeight();
+    if (clientX >= 0 && clientX < w && clientY >= 0 && clientY < h) {
+        ShowDropPreviews();
+    } else {
+        HideDropPreviews();
+    }
+}
 
 void Docker::StartDragMonitor()
 {
-    if (m_DragMonitoring) return;
-    m_DragMonitoring = true;
-
-    m_DragThread = std::thread([this]() {
-        while (m_DragMonitoring)
-        {
-            if (m_IsDragPreview)
-            {
-                int mx, my;
-                BaseWin::GetMouseScreenPos(mx, my);
-                BaseWin* winUnder = BaseWin::GetWindowAt(mx, my);
-
-                if (winUnder == this) {
-                    ShowDropPreviews();
-                } else {
-                    HideDropPreviews();
-                }
-            }
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        }
-    });
+    if (m_DragTicker.IsRunning()) {
+        m_DragTicker.Resume();
+    } else {
+        m_DragTicker.Start(50, [this]() {
+            PollMousePosition();
+        });
+    }
 }
 
 void Docker::StopDragMonitor()
 {
-    m_DragMonitoring = false;
-    if (m_DragThread.joinable())
-        m_DragThread.join();
+    m_DragTicker.Pause();
 }
 
 } 
