@@ -1,4 +1,4 @@
-﻿#include "dock/Docker.h"
+#include "dock/Docker.h"
 #include "dock/DockLayer.h"
 #include "Application/include/Application.h"
 #include "Widget/include/BaseWin.h"
@@ -39,8 +39,6 @@ Docker::Docker(const std::string& title, int w, int h, XWidget* parent)
 
 Docker::~Docker()
 {
-    m_DragTicker.Stop();
-
     if (m_Layer) {
         Application::instance()->PopLayer(m_Layer);
         delete m_Layer;
@@ -226,46 +224,6 @@ void Docker::HideDropPreviews()
         if (ov) ov->SetVisible(false);
     }
     RequestRepaint();
-}
-
-// ── 拖拽检测定时器 ───────────────────────────────────────
-
-void Docker::PollMousePosition()
-{
-    if (!m_IsDragPreview) return;
-
-    // 获取鼠标屏幕坐标
-    int mx, my;
-    BaseWin::GetMouseScreenPos(mx, my);
-
-    // 转成相对于 Docker 窗口的客户区坐标
-    int clientX = mx, clientY = my;
-    ScreenToClient(clientX, clientY);
-
-    // 检查是否在 Docker 窗口区域内
-    int w = GetActualWidth();
-    int h = GetActualHeight();
-    if (clientX >= 0 && clientX < w && clientY >= 0 && clientY < h) {
-        ShowDropPreviews();
-    } else {
-        HideDropPreviews();
-    }
-}
-
-void Docker::StartDragMonitor()
-{
-    if (m_DragTicker.IsRunning()) {
-        m_DragTicker.Resume();
-    } else {
-        m_DragTicker.Start(50, [this]() {
-            PollMousePosition();
-        });
-    }
-}
-
-void Docker::StopDragMonitor()
-{
-    m_DragTicker.Pause();
 }
 
 } 

@@ -4,7 +4,6 @@
 #include "UI/include/dock/DockPanel.h"
 #include "UI/include/Component/Overlay.h"
 #include "XCore/include/XYCore.h"
-#include "Timer/include/Timer.h"
 #include <string>
 
 namespace X_Y {
@@ -28,25 +27,20 @@ public:
     Area HitTestArea(int clientX, int clientY) const;
 
     // 停靠预览指示器（五个区域同时显示）
+
     void ShowDropPreviews();
     void HideDropPreviews();
 
-    // 拖拽检测定时器（系统拖拽模态循环中轮询鼠标位置）
-    void StartDragMonitor();
-    void StopDragMonitor();
-
     // 由 DockLayer 设置拖拽状态
+
     void SetDragPreviewMode(bool on) { m_IsDragPreview = on; }
+    bool IsDragPreviewMode() const { return m_IsDragPreview; }
 
 private:
-    void PollMousePosition();
-
     Scope<DockPanel> m_Panels[5];
     DockLayer*       m_Layer = nullptr;
     Scope<Overlay>   m_Previews[5];
-
-    Ticker m_DragTicker;
-    bool   m_IsDragPreview = false;
+    bool             m_IsDragPreview = false;
 
     DockPanel* Panel(Area a) const { return m_Panels[(int)a].get(); }
 };

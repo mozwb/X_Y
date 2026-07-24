@@ -41,6 +41,11 @@ namespace X_Y {
         static BaseWin* GetWindowAt(int screenX, int screenY);
         virtual void OnPaint(Canvas* canvas) {}  // 平台绘制回调
 
+        // ── 自定义拖拽状态（由 WndProc 维护） ──────────
+        bool m_IsDragging = false;
+        int m_DragOffsetX = 0;
+        int m_DragOffsetY = 0;
+
     protected:
         bool Show(ShowCmd nshow = ShowCmd::Show);
         void Close();
