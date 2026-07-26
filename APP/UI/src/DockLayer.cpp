@@ -33,6 +33,20 @@ void DockLayer::OnEvent(XMovement* event)
         m_IsDragging = true;
         event->Handled = true;
         m_Owner->SetDragPreviewMode(true);
+
+        // 立即执行一次预览检查，无需等待鼠标移动
+        int screenX, screenY;
+        BaseWin::GetMouseScreenPos(screenX, screenY);
+        int clientX = screenX, clientY = screenY;
+        m_Owner->ScreenToClient(clientX, clientY);
+        int w = m_Owner->GetActualWidth();
+        int h = m_Owner->GetActualHeight();
+        if (clientX >= 0 && clientX < w && clientY >= 0 && clientY < h) {
+            m_Owner->ShowDropPreviews();
+        } else {
+            m_Owner->HideDropPreviews();
+        }
+
         XINFO("[DockLayer] drag BEGIN: {}", senderWidget->getname());
         break;
     }

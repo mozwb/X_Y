@@ -51,10 +51,11 @@ void Docker::Dock(XWidget* panel, const std::string& title, Area area)
 {
     if (!panel) return;
 
-    // 解除原来的 parent 关系
+    // 解除原来的 parent 关系并隐藏旧窗口
     if (panel->getParent()) {
         panel->releaseSelf();
     }
+    panel->show(ShowCmd::Hide);
 
     DockPanel* targetPanel = Panel(area);
 
@@ -69,7 +70,7 @@ void Docker::Dock(XWidget* panel, const std::string& title, Area area)
         panel->SetParent(targetPanel->GetNativeHandle());
     }
 
-    // 添加到 tab 管理器
+    // 添加到 tab 管理器（ActivateTab 会在激活时 show 该面板）
     targetPanel->AddPanel(panel, title);
 
     RecalcLayout();
@@ -170,37 +171,41 @@ static void GetAreaRect(Docker* docker, Docker::Area area, int& x, int& y, int& 
     int dh = docker->GetActualHeight();
     if (dw <= 0 || dh <= 0) return;
 
-    const float RATIO = 0.20f;
-    int edge = (int)(dh * RATIO);
-    if (edge < 40) edge = 40;
+    const int MARK_W = 60;
+    const int MARK_H = 40;
 
     switch (area) {
     case Docker::Top:
-        x = 0; y = 0; w = dw; h = edge;
+        x = (dw - MARK_W) / 2;
+        y = 0;
+        w = MARK_W;
+        h = MARK_H;
         break;
     case Docker::Bottom:
-        x = 0; y = dh - edge; w = dw; h = edge;
+        x = (dw - MARK_W) / 2;
+        y = dh - MARK_H;
+        w = MARK_W;
+        h = MARK_H;
         break;
-    case Docker::Left: {
-        int ew = (int)(dw * RATIO);
-        if (ew < 60) ew = 60;
-        x = 0; y = edge; w = ew; h = dh - 2 * edge;
+    case Docker::Left:
+        x = 0;
+        y = (dh - MARK_H) / 2;
+        w = MARK_W;
+        h = MARK_H;
         break;
-    }
-    case Docker::Right: {
-        int ew = (int)(dw * RATIO);
-        if (ew < 60) ew = 60;
-        x = dw - ew; y = edge; w = ew; h = dh - 2 * edge;
+    case Docker::Right:
+        x = dw - MARK_W;
+        y = (dh - MARK_H) / 2;
+        w = MARK_W;
+        h = MARK_H;
         break;
-    }
     case Docker::Center:
-    default: {
-        int ew = (int)(dw * RATIO);
-        if (ew < 60) ew = 60;
-        int ewy = edge;
-        x = ew; y = ewy; w = dw - 2 * ew; h = dh - 2 * ewy;
+    default:
+        x = (dw - MARK_W) / 2;
+        y = (dh - MARK_H) / 2;
+        w = MARK_W;
+        h = MARK_H;
         break;
-    }
     }
 }
 
