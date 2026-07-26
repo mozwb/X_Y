@@ -14,6 +14,7 @@ namespace X_Y {
         }
         static Buffer ReadFileBinary(const File& filepath);
         static bool WriteFileBinary(const File& filepath, const Buffer& buffer);
+        static bool AppendFileBinary(const File& filepath, const Buffer& buffer);
 
 #ifdef XY_PLATFORM_WINDOWS
         static std::string OpenFileDialog(const char* filter = "All Files (*.*)\0*.*\0");
@@ -53,6 +54,7 @@ namespace X_Y {
 		bool IsFile() const { return std::filesystem::is_regular_file(m_Path); }
         Buffer ReadBinary() const { return FilesSystem::ReadFileBinary(m_Path); }
         bool WriteBinary(const Buffer& buf) const { return FilesSystem::WriteFileBinary(m_Path, buf); }
+        bool AppendBinary(const Buffer& buf) const { return FilesSystem::AppendFileBinary(m_Path, buf); }
 		bool MatchExtension(const std::string& extension) const { return std::filesystem::path(m_Path).extension() == extension; }
 		bool CopyTo(const File& dest) const { std::error_code ec; std::filesystem::copy_file(m_Path, dest, std::filesystem::copy_options::overwrite_existing, ec); return !ec; }
         //——文件夹操作——

@@ -34,9 +34,10 @@ public:
     
     void Log(const std::string& message) const override {
         Buffer line(message.size());
-        memcpy(line.Data, message.data(), message.size());
-        line.Size = message.size();
-        DataStore::Instance().Append(m_Key, line);
+        line.Append(message.data(), message.size());
+		line.Append("\n", 1); // 换行
+        DataStore::Instance().Insert(m_Key, line);
+        DataStore::Instance().Flush(m_Key);
     }
 
     // ── 设置/获取 key ──

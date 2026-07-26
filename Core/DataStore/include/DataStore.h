@@ -22,8 +22,10 @@ public:
     std::vector<std::string> ListKeys() const;
 
     // ── 持久化 ──
-    void Flush(const std::string& key);
-    void FlushAll();
+    bool Save(const std::string& key);     // 覆盖写（全量快照）
+    bool SaveAll();                        // 全部覆盖写
+    void Flush(const std::string& key);    // 追加写（适合日志）
+    void FlushAll();                       // 全部追加写
     bool LoadFile(const std::string& filepath);
     void LoadDirectory(const XPath& dir);
 

@@ -1,5 +1,6 @@
 ﻿#include"FilesSystem/include/FilesSystem.h"
 #include<fstream>
+#include <filesystem>
 #ifdef XY_PLATFORM_WINDOWS
 #include<Windows.h>
 #include<commdlg.h>
@@ -42,6 +43,26 @@ namespace X_Y {
 		{
 			// Failed to open the file for writing
 			return false;
+		}
+
+		stream.write(reinterpret_cast<const char*>(buffer.Data), buffer.Size);
+		stream.close();
+		return true;
+	}
+
+	bool FilesSystem::AppendFileBinary(const File& filepath, const Buffer& buffer)
+	{
+		// 追加模式：文件不存在则创建，存在则追加到末尾
+		std::ofstream stream(filepath, std::ios::binary | std::ios::app);
+
+		if (!stream)
+		{
+			// 尝试创建目录
+			std::error_code ec;
+			std::filesystem::create_directories(filepath.parent_path(), ec);
+			stream.open(filepath, std::ios::binary | std::ios::app);
+			if (!stream)
+				return false;
 		}
 
 		stream.write(reinterpret_cast<const char*>(buffer.Data), buffer.Size);
