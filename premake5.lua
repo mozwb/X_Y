@@ -67,7 +67,8 @@ include "Core/Timer"
 include "Core/Buffer"
 include "Core/FilesSystem"
 include "Core/Image"
-include "Core/Middle"  
+include "Core/Middle"
+include "Core/DataStore"
 group ""
 
 
@@ -123,5 +124,6 @@ project "Test"
         "Image",
         "Model",
         "Middle",
+        "DataStore",
     }
 end

@@ -11,8 +11,12 @@ project "Log"
     includedirs
     {
         "include",  
-        "%{wks.location}/Core/XCore/include",      -- 只写 include，Core 项目自己的目录
-        "%{wks.location}/Core/Timer/include"      
+        "%{wks.location}/Core/XCore/include",
+        "%{wks.location}/Core/Timer/include",
+        "%{wks.location}/Core/Buffer/include",
+        "%{wks.location}/Core/FilesSystem/include",
+        "%{wks.location}/Core/DataStore/include"
     }
     links{
+        "DataStore"
     }

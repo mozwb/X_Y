@@ -1,6 +1,7 @@
 ﻿#pragma once
 #ifdef XY_DEBUG
 #include"LogConfigure.h"
+#include"DataStoreDevice.h"
 namespace X_Y {
 	template<typename T> using LogBase = LogConfigure::LogConfigure<T>;
 	using	LogConfigure::DEVICE;
@@ -13,7 +14,7 @@ namespace X_Y {
 		LOG(str name) : LogBase<LOG>(name) {
 			Pink::setModel("%255:105:180%[位置][日期][时间][发起者][等级]:[内容]%#");
 			this->add(new DEVICE());
-			this->add(new LFile("log.txt", std::ios::trunc));
+			this->add(new DataStoreDevice());  // 追加到 DataStore，key=当天日期.log
 		}
 	};
 }
