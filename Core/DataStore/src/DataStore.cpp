@@ -231,27 +231,65 @@ void DataStore::LoadDirectory(const XPath& dir)
     }
 }
 
+// ── 统计 ──
+
+DataStore::Stats DataStore::GetStats() const
+{
+    Stats stats;
+
+    stats.PoolBlockSize = m_Pool.BlockSize();
+    stats.PoolTotalBlocks = m_Pool.TotalBlocks();
+    stats.PoolFreeBlocks = m_Pool.FreeBlocks();
+    stats.PoolUsedBytes = m_Pool.UsedBytes();
+
+    stats.TotalEntries = m_Entries.size();
+    stats.RingBufferCount = m_RingBuffers.size();
+
+    for (const auto& pair : m_Entries)
+    {
+        const Buffer& buf = pair.second;
+        stats.TotalBytes += buf.Size;
+        stats.TotalCapacity += buf.Capacity;
+
+        if (IsPoolBuffer(buf))
+            stats.PoolEntries++;
+        else
+            stats.SelfManagedEntries++;
+    }
+
+    return stats;
+}
+
 void DataStore::DumpStats()
 {
+    Stats s = GetStats();
+
     std::cout << "=== DataStore Stats ===" << std::endl;
-    std::cout << "Buffer entries: " << m_Entries.size() << std::endl;
+    std::cout << "Buffer entries: " << s.TotalEntries
+              << " (pool: " << s.PoolEntries
+              << ", self: " << s.SelfManagedEntries << ")" << std::endl;
+    std::cout << "  Total data: " << s.TotalBytes << " bytes" << std::endl;
+    std::cout << "  Total capacity: " << s.TotalCapacity << " bytes" << std::endl;
+    std::cout << "RingBuffers: " << s.RingBufferCount << std::endl;
+    std::cout << "Pool: " << s.PoolBlockSize << " bytes/block, "
+              << "total " << s.PoolTotalBlocks << " blocks, "
+              << "free " << s.PoolFreeBlocks << ", "
+              << "used " << s.PoolUsedBytes << " bytes" << std::endl;
+
+    // 详细展开
     for (const auto& pair : m_Entries) {
+        const Buffer& buf = pair.second;
+        const char* src = IsPoolBuffer(buf) ? "pool" : "self";
         std::cout << "  [" << pair.first << "] "
-                  << pair.second.Size << "/" << pair.second.Capacity << " bytes"
+                  << buf.Size << "/" << buf.Capacity << " bytes (" << src << ")"
                   << std::endl;
     }
-    std::cout << "RingBuffer entries: " << m_RingBuffers.size() << std::endl;
     for (const auto& pair : m_RingBuffers) {
-        std::cout << "  [" << pair.first << "] RingBuffer "
+        std::cout << "  Ring[" << pair.first << "] "
                   << pair.second.Capacity() << " bytes, "
                   << pair.second.TotalBlocks() << " blocks"
                   << std::endl;
     }
-    std::cout << "Pool: " << m_Pool.BlockSize() << " bytes/block, "
-              << m_Pool.TotalBlocks() << " total, "
-              << m_Pool.FreeBlocks() << " free, "
-              << m_Pool.UsedBytes() << " used"
-              << std::endl;
     std::cout << "========================" << std::endl;
 }
 

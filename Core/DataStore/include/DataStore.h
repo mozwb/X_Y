@@ -13,6 +13,23 @@ class DataStore {
 public:
     static DataStore& Instance();
 
+    // ── 统计信息 ──
+    struct Stats {
+        uint64_t TotalEntries = 0;       // m_Entries 总数
+        uint64_t PoolEntries = 0;        // 来自 Pool 的条目数
+        uint64_t SelfManagedEntries = 0; // 自管/外来挂载的条目数
+        uint64_t TotalBytes = 0;         // 所有 Buffer 的 Size 之和
+        uint64_t TotalCapacity = 0;      // 所有 Buffer 的 Capacity 之和
+
+        uint64_t RingBufferCount = 0;
+        uint64_t PoolBlockSize = 0;
+        uint32_t PoolTotalBlocks = 0;
+        uint32_t PoolFreeBlocks = 0;
+        uint64_t PoolUsedBytes = 0;
+    };
+
+    Stats GetStats() const;
+
     // ── 数据库操作 ──
     void   Insert(const std::string& key, Buffer data);
     void   Append(const std::string& key, const Buffer& data);
@@ -25,11 +42,10 @@ public:
 
     // ── 前后端分离：统一内存管理 ──
     // 获取或创建一块 Buffer（从 BufferPool 分配）
-    // 典型用途：Log 组件向 DataStore 要一块 buffer 用于写入
+    // 调用方直接追加写入即可
     Buffer* GetOrCreate(const std::string& key, uint64_t reserveSize = 4096);
 
     // 获取或创建一个 RingBuffer
-    // 典型用途：日志环形缓冲区，Log 写入，LogViewer 读取
     RingBuffer* GetOrCreateRingBuffer(const std::string& key, uint64_t capacity = 65536);
 
     // ── 持久化 ──
@@ -52,6 +68,9 @@ private:
 
     DataStore(const DataStore&) = delete;
     DataStore& operator=(const DataStore&) = delete;
+
+    // 检查一个 Buffer 是否由 Pool 管理
+    static bool IsPoolBuffer(const Buffer& buf) { return (bool)buf.Deleter; }
 
     XPath KeyToPath(const std::string& key) const;
     bool LoadFileInto(const std::string& key, const XPath& path);
