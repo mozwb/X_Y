@@ -1,5 +1,6 @@
 #include "Buffer.h"
 #include <cstdio>
+#include <cstdlib>
 
 namespace X_Y {
 
@@ -12,8 +13,6 @@ Buffer::Buffer(uint64_t initialCapacity)
 
 Buffer::Buffer(const Buffer& other)
     : Data(nullptr), Size(0), Capacity(0)
-    , bFreeInstead(false)
-    // Deleter 默认空 — 拷贝不传递，新 Buffer 自管内存
 {
     if (other.Data && other.Size > 0)
     {
@@ -21,17 +20,16 @@ Buffer::Buffer(const Buffer& other)
         memcpy(Data, other.Data, other.Size);
         Size = other.Size;
     }
+    // Deleter 默认空 — 拷贝不传递
 }
 
 Buffer::Buffer(Buffer&& other) noexcept
     : Data(other.Data), Size(other.Size), Capacity(other.Capacity)
-    , bFreeInstead(other.bFreeInstead)
-    , Deleter(std::move(other.Deleter))  // 移动转移 Deleter
+    , Deleter(std::move(other.Deleter))
 {
     other.Data = nullptr;
     other.Size = 0;
     other.Capacity = 0;
-    other.bFreeInstead = false;
 }
 
 Buffer::~Buffer()
@@ -44,14 +42,13 @@ Buffer& Buffer::operator=(const Buffer& other)
     if (this != &other)
     {
         Release();
-        bFreeInstead = false;
-        Deleter = nullptr;  // 拷贝赋值不传递
         if (other.Data && other.Size > 0)
         {
             Reserve(other.Size);
             memcpy(Data, other.Data, other.Size);
             Size = other.Size;
         }
+        // Deleter 默认空 — 拷贝赋值不传递
     }
     return *this;
 }
@@ -64,34 +61,32 @@ Buffer& Buffer::operator=(Buffer&& other) noexcept
         Data = other.Data;
         Size = other.Size;
         Capacity = other.Capacity;
-        bFreeInstead = other.bFreeInstead;
         Deleter = std::move(other.Deleter);
         other.Data = nullptr;
         other.Size = 0;
         other.Capacity = 0;
-        other.bFreeInstead = false;
     }
     return *this;
 }
 
-// ── 内存管理 ──
+// ── 内存管理（统一 malloc/free） ──
 
 void Buffer::Reserve(uint64_t newCapacity)
 {
     if (newCapacity <= Capacity)
         return;
 
+    // 16 字节对齐
     newCapacity = (newCapacity + 15) & ~15ULL;
-    uint8_t* newData = new uint8_t[newCapacity];
+    uint8_t* newData = static_cast<uint8_t*>(std::malloc(newCapacity));
     if (Data)
     {
-        memcpy(newData, Data, Size);
+        std::memcpy(newData, Data, Size);
         Release();
     }
     Data = newData;
     Capacity = newCapacity;
-    bFreeInstead = false;
-    Deleter = nullptr;  // 重新分配后，新内存不归池管
+    Deleter = nullptr;  // 新分配的内存归自管
 }
 
 void Buffer::Ensure(uint64_t neededSize)
@@ -122,26 +117,22 @@ void Buffer::Release()
         // 池管理的内存 → 回调归还
         Deleter(Data, Size, Capacity);
     }
-    else if (bFreeInstead)
-    {
-        free(Data);
-    }
     else
     {
-        delete[] Data;
+        // 自管内存 → 统一 free
+        std::free(Data);
     }
 
     Data = nullptr;
     Size = 0;
     Capacity = 0;
-    bFreeInstead = false;
     Deleter = nullptr;
 }
 
 void Buffer::ZeroInitialize()
 {
     if (Data)
-        memset(Data, 0, Capacity);
+        std::memset(Data, 0, Capacity);
 }
 
 // ── 读写操作 ──
@@ -150,7 +141,7 @@ void Buffer::Append(const void* src, uint64_t len)
 {
     if (!src || len == 0) return;
     Ensure(Size + len);
-    memcpy(Data + Size, src, len);
+    std::memcpy(Data + Size, src, len);
     Size += len;
 }
 
@@ -159,7 +150,7 @@ void Buffer::Overwrite(const void* src, uint64_t len)
     if (!src && len > 0) return;
     Allocate(len);
     if (len > 0)
-        memcpy(Data, src, len);
+        std::memcpy(Data, src, len);
 }
 
 void Buffer::Overwrite(const Buffer& other)
@@ -174,7 +165,7 @@ void Buffer::Overwrite(std::initializer_list<uint8_t> list)
 
 void Buffer::Overwrite(const char* str)
 {
-    uint64_t len = str ? strlen(str) : 0;
+    uint64_t len = str ? std::strlen(str) : 0;
     Overwrite(reinterpret_cast<const uint8_t*>(str), len);
 }
 

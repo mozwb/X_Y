@@ -62,10 +62,8 @@ Buffer BufferPool::Allocate(uint64_t size)
     result.Data = block.Memory;
     result.Capacity = m_BlockSize;
     result.Size = size > m_BlockSize ? m_BlockSize : size;
-    result.bFreeInstead = false;
 
-    // 关键：lambda 捕获 this，析构时自动归还到本 Pool
-    // mutable 因为 lambda 体不修改捕获，只是转发
+    // lambda 捕获 this，Buffer 析构时自动归还到本 Pool
     result.Deleter = [this](uint8_t* data, uint64_t, uint64_t) {
         this->DeallocateRaw(data);
     };
@@ -75,11 +73,7 @@ Buffer BufferPool::Allocate(uint64_t size)
 
 void BufferPool::DeallocateRaw(uint8_t* data)
 {
-    // 内部方法：只找块索引，不操作 Buffer 对象
-    // 由 Deleter 回调调用，此时 mutex 已由外部 Allocate 释放？
-    // 不对——Deleter 是从 Buffer 析构中调用的，析构可能发生在任意线程
-    // 所以需要加锁
-
+    // Deleter 回调（Buffer 析构时触发），可能在任意线程，需加锁
     std::lock_guard<std::mutex> lock(m_Mutex);
 
     for (uint32_t i = 0; i < m_TotalBlocks; i++)

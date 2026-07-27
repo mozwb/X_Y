@@ -11,18 +11,17 @@ namespace X_Y {
 
 // ── Buffer ──
 // 二进制数据容器：支持拷贝/移动/读写/自动扩容
-// 提供自定义删除器（Deleter），支持 Pool 托管内存自动归还
+// 所有自管内存统一使用 malloc/free（不再有 new[]/delete[]）
 //
-// Deleter 是 std::function<void(uint8_t*, uint64_t, uint64_t)>
-//   - 未设置（默认空）：走 bFreeInstead 判断
-//   - 已设置：析构时调 Deleter(Data, Size, Capacity)，Data 置 nullptr
-//   - 拷贝时 Deleter 不传递
-//   - 移动时 Deleter 转移
+// 删除器（Deleter）：
+//   - 未设置（默认空）：析构时走 free(Data)
+//   - 已设置：析构时调 Deleter(Data, Size, Capacity)（用于 Pool 内存自动归还）
+//   - 拷贝时不传递 Deleter
+//   - 移动时转移 Deleter
 //
-// 重大约束：
-//   Buffer 带 Deleter 时，调 Reserve/Ensure/Allocate 会先调 Release()
-//   这会导致池内存被归还，之后再 new 新内存。这是预期行为：
-//   "从池拿 → 追加不够了 → 自动切到自管内存"
+// Buffer 带 Deleter 时调 Reserve/Ensure/Allocate：
+//   先 Release（归还池内存）→ 再 malloc 新内存 → 清除 Deleter
+//   这是安全行为："池内存不够用就切到自管"
 
 struct Buffer
 {
@@ -30,10 +29,9 @@ struct Buffer
     uint64_t Size = 0;
     uint64_t Capacity = 0;
 
-    // 释放方式：true = free(), false = delete[]
-    bool bFreeInstead = false;
-
-    // 自定义删除器（使用 std::function，支持捕获 this 的 lambda）
+    // 自定义删除器（std::function，支持捕获 this 的 lambda）
+    // 有 → 析构调删除器（池管理内存）
+    // 无 → 析构走 free()（所有自管内存统一 malloc）
     using DeleterFn = std::function<void(uint8_t*, uint64_t, uint64_t)>;
     DeleterFn Deleter;
 
