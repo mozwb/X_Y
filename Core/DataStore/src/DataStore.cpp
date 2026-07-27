@@ -1,5 +1,6 @@
-﻿#include "DataStore/include/DataStore.h"
+#include "DataStore/include/DataStore.h"
 #include <cassert>
+#include <iostream>
 
 namespace X_Y {
 
@@ -9,6 +10,10 @@ DataStore& DataStore::Instance()
 {
     static DataStore inst;
     return inst;
+}
+
+DataStore::DataStore()
+{
 }
 
 // ── 内部工具 ──
@@ -35,8 +40,6 @@ void DataStore::SetDataDir(const std::string& dir)
 }
 
 // ── 数据库操作 ──
-// Insert/Append 只操作内存，不碰文件
-// 需要持久化时手动调 Save/Flush
 
 void DataStore::Insert(const std::string& key, Buffer data)
 {
@@ -59,7 +62,6 @@ Buffer* DataStore::Get(const std::string& key)
     if (it != m_Entries.end())
         return &it->second;
 
-    // 内存没有，尝试从文件加载
     XPath path = KeyToPath(key);
     if (path.Exists()) {
         if (LoadFileInto(key, path)) {
@@ -117,9 +119,34 @@ std::vector<std::string> DataStore::ListKeys() const
     return keys;
 }
 
+// ── 前后端分离：统一内存管理 ──
+
+Buffer* DataStore::GetOrCreate(const std::string& key, uint64_t reserveSize)
+{
+    auto it = m_Entries.find(key);
+    if (it != m_Entries.end())
+        return &it->second;
+
+    Buffer buf = m_Pool.Allocate(reserveSize);
+    auto result = m_Entries.emplace(key, std::move(buf));
+    return &result.first->second;
+}
+
+RingBuffer* DataStore::GetOrCreateRingBuffer(const std::string& key, uint64_t capacity)
+{
+    auto it = m_RingBuffers.find(key);
+    if (it != m_RingBuffers.end())
+        return &it->second;
+
+    auto result = m_RingBuffers.emplace(
+        std::piecewise_construct,
+        std::forward_as_tuple(key),
+        std::forward_as_tuple(capacity)
+    );
+    return &result.first->second;
+}
+
 // ── 持久化 ──
-// Save: 覆盖写（全量快照）
-// Flush: 追加写（适合日志累积）
 
 bool DataStore::Save(const std::string& key)
 {
@@ -204,5 +231,28 @@ void DataStore::LoadDirectory(const XPath& dir)
     }
 }
 
-} 
-// namespace X_Y
+void DataStore::DumpStats()
+{
+    std::cout << "=== DataStore Stats ===" << std::endl;
+    std::cout << "Buffer entries: " << m_Entries.size() << std::endl;
+    for (const auto& pair : m_Entries) {
+        std::cout << "  [" << pair.first << "] "
+                  << pair.second.Size << "/" << pair.second.Capacity << " bytes"
+                  << std::endl;
+    }
+    std::cout << "RingBuffer entries: " << m_RingBuffers.size() << std::endl;
+    for (const auto& pair : m_RingBuffers) {
+        std::cout << "  [" << pair.first << "] RingBuffer "
+                  << pair.second.Capacity() << " bytes, "
+                  << pair.second.TotalBlocks() << " blocks"
+                  << std::endl;
+    }
+    std::cout << "Pool: " << m_Pool.BlockSize() << " bytes/block, "
+              << m_Pool.TotalBlocks() << " total, "
+              << m_Pool.FreeBlocks() << " free, "
+              << m_Pool.UsedBytes() << " used"
+              << std::endl;
+    std::cout << "========================" << std::endl;
+}
+
+} // namespace X_Y

@@ -1,5 +1,7 @@
-﻿#pragma once
+#pragma once
 #include "Buffer/include/Buffer.h"
+#include "Buffer/include/BufferPool.h"
+#include "Buffer/include/RingBuffer.h"
 #include "FilesSystem/include/FilesSystem.h"
 #include <string>
 #include <unordered_map>
@@ -21,11 +23,20 @@ public:
     bool   Contains(const std::string& key) const;
     std::vector<std::string> ListKeys() const;
 
+    // ── 前后端分离：统一内存管理 ──
+    // 获取或创建一块 Buffer（从 BufferPool 分配）
+    // 典型用途：Log 组件向 DataStore 要一块 buffer 用于写入
+    Buffer* GetOrCreate(const std::string& key, uint64_t reserveSize = 4096);
+
+    // 获取或创建一个 RingBuffer
+    // 典型用途：日志环形缓冲区，Log 写入，LogViewer 读取
+    RingBuffer* GetOrCreateRingBuffer(const std::string& key, uint64_t capacity = 65536);
+
     // ── 持久化 ──
-    bool Save(const std::string& key);     // 覆盖写（全量快照）
-    bool SaveAll();                        // 全部覆盖写
-    void Flush(const std::string& key);    // 追加写（适合日志）
-    void FlushAll();                       // 全部追加写
+    bool Save(const std::string& key);
+    bool SaveAll();
+    void Flush(const std::string& key);
+    void FlushAll();
     bool LoadFile(const std::string& filepath);
     void LoadDirectory(const XPath& dir);
 
@@ -33,20 +44,23 @@ public:
     void SetDataDir(const std::string& dir);
     const XPath& GetDataDir() const { return m_DataDir; }
 
+    // ── 统计 ──
+    void DumpStats();
+
 private:
-    DataStore() = default;
+    DataStore();
+
     DataStore(const DataStore&) = delete;
     DataStore& operator=(const DataStore&) = delete;
 
-    // 内部工具：key → 文件路径
     XPath KeyToPath(const std::string& key) const;
-
-    // 内部：从文件读入内存（不经过 Insert，直接设值）
     bool LoadFileInto(const std::string& key, const XPath& path);
 
-    std::unordered_map<std::string, Buffer> m_Entries;
+    std::unordered_map<std::string, Buffer>     m_Entries;
+    std::unordered_map<std::string, RingBuffer> m_RingBuffers;
+    BufferPool m_Pool{65536};  // 通用内存池，每块 64KB
+
     XPath m_DataDir{"DataStore/"};
 };
 
-} 
-// namespace X_Y
+} // namespace X_Y
