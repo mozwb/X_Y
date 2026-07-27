@@ -9,12 +9,17 @@ namespace X_Y {
 // 通用内存池：预分配固定大小的块，分配/回收复用内存
 // 线程安全（internal mutex）
 //
-// 典型用途：网络收发、文件缓存、编辑器撤销栈等需要频繁分配固定大小内存的场景
+// 核心设计：Pool::Allocate 返回的 Buffer 设自定义 Deleter（lambda 捕获 this），
+//           析构时自动调用 Pool::Deallocate 归还，无需用户操心
 //
 // 使用方式：
-//   BufferPool pool(65536);          // 每块 64KB
-//   Buffer buf = pool.Allocate(256); // 从池中取一块，容量至少 256 字节
-//   pool.Deallocate(buf);            // 归还（内存回到池中）
+//   BufferPool pool(65536);
+//   Buffer buf = pool.Allocate(256);
+//   // buf 超出作用域时自动归还到池，无需手动操作
+//
+// 注意：从 Pool 分配的 Buffer 如果调 Reserve/Ensure/Allocate 扩容，
+//       会先 Release（归还池内存），再 new 新内存。
+//       这是安全的行为——"池内存不够用了就切到自管"。
 
 class BufferPool {
 public:
@@ -25,21 +30,16 @@ public:
     ~BufferPool();
 
     // ── 分配 ──
-    // 从池中分配一块 Buffer，容量至少为 size（按块大小对齐）
-    // 池空时自动 new 一块新内存
+    // 从池中分配一块 Buffer，返回的 Buffer 容量为 blockSize
+    // 析构时自动归还到池
     Buffer Allocate(uint64_t size);
 
-    // ── 回收 ──
-    // 归还 Buffer，内存回到池中供复用
-    // 注意：调用后 buf.Data 置 nullptr，不要继续使用
+    // ── 手动回收 ──
+    // 提前归还 Buffer 到池，调用后 buf 清空
     void Deallocate(Buffer& buf);
 
-    // ── 扩容 ──
-    // 预先分配 numBlocks 块
+    // ── 扩容/缩容 ──
     bool Grow(uint32_t numBlocks);
-
-    // ── 缩容 ──
-    // 释放空闲块，保留至少 minBlocks 块
     void Shrink(uint32_t minBlocks = 0);
 
     // ── 查询 ──
@@ -54,15 +54,14 @@ private:
     };
 
     Block* AllocNewBlock();
+    void DeallocateRaw(uint8_t* data);
 
     uint64_t m_BlockSize;
     uint32_t m_MaxBlocks;
     uint32_t m_TotalBlocks = 0;
     uint64_t m_UsedBytes = 0;
 
-    // 所有已分配的块
     std::vector<Block> m_Blocks;
-    // 空闲块索引栈
     std::vector<uint32_t> m_FreeList;
 
     mutable std::mutex m_Mutex;

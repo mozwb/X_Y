@@ -8,7 +8,6 @@ BufferPool::BufferPool(uint64_t blockSize, uint32_t maxBlocks)
     : m_BlockSize(blockSize)
     , m_MaxBlocks(maxBlocks)
 {
-    // 初始不预分配，按需 Grow
 }
 
 BufferPool::~BufferPool()
@@ -51,7 +50,7 @@ Buffer BufferPool::Allocate(uint64_t size)
     {
         Block* newBlock = AllocNewBlock();
         if (!newBlock)
-            return Buffer();  // 分配失败
+            return Buffer();
 
         blockIdx = static_cast<uint32_t>(m_Blocks.size() - 1);
     }
@@ -63,9 +62,36 @@ Buffer BufferPool::Allocate(uint64_t size)
     result.Data = block.Memory;
     result.Capacity = m_BlockSize;
     result.Size = size > m_BlockSize ? m_BlockSize : size;
-    result.bFreeInstead = true;  // 池内存用 free 释放（Deallocate 归还，不真正 free）
+    result.bFreeInstead = false;
+
+    // 关键：lambda 捕获 this，析构时自动归还到本 Pool
+    // mutable 因为 lambda 体不修改捕获，只是转发
+    result.Deleter = [this](uint8_t* data, uint64_t, uint64_t) {
+        this->DeallocateRaw(data);
+    };
 
     return result;
+}
+
+void BufferPool::DeallocateRaw(uint8_t* data)
+{
+    // 内部方法：只找块索引，不操作 Buffer 对象
+    // 由 Deleter 回调调用，此时 mutex 已由外部 Allocate 释放？
+    // 不对——Deleter 是从 Buffer 析构中调用的，析构可能发生在任意线程
+    // 所以需要加锁
+
+    std::lock_guard<std::mutex> lock(m_Mutex);
+
+    for (uint32_t i = 0; i < m_TotalBlocks; i++)
+    {
+        if (m_Blocks[i].Memory == data)
+        {
+            m_FreeList.push_back(i);
+            m_UsedBytes -= m_BlockSize;
+            return;
+        }
+    }
+    // 没找到——说明 data 不是本池的内存，忽略（防御性）
 }
 
 void BufferPool::Deallocate(Buffer& buf)
@@ -73,23 +99,12 @@ void BufferPool::Deallocate(Buffer& buf)
     if (!buf.Data)
         return;
 
-    std::lock_guard<std::mutex> lock(m_Mutex);
-
-    // 找到 buf.Data 对应的块索引
-    for (uint32_t i = 0; i < m_TotalBlocks; i++)
-    {
-        if (m_Blocks[i].Memory == buf.Data)
-        {
-            m_FreeList.push_back(i);
-            m_UsedBytes -= m_BlockSize;
-            break;
-        }
-    }
+    DeallocateRaw(buf.Data);
 
     buf.Data = nullptr;
     buf.Size = 0;
     buf.Capacity = 0;
-    buf.bFreeInstead = false;
+    buf.Deleter = nullptr;
 }
 
 bool BufferPool::Grow(uint32_t numBlocks)
@@ -117,7 +132,6 @@ void BufferPool::Shrink(uint32_t minBlocks)
 {
     std::lock_guard<std::mutex> lock(m_Mutex);
 
-    // 只释放空闲块，保留至少 minBlocks
     while (m_FreeList.size() > minBlocks)
     {
         uint32_t idx = m_FreeList.back();

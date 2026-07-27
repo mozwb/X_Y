@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Buffer.h"
 #include <mutex>
 
@@ -110,4 +110,5 @@ private:
     RingBuffer& operator=(const RingBuffer&) = delete;
 };
 
-} // namespace X_Y
+} 
+// namespace X_Y

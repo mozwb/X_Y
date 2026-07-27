@@ -5,17 +5,37 @@
 #include <string>
 #include <sstream>
 #include <cctype>
+#include <functional>
 
 namespace X_Y {
 
-// @@ 砚台注：用 Buffer 做日志的缓冲池 + 二进制数据容器
-// @@ 改进后的 Buffer：支持拷贝、移动、读写、子视图
+// ── Buffer ──
+// 二进制数据容器：支持拷贝/移动/读写/自动扩容
+// 提供自定义删除器（Deleter），支持 Pool 托管内存自动归还
+//
+// Deleter 是 std::function<void(uint8_t*, uint64_t, uint64_t)>
+//   - 未设置（默认空）：走 bFreeInstead 判断
+//   - 已设置：析构时调 Deleter(Data, Size, Capacity)，Data 置 nullptr
+//   - 拷贝时 Deleter 不传递
+//   - 移动时 Deleter 转移
+//
+// 重大约束：
+//   Buffer 带 Deleter 时，调 Reserve/Ensure/Allocate 会先调 Release()
+//   这会导致池内存被归还，之后再 new 新内存。这是预期行为：
+//   "从池拿 → 追加不够了 → 自动切到自管内存"
+
 struct Buffer
 {
     uint8_t* Data = nullptr;
     uint64_t Size = 0;
     uint64_t Capacity = 0;
+
+    // 释放方式：true = free(), false = delete[]
     bool bFreeInstead = false;
+
+    // 自定义删除器（使用 std::function，支持捕获 this 的 lambda）
+    using DeleterFn = std::function<void(uint8_t*, uint64_t, uint64_t)>;
+    DeleterFn Deleter;
 
     Buffer() = default;
     explicit Buffer(uint64_t initialCapacity);

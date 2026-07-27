@@ -13,6 +13,7 @@ Buffer::Buffer(uint64_t initialCapacity)
 Buffer::Buffer(const Buffer& other)
     : Data(nullptr), Size(0), Capacity(0)
     , bFreeInstead(false)
+    // Deleter 默认空 — 拷贝不传递，新 Buffer 自管内存
 {
     if (other.Data && other.Size > 0)
     {
@@ -25,6 +26,7 @@ Buffer::Buffer(const Buffer& other)
 Buffer::Buffer(Buffer&& other) noexcept
     : Data(other.Data), Size(other.Size), Capacity(other.Capacity)
     , bFreeInstead(other.bFreeInstead)
+    , Deleter(std::move(other.Deleter))  // 移动转移 Deleter
 {
     other.Data = nullptr;
     other.Size = 0;
@@ -43,6 +45,7 @@ Buffer& Buffer::operator=(const Buffer& other)
     {
         Release();
         bFreeInstead = false;
+        Deleter = nullptr;  // 拷贝赋值不传递
         if (other.Data && other.Size > 0)
         {
             Reserve(other.Size);
@@ -62,6 +65,7 @@ Buffer& Buffer::operator=(Buffer&& other) noexcept
         Size = other.Size;
         Capacity = other.Capacity;
         bFreeInstead = other.bFreeInstead;
+        Deleter = std::move(other.Deleter);
         other.Data = nullptr;
         other.Size = 0;
         other.Capacity = 0;
@@ -87,6 +91,7 @@ void Buffer::Reserve(uint64_t newCapacity)
     Data = newData;
     Capacity = newCapacity;
     bFreeInstead = false;
+    Deleter = nullptr;  // 重新分配后，新内存不归池管
 }
 
 void Buffer::Ensure(uint64_t neededSize)
@@ -109,17 +114,28 @@ void Buffer::Allocate(uint64_t size)
 
 void Buffer::Release()
 {
-    if (Data)
+    if (!Data)
+        return;
+
+    if (Deleter)
     {
-        if (bFreeInstead)
-            free(Data);
-        else
-            delete[] Data;
+        // 池管理的内存 → 回调归还
+        Deleter(Data, Size, Capacity);
     }
+    else if (bFreeInstead)
+    {
+        free(Data);
+    }
+    else
+    {
+        delete[] Data;
+    }
+
     Data = nullptr;
     Size = 0;
     Capacity = 0;
     bFreeInstead = false;
+    Deleter = nullptr;
 }
 
 void Buffer::ZeroInitialize()
