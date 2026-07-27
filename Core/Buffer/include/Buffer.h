@@ -199,6 +199,35 @@ namespace X_Y {
 			Append(&value, sizeof(T));
 		}
 
+		// ========== 覆盖式写入 ==========
+		// 用原始指针覆盖内容（清空旧数据，写入新内容）
+		void Overwrite(const void* src, uint64_t len)
+		{
+			if (!src && len > 0) return;
+			Allocate(len);  // 释放旧内存 + 设新大小
+			if (len > 0)
+				memcpy(Data, src, len);
+		}
+
+		// 覆盖写入另一个 Buffer 的内容
+		void Overwrite(const Buffer& other)
+		{
+			Overwrite(other.Data, other.Size);
+		}
+
+		// 覆盖写入 initializer_list（方便 Buffer b = {0x01, 0x02}）
+		void Overwrite(std::initializer_list<uint8_t> list)
+		{
+			Overwrite(list.begin(), list.size());
+		}
+
+		// 覆盖写入字符串（不含 null 终止符）
+		void Overwrite(const char* str)
+		{
+			uint64_t len = str ? strlen(str) : 0;
+			Overwrite(reinterpret_cast<const uint8_t*>(str), len);
+		}
+
 		Buffer View(uint64_t offset, uint64_t size) const
 		{
 			assert(offset + size <= Size);

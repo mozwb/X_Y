@@ -320,14 +320,14 @@ namespace X_Y
 			{
 				return flag;
 			}
-			if (flag)
-			{
-				XDEBUG("{}事件处理成功{}", reinterpret_cast<uintptr_t>(this->sender),this->GetName())
-			}
-			else
-			{
-				XDEBUG("{}事件处理失败{}", reinterpret_cast<uintptr_t>(this->sender),this->GetName())
-			}
+			//if (flag)
+			//{
+			//	XDEBUG("{}事件处理成功{}", reinterpret_cast<uintptr_t>(this->sender),this->GetName())
+			//}
+			//else
+			//{
+			//	XDEBUG("{}事件处理失败{}", reinterpret_cast<uintptr_t>(this->sender),this->GetName())
+			//}
 			return flag;
 		}
 		bool IsInCategory(MovementCategory category)
