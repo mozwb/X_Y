@@ -60,6 +60,11 @@ public:
     bool SaveAll();
     void Flush(const std::string& key);
     void FlushAll();
+
+    // ── RingBuffer 持久化 ──
+    // 将指定 key 的 RingBuffer 内容追加写入文件
+    // 文件名为 {key}.log，位于 DataStore 目录下
+    bool FlushRingBuffer(const std::string& key);
     bool LoadFile(const std::string& filepath);
     void LoadDirectory(const XPath& dir);
 

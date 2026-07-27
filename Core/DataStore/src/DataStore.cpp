@@ -159,6 +159,40 @@ RingBuffer* DataStore::GetOrCreateRingBuffer(const std::string& key, uint64_t ca
     return &result.first->second;
 }
 
+// ── RingBuffer 持久化 ──
+
+bool DataStore::FlushRingBuffer(const std::string& key)
+{
+    auto it = m_RingBuffers.find(key);
+    if (it == m_RingBuffers.end())
+        return false;
+
+    RingBuffer& ring = it->second;
+
+    // 读 RingBuffer 全部数据
+    Buffer collected;
+    ring.Read([&](const uint8_t* data, uint64_t size) {
+        collected.Append(data, size);
+    });
+
+    if (collected.Size == 0)
+        return true;
+
+    // 确保目录存在
+    if (!m_DataDir.Exists())
+        m_DataDir.CreateDirectory();
+
+    // 写入 {key}.log
+    std::string filename = key + ".log";
+    XPath path = m_DataDir / filename;
+    bool ok = FilesSystem::AppendFileBinary(path, collected);
+
+    // 清空 RingBuffer
+    ring.Clear();
+
+    return ok;
+}
+
 // ── 自管 Buffer 分配（不走 Pool）──
 
 Buffer* DataStore::CreateBuffer(const std::string& key, uint64_t size)
