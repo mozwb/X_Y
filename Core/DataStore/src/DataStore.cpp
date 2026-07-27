@@ -12,6 +12,11 @@ DataStore& DataStore::Instance()
     return inst;
 }
 
+DataStore::~DataStore()
+{
+    FlushAll();
+}
+
 DataStore::DataStore()
 {
 }
@@ -39,18 +44,16 @@ void DataStore::SetDataDir(const std::string& dir)
     m_DataDir = dir;
 }
 
-// ── 数据库操�?──
+// ── 数据库操作 ──
 
 void DataStore::Insert(const std::string& key, Buffer data)
 {
-    // 拒绝 Pool Buffer：Deleter 意味着这块内存�?Pool �?    // DataStore 不接受外部传入的 Pool 内存
-    // 如果传入 Pool Buffer，Release 会归�?Pool，导�?DataStore 里的 Buffer 变野指针
     if (data.Deleter) {
-        // 安全处理：归�?Pool，拿一份自管拷�?        Buffer copy(data.Size);
-        if (data.Size > 0)
+        Buffer copy(data.Size > 0 ? data.Size : 64);
+        if (data.Size > 0) {
             std::memcpy(copy.Data, data.Data, data.Size);
-        copy.Size = data.Size;
-        // data 析构 �?自动归还 Pool
+            copy.Size = data.Size;
+        }
         m_Entries[key] = std::move(copy);
     } else {
         m_Entries[key] = std::move(data);
@@ -143,55 +146,7 @@ Buffer* DataStore::GetOrCreate(const std::string& key, uint64_t reserveSize)
     return &result.first->second;
 }
 
-RingBuffer* DataStore::GetOrCreateRingBuffer(const std::string& key, uint64_t capacity)
-{
-    auto it = m_RingBuffers.find(key);
-    if (it != m_RingBuffers.end())
-        return &it->second;
-
-    auto result = m_RingBuffers.emplace(
-        std::piecewise_construct,
-        std::forward_as_tuple(key),
-        std::forward_as_tuple(capacity)
-    );
-    return &result.first->second;
-}
-
-// ── RingBuffer 持久�?──
-
-bool DataStore::FlushRingBuffer(const std::string& key)
-{
-    auto it = m_RingBuffers.find(key);
-    if (it == m_RingBuffers.end())
-        return false;
-
-    RingBuffer& ring = it->second;
-
-    // �?RingBuffer 全部数据
-    Buffer collected;
-    ring.Read([&](const uint8_t* data, uint64_t size) {
-        collected.Append(data, size);
-    });
-
-    if (collected.Size == 0)
-        return true;
-
-    // 确保目录存在
-    if (!m_DataDir.Exists())
-        m_DataDir.CreateDirectory();
-
-    // 写入 {key}.log
-    std::string filename = key + ".log";
-    XPath path = m_DataDir / filename;
-    bool ok = FilesSystem::AppendFileBinary(path, collected);
-
-    // 清空 RingBuffer
-    ring.Clear();
-
-    return ok;
-}
-
-// ── 自管 Buffer 分配（不�?Pool）──
+// ── 自管 Buffer 分配（不走 Pool）──
 
 Buffer* DataStore::CreateBuffer(const std::string& key, uint64_t size)
 {
@@ -200,12 +155,12 @@ Buffer* DataStore::CreateBuffer(const std::string& key, uint64_t size)
         it->second.Allocate(size);
         return &it->second;
     }
-    Buffer buf(size);  // 自管 malloc
+    Buffer buf(size);
     auto result = m_Entries.emplace(key, std::move(buf));
     return &result.first->second;
 }
 
-// ── 持久�?──
+// ── 持久化 ──
 
 bool DataStore::Save(const std::string& key)
 {
@@ -268,13 +223,8 @@ bool DataStore::LoadFile(const std::string& filepath)
         return false;
 
     XPath path(filepath);
-    std::string name = path.getName();
-
-    auto dotPos = name.rfind('.');
-    if (dotPos != std::string::npos)
-        name = name.substr(0, dotPos);
-
-    m_Entries[name] = std::move(buf);
+    std::string key = path.getName();
+    m_Entries[key] = std::move(buf);
     return true;
 }
 
@@ -302,7 +252,6 @@ DataStore::Stats DataStore::GetStats() const
     stats.PoolUsedBytes = m_Pool.UsedBytes();
 
     stats.TotalEntries = m_Entries.size();
-    stats.RingBufferCount = m_RingBuffers.size();
 
     for (const auto& pair : m_Entries)
     {
@@ -329,24 +278,16 @@ void DataStore::DumpStats()
               << ", self: " << s.SelfManagedEntries << ")" << std::endl;
     std::cout << "  Total data: " << s.TotalBytes << " bytes" << std::endl;
     std::cout << "  Total capacity: " << s.TotalCapacity << " bytes" << std::endl;
-    std::cout << "RingBuffers: " << s.RingBufferCount << std::endl;
     std::cout << "Pool: " << s.PoolBlockSize << " bytes/block, "
               << "total " << s.PoolTotalBlocks << " blocks, "
               << "free " << s.PoolFreeBlocks << ", "
               << "used " << s.PoolUsedBytes << " bytes" << std::endl;
 
-    // 详细展开
     for (const auto& pair : m_Entries) {
         const Buffer& buf = pair.second;
         const char* src = IsPoolBuffer(buf) ? "pool" : "self";
         std::cout << "  [" << pair.first << "] "
                   << buf.Size << "/" << buf.Capacity << " bytes (" << src << ")"
-                  << std::endl;
-    }
-    for (const auto& pair : m_RingBuffers) {
-        std::cout << "  Ring[" << pair.first << "] "
-                  << pair.second.Capacity << " bytes, "
-                  << pair.second.TotalBlocks() << " blocks"
                   << std::endl;
     }
     std::cout << "========================" << std::endl;

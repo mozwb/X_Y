@@ -1,7 +1,6 @@
 #pragma once
 #include "Buffer/include/Buffer.h"
 #include "Buffer/include/BufferPool.h"
-#include "Buffer/include/RingBuffer.h"
 #include "FilesSystem/include/FilesSystem.h"
 #include <string>
 #include <unordered_map>
@@ -21,7 +20,6 @@ public:
         uint64_t TotalBytes = 0;         // 所有 Buffer 的 Size 之和
         uint64_t TotalCapacity = 0;      // 所有 Buffer 的 Capacity 之和
 
-        uint64_t RingBufferCount = 0;
         uint64_t PoolBlockSize = 0;
         uint32_t PoolTotalBlocks = 0;
         uint32_t PoolFreeBlocks = 0;
@@ -47,9 +45,6 @@ public:
     // 调用方直接追加写入即可
     Buffer* GetOrCreate(const std::string& key, uint64_t reserveSize = 4096);
 
-    // 获取或创建一个 RingBuffer
-    RingBuffer* GetOrCreateRingBuffer(const std::string& key, uint64_t capacity = 65536);
-
     // ── 自管 Buffer 分配（不走 Pool）──
     // 适合 Image、Model 等一次性大数据
     // 已有则重新分配大小，没有则创建
@@ -61,10 +56,6 @@ public:
     void Flush(const std::string& key);
     void FlushAll();
 
-    // ── RingBuffer 持久化 ──
-    // 将指定 key 的 RingBuffer 内容追加写入文件
-    // 文件名为 {key}.log，位于 DataStore 目录下
-    bool FlushRingBuffer(const std::string& key);
     bool LoadFile(const std::string& filepath);
     void LoadDirectory(const XPath& dir);
 
@@ -76,6 +67,7 @@ public:
     void DumpStats();
 
 private:
+    ~DataStore();
     DataStore();
 
     DataStore(const DataStore&) = delete;
@@ -87,8 +79,7 @@ private:
     XPath KeyToPath(const std::string& key) const;
     bool LoadFileInto(const std::string& key, const XPath& path);
 
-    std::unordered_map<std::string, Buffer>     m_Entries;
-    std::unordered_map<std::string, RingBuffer> m_RingBuffers;
+    std::unordered_map<std::string, Buffer> m_Entries;
     BufferPool m_Pool{65536};  // 通用内存池，每块 64KB
 
     XPath m_DataDir{"DataStore/"};
