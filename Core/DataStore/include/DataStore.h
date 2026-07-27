@@ -31,6 +31,8 @@ public:
     Stats GetStats() const;
 
     // ── 数据库操作 ──
+    // Insert：外部挂载一个 Buffer 到 DataStore
+    // 注意：不接受 Pool Buffer（带 Deleter 的 Buffer）
     void   Insert(const std::string& key, Buffer data);
     void   Append(const std::string& key, const Buffer& data);
     Buffer* Get(const std::string& key);
@@ -47,6 +49,11 @@ public:
 
     // 获取或创建一个 RingBuffer
     RingBuffer* GetOrCreateRingBuffer(const std::string& key, uint64_t capacity = 65536);
+
+    // ── 自管 Buffer 分配（不走 Pool）──
+    // 适合 Image、Model 等一次性大数据
+    // 已有则重新分配大小，没有则创建
+    Buffer* CreateBuffer(const std::string& key, uint64_t size);
 
     // ── 持久化 ──
     bool Save(const std::string& key);

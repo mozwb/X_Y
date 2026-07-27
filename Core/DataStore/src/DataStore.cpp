@@ -43,7 +43,20 @@ void DataStore::SetDataDir(const std::string& dir)
 
 void DataStore::Insert(const std::string& key, Buffer data)
 {
-    m_Entries[key] = std::move(data);
+    // 拒绝 Pool Buffer：Deleter 意味着这块内存归 Pool 管
+    // DataStore 不接受外部传入的 Pool 内存
+    // 如果传入 Pool Buffer，Release 会归还 Pool，导致 DataStore 里的 Buffer 变野指针
+    if (data.Deleter) {
+        // 安全处理：归还 Pool，拿一份自管拷贝
+        Buffer copy(data.Size);
+        if (data.Size > 0)
+            std::memcpy(copy.Data, data.Data, data.Size);
+        copy.Size = data.Size;
+        // data 析构 → 自动归还 Pool
+        m_Entries[key] = std::move(copy);
+    } else {
+        m_Entries[key] = std::move(data);
+    }
 }
 
 void DataStore::Append(const std::string& key, const Buffer& data)
@@ -143,6 +156,20 @@ RingBuffer* DataStore::GetOrCreateRingBuffer(const std::string& key, uint64_t ca
         std::forward_as_tuple(key),
         std::forward_as_tuple(capacity)
     );
+    return &result.first->second;
+}
+
+// ── 自管 Buffer 分配（不走 Pool）──
+
+Buffer* DataStore::CreateBuffer(const std::string& key, uint64_t size)
+{
+    auto it = m_Entries.find(key);
+    if (it != m_Entries.end()) {
+        it->second.Allocate(size);
+        return &it->second;
+    }
+    Buffer buf(size);  // 自管 malloc
+    auto result = m_Entries.emplace(key, std::move(buf));
     return &result.first->second;
 }
 
