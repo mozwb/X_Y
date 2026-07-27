@@ -39,20 +39,18 @@ void DataStore::SetDataDir(const std::string& dir)
     m_DataDir = dir;
 }
 
-// ── 数据库操作 ──
+// ── 数据库操�?──
 
 void DataStore::Insert(const std::string& key, Buffer data)
 {
-    // 拒绝 Pool Buffer：Deleter 意味着这块内存归 Pool 管
-    // DataStore 不接受外部传入的 Pool 内存
-    // 如果传入 Pool Buffer，Release 会归还 Pool，导致 DataStore 里的 Buffer 变野指针
+    // 拒绝 Pool Buffer：Deleter 意味着这块内存�?Pool �?    // DataStore 不接受外部传入的 Pool 内存
+    // 如果传入 Pool Buffer，Release 会归�?Pool，导�?DataStore 里的 Buffer 变野指针
     if (data.Deleter) {
-        // 安全处理：归还 Pool，拿一份自管拷贝
-        Buffer copy(data.Size);
+        // 安全处理：归�?Pool，拿一份自管拷�?        Buffer copy(data.Size);
         if (data.Size > 0)
             std::memcpy(copy.Data, data.Data, data.Size);
         copy.Size = data.Size;
-        // data 析构 → 自动归还 Pool
+        // data 析构 �?自动归还 Pool
         m_Entries[key] = std::move(copy);
     } else {
         m_Entries[key] = std::move(data);
@@ -159,7 +157,7 @@ RingBuffer* DataStore::GetOrCreateRingBuffer(const std::string& key, uint64_t ca
     return &result.first->second;
 }
 
-// ── RingBuffer 持久化 ──
+// ── RingBuffer 持久�?──
 
 bool DataStore::FlushRingBuffer(const std::string& key)
 {
@@ -169,7 +167,7 @@ bool DataStore::FlushRingBuffer(const std::string& key)
 
     RingBuffer& ring = it->second;
 
-    // 读 RingBuffer 全部数据
+    // �?RingBuffer 全部数据
     Buffer collected;
     ring.Read([&](const uint8_t* data, uint64_t size) {
         collected.Append(data, size);
@@ -193,7 +191,7 @@ bool DataStore::FlushRingBuffer(const std::string& key)
     return ok;
 }
 
-// ── 自管 Buffer 分配（不走 Pool）──
+// ── 自管 Buffer 分配（不�?Pool）──
 
 Buffer* DataStore::CreateBuffer(const std::string& key, uint64_t size)
 {
@@ -207,7 +205,7 @@ Buffer* DataStore::CreateBuffer(const std::string& key, uint64_t size)
     return &result.first->second;
 }
 
-// ── 持久化 ──
+// ── 持久�?──
 
 bool DataStore::Save(const std::string& key)
 {
@@ -347,7 +345,7 @@ void DataStore::DumpStats()
     }
     for (const auto& pair : m_RingBuffers) {
         std::cout << "  Ring[" << pair.first << "] "
-                  << pair.second.Capacity() << " bytes, "
+                  << pair.second.Capacity << " bytes, "
                   << pair.second.TotalBlocks() << " blocks"
                   << std::endl;
     }
