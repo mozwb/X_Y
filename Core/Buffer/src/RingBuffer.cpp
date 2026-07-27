@@ -114,6 +114,40 @@ void RingBuffer::Push(const void* data, uint64_t len)
     m_TotalBlocks++;
 }
 
+uint64_t RingBuffer::Available() const
+{
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    if (m_TotalBlocks == 0)
+        return m_Capacity;
+
+    // 近似计算：write 和 read 之间剩余的空间
+    // 简单估算：write 追到 read 之前的那段
+    int64_t dist = static_cast<int64_t>(m_WriteIndex) - m_ReadIndex;
+    if (dist < 0)
+        dist += static_cast<int64_t>(m_Capacity);
+
+    // 至少保留 sizeof(BlockInfo) 的空间作为安全边际
+    uint64_t used = static_cast<uint64_t>(dist);
+    if (used >= m_Capacity)
+        return 0;
+    return m_Capacity - used;
+}
+
+double RingBuffer::FillRatio() const
+{
+    std::lock_guard<std::mutex> lock(m_Mutex);
+    if (m_TotalBlocks == 0 || m_Capacity == 0)
+        return 0.0;
+
+    int64_t dist = static_cast<int64_t>(m_WriteIndex) - m_ReadIndex;
+    if (dist < 0)
+        dist += static_cast<int64_t>(m_Capacity);
+
+    double ratio = static_cast<double>(dist) / static_cast<double>(m_Capacity);
+    if (ratio > 1.0) ratio = 1.0;
+    return ratio;
+}
+
 void RingBuffer::Clear()
 {
     std::lock_guard<std::mutex> lock(m_Mutex);

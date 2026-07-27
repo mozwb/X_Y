@@ -80,6 +80,11 @@ public:
     uint64_t TotalBlocks() const { return m_TotalBlocks; }
     bool Empty() const { return m_TotalBlocks == 0; }
 
+    // 剩余可用字节数（近似）
+    uint64_t Available() const;
+    // 填充率 0.0 ~ 1.0
+    double FillRatio() const;
+
 private:
 #pragma pack(push, 1)
     struct BlockInfo {
