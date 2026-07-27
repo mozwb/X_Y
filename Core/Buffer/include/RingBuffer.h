@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Buffer.h"
 #include <mutex>
 
@@ -6,6 +6,7 @@ namespace X_Y {
 
 // ── RingBuffer ──
 // 循环 Buffer：固定容量，写入超出时自动覆盖最旧数据
+// 继承 Buffer 复用内存管理（统一 malloc/free 或 Pool 分配）
 // 线程安全（internal mutex）
 //
 // 典型用途：日志缓冲区、流式数据（实时显示最近 N 条记录）
@@ -13,13 +14,13 @@ namespace X_Y {
 // 使用方式：
 //   RingBuffer ring(65536);              // 64KB 环形缓冲区
 //   ring.Push("hello", 5);               // 追加数据
-//   ring.Push("world", 5);
 //   ring.Read([](const uint8_t* d, uint64_t sz) { ... }); // 遍历所有有效数据
 
-class RingBuffer {
+class RingBuffer : public Buffer {
 public:
-    // capacity: 总容量（字节）
     explicit RingBuffer(uint64_t capacity = 65536);
+    RingBuffer(RingBuffer&& other) noexcept;
+    RingBuffer& operator=(RingBuffer&& other) noexcept;
     ~RingBuffer();
 
     // ── 写入 ──
@@ -40,32 +41,28 @@ public:
             return 0;
 
         uint64_t count = 0;
-        // 从 m_ReadIndex 开始遍历
         int64_t idx = m_ReadIndex;
         for (uint64_t i = 0; i < m_TotalBlocks; i++)
         {
-            BlockInfo* info = reinterpret_cast<BlockInfo*>(m_Buffer + idx);
-            if (info->Size == 0 || info->Size > m_Capacity)
+            BlockInfo* info = reinterpret_cast<BlockInfo*>(Data + idx);
+            if (info->Size == 0 || info->Size > Capacity)
                 break;
 
             uint64_t dataStart = idx + sizeof(BlockInfo);
             uint64_t dataEnd = dataStart + info->Size;
 
-            // 处理环绕
-            if (dataEnd <= m_Capacity)
+            if (dataEnd <= Capacity)
             {
-                callback(m_Buffer + dataStart, info->Size);
+                callback(Data + dataStart, info->Size);
             }
             else
             {
-                // 跨环形边界
-                uint64_t firstPart = m_Capacity - dataStart;
-                callback(m_Buffer + dataStart, firstPart);
-                callback(m_Buffer, info->Size - firstPart);
+                uint64_t firstPart = Capacity - dataStart;
+                callback(Data + dataStart, firstPart);
+                callback(Data, info->Size - firstPart);
             }
 
-            // 跳到下一块
-            idx = (idx + info->TotalBlockSize()) % m_Capacity;
+            idx = (idx + info->TotalBlockSize()) % Capacity;
             count++;
         }
         return count;
@@ -76,31 +73,22 @@ public:
     void Reset() { Clear(); }
 
     // ── 查询 ──
-    uint64_t Capacity() const { return m_Capacity; }
     uint64_t TotalBlocks() const { return m_TotalBlocks; }
     bool Empty() const { return m_TotalBlocks == 0; }
-
-    // 剩余可用字节数（近似）
     uint64_t Available() const;
-    // 填充率 0.0 ~ 1.0
     double FillRatio() const;
 
 private:
 #pragma pack(push, 1)
     struct BlockInfo {
-        uint64_t Size;  // 数据大小（不含本结构体）
+        uint64_t Size;
         uint64_t TotalBlockSize() const {
             return sizeof(BlockInfo) + Size;
         }
     };
 #pragma pack(pop)
 
-    // 在环形缓冲区中分配一块空间
-    // 返回写入位置的索引（按 BlockInfo 对齐后）
     uint64_t AllocBlock(uint64_t dataLen);
-
-    uint8_t* m_Buffer;
-    uint64_t m_Capacity;
 
     // 写入指针（下一个 BlockInfo 写入位置）
     uint64_t m_WriteIndex = 0;
@@ -115,5 +103,4 @@ private:
     RingBuffer& operator=(const RingBuffer&) = delete;
 };
 
-} 
-// namespace X_Y
+} // namespace X_Y
