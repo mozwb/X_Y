@@ -1,10 +1,13 @@
-#include "DataStore/include/DataStore.h"
+﻿#include "DataStore.h"
 #include <cassert>
-#include <iostream>
+#include <sstream>
+#include <fstream>
 
 namespace X_Y {
 
-// ── 单例 ──
+// ═════════════════════════════════════════════════════════════════════════════
+//  单例
+// ═════════════════════════════════════════════════════════════════════════════
 
 DataStore& DataStore::Instance()
 {
@@ -12,100 +15,159 @@ DataStore& DataStore::Instance()
     return inst;
 }
 
-DataStore::~DataStore()
-{
-    FlushAll();
-}
-
-DataStore::DataStore()
-{
-}
-
-// ── 内部工具 ──
+// ═════════════════════════════════════════════════════════════════════════════
+//  内部工具
+// ═════════════════════════════════════════════════════════════════════════════
 
 XPath DataStore::KeyToPath(const std::string& key) const
 {
     return m_DataDir / key;
 }
 
-bool DataStore::LoadFileInto(const std::string& key, const XPath& path)
+XPath DataStore::IndexPath() const
 {
-    Buffer buf = FilesSystem::ReadFileBinary(path);
-    if (!buf)
-        return false;
-    m_Entries[key] = std::move(buf);
-    return true;
+    return m_DataDir / ".dsidx";
 }
 
-// ── 配置 ──
+void DataStore::EnsureDataDir()
+{
+    if (!m_DataDir.Exists())
+        m_DataDir.CreateDirectory();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  索引管理
+// ═════════════════════════════════════════════════════════════════════════════
+
+void DataStore::SaveIndex()
+{
+    EnsureDataDir();
+
+    std::ofstream ofs(IndexPath().Path().string(), std::ios::binary);
+    if (!ofs)
+        return;
+
+    for (const auto& pair : m_Entries)
+        ofs << pair.first << "\n";
+
+    ofs.close();
+}
+
+void DataStore::LoadIndex()
+{
+    XPath idxPath = IndexPath();
+    if (!idxPath.Exists())
+        return;
+
+    std::ifstream ifs(idxPath.Path().string());
+    if (!ifs)
+        return;
+
+    std::string line;
+    while (std::getline(ifs, line))
+    {
+        if (!line.empty() && line[0] != '#')
+        {
+            // 只注册 key，不加载数据（空 Buffer 占位）
+            if (m_Entries.find(line) == m_Entries.end())
+                m_Entries[line] = Buffer();
+        }
+    }
+
+    ifs.close();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  配置
+// ═════════════════════════════════════════════════════════════════════════════
 
 void DataStore::SetDataDir(const std::string& dir)
 {
     m_DataDir = dir;
 }
 
-// ── 数据库操作 ──
+// ═════════════════════════════════════════════════════════════════════════════
+//  核心操作
+// ═════════════════════════════════════════════════════════════════════════════
 
-void DataStore::Insert(const std::string& key, Buffer data)
+Buffer* DataStore::GetOrCreate(const std::string& key, uint64_t reserveSize)
 {
-    if (data.Deleter) {
-        Buffer copy(data.Size > 0 ? data.Size : 64);
-        if (data.Size > 0) {
-            std::memcpy(copy.Data, data.Data, data.Size);
-            copy.Size = data.Size;
-        }
-        m_Entries[key] = std::move(copy);
-    } else {
-        m_Entries[key] = std::move(data);
-    }
-}
+    std::unique_lock lock(m_Mutex);
 
-void DataStore::Append(const std::string& key, const Buffer& data)
-{
     auto it = m_Entries.find(key);
-    if (it != m_Entries.end()) {
-        it->second.Append(data.Data, data.Size);
-    } else {
-        m_Entries[key] = data.Copy();
+    if (it != m_Entries.end())
+    {
+        // key 已注册但数据未加载（空 Buffer 占位）
+        if (!it->second.Data)
+        {
+            XPath path = KeyToPath(key);
+            if (path.Exists())
+            {
+                Buffer loaded = FilesSystem::ReadFileBinary(path);
+                if (loaded)
+                    it->second = std::move(loaded);
+            }
+        }
+        return &it->second;
     }
+
+    // 创建新条目
+    Buffer buf(reserveSize);
+    auto result = m_Entries.emplace(key, std::move(buf));
+    SaveIndex();
+    return &result.first->second;
 }
 
 Buffer* DataStore::Get(const std::string& key)
 {
-    auto it = m_Entries.find(key);
-    if (it != m_Entries.end())
-        return &it->second;
+    std::shared_lock lock(m_Mutex);
 
-    XPath path = KeyToPath(key);
-    if (path.Exists()) {
-        if (LoadFileInto(key, path)) {
-            auto it2 = m_Entries.find(key);
-            if (it2 != m_Entries.end())
-                return &it2->second;
+    auto it = m_Entries.find(key);
+    if (it == m_Entries.end())
+        return nullptr;
+
+    // 空 Buffer 占位 → 从文件加载
+    if (!it->second.Data)
+    {
+        lock.unlock();
+        std::unique_lock ulock(m_Mutex);
+
+        // 二次检查（防止另一个线程已加载）
+        if (!it->second.Data)
+        {
+            XPath path = KeyToPath(key);
+            if (path.Exists())
+            {
+                Buffer loaded = FilesSystem::ReadFileBinary(path);
+                if (loaded)
+                    it->second = std::move(loaded);
+            }
         }
+        return &it->second;
     }
 
-    return nullptr;
-}
-
-const Buffer* DataStore::Get(const std::string& key) const
-{
-    auto it = m_Entries.find(key);
-    if (it != m_Entries.end())
-        return &it->second;
-    return nullptr;
+    return &it->second;
 }
 
 bool DataStore::Remove(const std::string& key)
 {
+    std::unique_lock lock(m_Mutex);
+
     XPath path = KeyToPath(key);
     if (path.Exists())
         path.Remove();
-    return m_Entries.erase(key) > 0;
+
+    bool erased = m_Entries.erase(key) > 0;
+    if (erased)
+        SaveIndex();
+
+    return erased;
 }
 
 void DataStore::Rename(const std::string& oldKey, const std::string& newKey)
 {
+    std::unique_lock lock(m_Mutex);
+
     auto it = m_Entries.find(oldKey);
     if (it == m_Entries.end())
         return;
@@ -117,15 +179,20 @@ void DataStore::Rename(const std::string& oldKey, const std::string& newKey)
     XPath newPath = KeyToPath(newKey);
     if (oldPath.Exists())
         oldPath.Rename(newPath);
+
+    SaveIndex();
 }
 
 bool DataStore::Contains(const std::string& key) const
 {
+    std::shared_lock lock(m_Mutex);
     return m_Entries.find(key) != m_Entries.end();
 }
 
 std::vector<std::string> DataStore::ListKeys() const
 {
+    std::shared_lock lock(m_Mutex);
+
     std::vector<std::string> keys;
     keys.reserve(m_Entries.size());
     for (const auto& pair : m_Entries)
@@ -133,87 +200,97 @@ std::vector<std::string> DataStore::ListKeys() const
     return keys;
 }
 
-// ── 前后端分离：统一内存管理 ──
-
-Buffer* DataStore::GetOrCreate(const std::string& key, uint64_t reserveSize)
-{
-    auto it = m_Entries.find(key);
-    if (it != m_Entries.end())
-        return &it->second;
-
-    Buffer buf = m_Pool.Allocate(reserveSize);
-    auto result = m_Entries.emplace(key, std::move(buf));
-    return &result.first->second;
-}
-
-// ── 自管 Buffer 分配（不走 Pool）──
-
-Buffer* DataStore::CreateBuffer(const std::string& key, uint64_t size)
-{
-    auto it = m_Entries.find(key);
-    if (it != m_Entries.end()) {
-        it->second.Allocate(size);
-        return &it->second;
-    }
-    Buffer buf(size);
-    auto result = m_Entries.emplace(key, std::move(buf));
-    return &result.first->second;
-}
-
-// ── 持久化 ──
+// ═════════════════════════════════════════════════════════════════════════════
+//  持久化
+// ═════════════════════════════════════════════════════════════════════════════
 
 bool DataStore::Save(const std::string& key)
 {
+    std::shared_lock lock(m_Mutex);
+
     auto it = m_Entries.find(key);
-    if (it == m_Entries.end())
+    if (it == m_Entries.end() || !it->second)
         return false;
 
-    if (!m_DataDir.Exists())
-        m_DataDir.CreateDirectory();
+    EnsureDataDir();
+
+    // 确保父目录存在
 
     XPath path = KeyToPath(key);
+    XPath parent = path.GetParent();
+    if (!parent.Exists())
+        parent.CreateDirectory();
+
     return FilesSystem::WriteFileBinary(path, it->second);
 }
 
 bool DataStore::SaveAll()
 {
+    std::shared_lock lock(m_Mutex);
+
     if (m_Entries.empty())
         return true;
 
-    if (!m_DataDir.Exists())
-        m_DataDir.CreateDirectory();
+    EnsureDataDir();
 
     bool allOk = true;
-    for (const auto& pair : m_Entries) {
-        if (!Save(pair.first))
+    for (const auto& pair : m_Entries)
+    {
+        if (!pair.second)
+            continue;
+
+        XPath path = KeyToPath(pair.first);
+        XPath parent = path.GetParent();
+        if (!parent.Exists())
+            parent.CreateDirectory();
+
+        if (!FilesSystem::WriteFileBinary(path, pair.second))
             allOk = false;
     }
+
+    SaveIndex();
     return allOk;
 }
 
 void DataStore::Flush(const std::string& key)
 {
+    std::shared_lock lock(m_Mutex);
+
     auto it = m_Entries.find(key);
-    if (it == m_Entries.end())
+    if (it == m_Entries.end() || !it->second)
         return;
 
-    if (!m_DataDir.Exists())
-        m_DataDir.CreateDirectory();
+    EnsureDataDir();
 
     XPath path = KeyToPath(key);
+    XPath parent = path.GetParent();
+    if (!parent.Exists())
+        parent.CreateDirectory();
+
     FilesSystem::AppendFileBinary(path, it->second);
 }
 
 void DataStore::FlushAll()
 {
+    std::shared_lock lock(m_Mutex);
+
     if (m_Entries.empty())
         return;
 
-    if (!m_DataDir.Exists())
-        m_DataDir.CreateDirectory();
+    EnsureDataDir();
 
     for (const auto& pair : m_Entries)
-        Flush(pair.first);
+    {
+        if (!pair.second)
+            continue;
+
+        XPath path = KeyToPath(pair.first);
+        XPath parent = path.GetParent();
+        if (!parent.Exists())
+            parent.CreateDirectory();
+
+        FilesSystem::AppendFileBinary(path, pair.second);
+    }
 }
 
 bool DataStore::LoadFile(const std::string& filepath)
@@ -224,7 +301,11 @@ bool DataStore::LoadFile(const std::string& filepath)
 
     XPath path(filepath);
     std::string key = path.getName();
+
+    std::unique_lock lock(m_Mutex);
     m_Entries[key] = std::move(buf);
+    SaveIndex();
+
     return true;
 }
 
@@ -233,64 +314,68 @@ void DataStore::LoadDirectory(const XPath& dir)
     if (!dir.Exists() || !dir.IsDirectory())
         return;
 
+    // 先重建索引
+    LoadIndex();
+
     std::vector<XPath> files = dir.ListDirectory();
-    for (const auto& file : files) {
-        if (file.IsFile())
-            LoadFile(file.Path().string());
+    for (const auto& file : files)
+    {
+        if (file.IsFile() && file.getName() != ".dsidx")
+        {
+            std::string key = file.getRelativePath(m_DataDir);
+            if (m_Entries.find(key) == m_Entries.end())
+                m_Entries[key] = Buffer();  // 空占位
+        }
     }
+
+    SaveIndex();
 }
 
-// ── 统计 ──
+// ═════════════════════════════════════════════════════════════════════════════
+//  统计
+// ═════════════════════════════════════════════════════════════════════════════
 
-DataStore::Stats DataStore::GetStats() const
+DataStoreStats DataStore::GetStats() const
 {
-    Stats stats;
+    std::shared_lock lock(m_Mutex);
 
-    stats.PoolBlockSize = m_Pool.BlockSize();
-    stats.PoolTotalBlocks = m_Pool.TotalBlocks();
-    stats.PoolFreeBlocks = m_Pool.FreeBlocks();
-    stats.PoolUsedBytes = m_Pool.UsedBytes();
-
-    stats.TotalEntries = m_Entries.size();
+    DataStoreStats stats;
+    stats.EntryCount = m_Entries.size();
+    stats.Entries.reserve(m_Entries.size());
 
     for (const auto& pair : m_Entries)
     {
-        const Buffer& buf = pair.second;
-        stats.TotalBytes += buf.Size;
-        stats.TotalCapacity += buf.Capacity;
+        stats.TotalBytes += pair.second.Size;
+        stats.TotalCapacity += pair.second.Capacity;
 
-        if (IsPoolBuffer(buf))
-            stats.PoolEntries++;
-        else
-            stats.SelfManagedEntries++;
+        DataStoreStats::EntryInfo info;
+        info.Key = pair.first;
+        info.Size = pair.second.Size;
+        info.Capacity = pair.second.Capacity;
+        stats.Entries.push_back(std::move(info));
     }
 
     return stats;
 }
 
-void DataStore::DumpStats()
+std::string DataStore::ToString() const
 {
-    Stats s = GetStats();
+    DataStoreStats s = GetStats();
 
-    std::cout << "=== DataStore Stats ===" << std::endl;
-    std::cout << "Buffer entries: " << s.TotalEntries
-              << " (pool: " << s.PoolEntries
-              << ", self: " << s.SelfManagedEntries << ")" << std::endl;
-    std::cout << "  Total data: " << s.TotalBytes << " bytes" << std::endl;
-    std::cout << "  Total capacity: " << s.TotalCapacity << " bytes" << std::endl;
-    std::cout << "Pool: " << s.PoolBlockSize << " bytes/block, "
-              << "total " << s.PoolTotalBlocks << " blocks, "
-              << "free " << s.PoolFreeBlocks << ", "
-              << "used " << s.PoolUsedBytes << " bytes" << std::endl;
+    std::ostringstream oss;
+    oss << "=== DataStore Stats ===\n";
+    oss << "Entries: " << s.EntryCount << "\n";
+    oss << "Total: " << s.TotalBytes << " bytes (data) / "
+        << s.TotalCapacity << " bytes (capacity)\n\n";
 
-    for (const auto& pair : m_Entries) {
-        const Buffer& buf = pair.second;
-        const char* src = IsPoolBuffer(buf) ? "pool" : "self";
-        std::cout << "  [" << pair.first << "] "
-                  << buf.Size << "/" << buf.Capacity << " bytes (" << src << ")"
-                  << std::endl;
+    for (const auto& info : s.Entries)
+    {
+        oss << "  [" << info.Key << "] "
+            << info.Size << "/" << info.Capacity << " bytes\n";
     }
-    std::cout << "========================" << std::endl;
+
+    oss << "========================\n";
+    return oss.str();
 }
 
 } // namespace X_Y

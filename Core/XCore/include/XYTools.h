@@ -1,6 +1,6 @@
 ﻿#pragma once
 #include<Log/include/XYLog.h>
-#include<Buffer/include/Buffer.h>
+#include<Memory/include/Buffer.h>
 #include<Timer/include/Timer.h>
 
 namespace X_Y {

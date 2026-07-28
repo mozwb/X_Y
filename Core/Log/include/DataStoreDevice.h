@@ -15,6 +15,7 @@ namespace X_Y {
 //   - DataStoreDevice 满了自动 Flush 到文件后重置
 //   - LogViewer 直接从同一 Buffer 读取（零拷贝）
 
+
 class DataStoreDevice : public LogConfigure::DEVICE {
 public:
     explicit DataStoreDevice(const std::string& key = "",
@@ -36,11 +37,17 @@ public:
         uint64_t needed = message.size() + 1;
         if (buf->Size + needed > buf->Capacity) {
             DataStore::Instance().Flush(m_Key);
-            buf->Size = 0;
+            buf->Allocate(m_Capacity);  // 重置为空 Buffer，下次 Log 写入从头
         }
 
         buf->Append(message.data(), message.size());
         buf->Append("\n", 1);
+    }
+
+    ~DataStoreDevice() {
+        Buffer* buf = DataStore::Instance().Get(m_Key);
+        if (buf && buf->Data)
+            DataStore::Instance().Flush(m_Key);
     }
 
     void SetKey(const std::string& key) { m_Key = key; }

@@ -15,14 +15,14 @@ project "Model"
     includedirs
     {
         "include",
-        "%{wks.location}/Core/Buffer/include",
+        "%{wks.location}/Core/Memory/include",
         "%{wks.location}/Core/FilesSystem/include",
         "%{wks.location}/Core/Middle/include"
     }
 
     links
     {
-        "Buffer",
+        "Memory",
         "FilesSystem",
         "Data"
     }

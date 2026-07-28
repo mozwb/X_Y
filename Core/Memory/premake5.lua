@@ -1,15 +1,12 @@
-project "Buffer"
+project "Memory"
     kind "StaticLib"
     language "C++"
 
-
-    files
-    {
+    files {
         "include/**.h",
         "src/**.cpp"
     }
 
-    includedirs
-    {
-        "include"
+    includedirs {
+        "include",
     }

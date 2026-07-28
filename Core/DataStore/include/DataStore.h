@@ -1,54 +1,49 @@
 #pragma once
-#include "Buffer/include/Buffer.h"
-#include "Buffer/include/BufferPool.h"
+#include "Memory/include/Buffer.h"
 #include "FilesSystem/include/FilesSystem.h"
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <shared_mutex>
 
 namespace X_Y {
+
+// ── 统计 ──
+struct DataStoreStats {
+    uint64_t EntryCount = 0;
+    uint64_t TotalBytes = 0;
+    uint64_t TotalCapacity = 0;
+
+    struct EntryInfo {
+        std::string Key;
+        uint64_t Size;
+        uint64_t Capacity;
+    };
+    std::vector<EntryInfo> Entries;
+};
+
+// ── DataStore ──
+// 基于文件的 key-value 存储
+//
+// 规则：
+//   - 所有条目由 DS 通过 GetOrCreate 创建，外部不挂载 Buffer
+//   - key = 文件路径（含后缀），如 "log"、"assets/tex/brick.img"
+//   - 保存时按 key 创建目录，文件内容 = Buffer 数据
+//   - .dsidx 索引文件记录所有 key 列表，启动时加载
+//   - Save = 覆盖写入，Flush = 追加写入
+//   - 析构不自动 Flush/Save，由业务决定
 
 class DataStore {
 public:
     static DataStore& Instance();
 
-    // ── 统计信息 ──
-    struct Stats {
-        uint64_t TotalEntries = 0;       // m_Entries 总数
-        uint64_t PoolEntries = 0;        // 来自 Pool 的条目数
-        uint64_t SelfManagedEntries = 0; // 自管/外来挂载的条目数
-        uint64_t TotalBytes = 0;         // 所有 Buffer 的 Size 之和
-        uint64_t TotalCapacity = 0;      // 所有 Buffer 的 Capacity 之和
-
-        uint64_t PoolBlockSize = 0;
-        uint32_t PoolTotalBlocks = 0;
-        uint32_t PoolFreeBlocks = 0;
-        uint64_t PoolUsedBytes = 0;
-    };
-
-    Stats GetStats() const;
-
-    // ── 数据库操作 ──
-    // Insert：外部挂载一个 Buffer 到 DataStore
-    // 注意：不接受 Pool Buffer（带 Deleter 的 Buffer）
-    void   Insert(const std::string& key, Buffer data);
-    void   Append(const std::string& key, const Buffer& data);
-    Buffer* Get(const std::string& key);
-    const Buffer* Get(const std::string& key) const;
-    bool   Remove(const std::string& key);
-    void   Rename(const std::string& oldKey, const std::string& newKey);
-    bool   Contains(const std::string& key) const;
-    std::vector<std::string> ListKeys() const;
-
-    // ── 前后端分离：统一内存管理 ──
-    // 获取或创建一块 Buffer（从 BufferPool 分配）
-    // 调用方直接追加写入即可
+    // ── 核心操作 ──
     Buffer* GetOrCreate(const std::string& key, uint64_t reserveSize = 4096);
-
-    // ── 自管 Buffer 分配（不走 Pool）──
-    // 适合 Image、Model 等一次性大数据
-    // 已有则重新分配大小，没有则创建
-    Buffer* CreateBuffer(const std::string& key, uint64_t size);
+    Buffer* Get(const std::string& key);
+    bool    Remove(const std::string& key);
+    void    Rename(const std::string& oldKey, const std::string& newKey);
+    bool    Contains(const std::string& key) const;
+    std::vector<std::string> ListKeys() const;
 
     // ── 持久化 ──
     bool Save(const std::string& key);
@@ -64,25 +59,25 @@ public:
     const XPath& GetDataDir() const { return m_DataDir; }
 
     // ── 统计 ──
-    void DumpStats();
+    DataStoreStats GetStats() const;
+    std::string ToString() const;
 
 private:
-    ~DataStore();
-    DataStore();
-
+    DataStore() = default;
+    ~DataStore() = default;
     DataStore(const DataStore&) = delete;
     DataStore& operator=(const DataStore&) = delete;
 
-    // 检查一个 Buffer 是否由 Pool 管理
-    static bool IsPoolBuffer(const Buffer& buf) { return (bool)buf.Deleter; }
-
     XPath KeyToPath(const std::string& key) const;
-    bool LoadFileInto(const std::string& key, const XPath& path);
+    XPath IndexPath() const;
+    void  EnsureDataDir();
+    void  SaveIndex();
+    void  LoadIndex();
 
     std::unordered_map<std::string, Buffer> m_Entries;
-    BufferPool m_Pool{65536};  // 通用内存池，每块 64KB
-
     XPath m_DataDir{"DataStore/"};
+
+    mutable std::shared_mutex m_Mutex;
 };
 
 } // namespace X_Y

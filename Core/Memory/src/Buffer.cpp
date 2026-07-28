@@ -1,10 +1,11 @@
-#include "Buffer.h"
+﻿#include "Buffer.h"
+#include "Memory.h"
 #include <cstdio>
-#include <cstdlib>
 
 namespace X_Y {
 
 // ── 构造/析构/拷贝/移动 ──
+
 
 Buffer::Buffer(uint64_t initialCapacity)
 {
@@ -20,12 +21,10 @@ Buffer::Buffer(const Buffer& other)
         memcpy(Data, other.Data, other.Size);
         Size = other.Size;
     }
-    // Deleter 默认空 — 拷贝不传递
 }
 
 Buffer::Buffer(Buffer&& other) noexcept
     : Data(other.Data), Size(other.Size), Capacity(other.Capacity)
-    , Deleter(std::move(other.Deleter))
 {
     other.Data = nullptr;
     other.Size = 0;
@@ -48,7 +47,6 @@ Buffer& Buffer::operator=(const Buffer& other)
             memcpy(Data, other.Data, other.Size);
             Size = other.Size;
         }
-        // Deleter 默认空 — 拷贝赋值不传递
     }
     return *this;
 }
@@ -61,7 +59,6 @@ Buffer& Buffer::operator=(Buffer&& other) noexcept
         Data = other.Data;
         Size = other.Size;
         Capacity = other.Capacity;
-        Deleter = std::move(other.Deleter);
         other.Data = nullptr;
         other.Size = 0;
         other.Capacity = 0;
@@ -69,7 +66,7 @@ Buffer& Buffer::operator=(Buffer&& other) noexcept
     return *this;
 }
 
-// ── 内存管理（统一 malloc/free） ──
+// ── 内存管理（统一走 Memory） ──
 
 void Buffer::Reserve(uint64_t newCapacity)
 {
@@ -78,7 +75,10 @@ void Buffer::Reserve(uint64_t newCapacity)
 
     // 16 字节对齐
     newCapacity = (newCapacity + 15) & ~15ULL;
-    uint8_t* newData = static_cast<uint8_t*>(std::malloc(newCapacity));
+    uint8_t* newData = static_cast<uint8_t*>(Memory::Instance().Alloc(newCapacity));
+    if (!newData)
+        return;  // OOM
+
     if (Data)
     {
         std::memcpy(newData, Data, Size);
@@ -86,7 +86,6 @@ void Buffer::Reserve(uint64_t newCapacity)
     }
     Data = newData;
     Capacity = newCapacity;
-    Deleter = nullptr;  // 新分配的内存归自管
 }
 
 void Buffer::Ensure(uint64_t neededSize)
@@ -109,24 +108,13 @@ void Buffer::Allocate(uint64_t size)
 
 void Buffer::Release()
 {
-    if (!Data)
-        return;
-
-    if (Deleter)
+    if (Data)
     {
-        // 池管理的内存 → 回调归还
-        Deleter(Data, Size, Capacity);
+        Memory::Instance().Free(Data);
+        Data = nullptr;
+        Size = 0;
+        Capacity = 0;
     }
-    else
-    {
-        // 自管内存 → 统一 free
-        std::free(Data);
-    }
-
-    Data = nullptr;
-    Size = 0;
-    Capacity = 0;
-    Deleter = nullptr;
 }
 
 void Buffer::ZeroInitialize()
@@ -237,4 +225,5 @@ std::string BufferView::toString() const
     return oss.str();
 }
 
-} // namespace X_Y
+} 
+// namespace X_Y

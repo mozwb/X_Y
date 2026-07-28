@@ -64,7 +64,7 @@ include "Core/Input"
 include "Core/XCore"
 include "Core/XMath"
 include "Core/Timer"
-include "Core/Buffer"
+include "Core/Memory"
 include "Core/FilesSystem"
 include "Core/Image"
 include "Core/Middle"
@@ -118,7 +118,7 @@ project "Test"
         "opengl32",
         "glad",
         "Timer",
-        "Buffer",
+        "Memory",
         "UI",
         "FilesSystem",
         "Image",

@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "Buffer/include/Buffer.h"
+#include "Memory/include/Buffer.h"
 #include "FilesSystem/include/FilesSystem.h"
 
 namespace X_Y {
@@ -87,4 +87,5 @@ namespace X_Y {
 		ImageError  m_Error  = ImageError::None;
 	};
 
-} // namespace X_Y
+} 
+// namespace X_Y

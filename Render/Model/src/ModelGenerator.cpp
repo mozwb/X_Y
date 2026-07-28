@@ -1,5 +1,5 @@
 ﻿#include "Model/include/ModelGenerator.h"
-#include "Core/Buffer/include/Buffer.h"
+#include "Core/Memory/include/Buffer.h"
 #include "Core/FilesSystem/include/FilesSystem.h"
 #include <sstream>
 #include <iomanip>

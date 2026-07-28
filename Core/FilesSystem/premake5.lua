@@ -13,5 +13,5 @@ project "FilesSystem"
     includedirs
     {
         "include",
-        "%{wks.location}/Core/Buffer/include"
+        "%{wks.location}/Core/Memory/include"
     }

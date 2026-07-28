@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include"Buffer/include/Buffer.h"
+#include"Memory/include/Buffer.h"
 #include<filesystem>
 #include <fstream>
 #include <regex>
@@ -42,6 +42,9 @@ namespace X_Y {
         XPath GetParent() const { return XPath(m_Path.parent_path()); }
 		bool IsPathEqual(const XPath& other) const { return std::filesystem::equivalent(m_Path, other.m_Path); }
         std::string getName() const { return m_Path.filename().string(); }
+        std::string getRelativePath(const XPath& base) const {
+            return std::filesystem::relative(m_Path, base.m_Path).string();
+        }
         bool MatchName(const std::string& pattern)const {
 			if (pattern.empty()) return false;
             std::string name = getName();

@@ -15,13 +15,13 @@ project "Image"
         "include",
         "src",
         "%{wks.location}/Core/Log/include",
-        "%{wks.location}/Core/Buffer/include",
+        "%{wks.location}/Core/Memory/include",
         "%{wks.location}/Core/FilesSystem/include"
     }
 
     links
     {
         "Log",
-        "Buffer",
+        "Memory",
         "FilesSystem"
     }

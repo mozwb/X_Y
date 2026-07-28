@@ -114,7 +114,7 @@ namespace X_Y {
 		m_Pixels.Data     = rgba;
 		m_Pixels.Size     = pixelSize;
 		m_Pixels.Capacity = pixelSize;
-		m_Pixels.bFreeInstead = true;  // malloc 来的，用 free() 释放
+		//m_Pixels.bFreeInstead = true;  // malloc 来的，用 free() 释放
 
 		m_Width    = w;
 		m_Height   = h;
