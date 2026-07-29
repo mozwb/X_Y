@@ -1,3 +1,15 @@
+## 2026-07-29 — LogViewer Composite 日志查看组件（建材阶段）
+
+| 操作 | 文件 | 说明 |
+|------|------|------|
+| 🏗️ 新 | `APP/UI/include/Composite/LogViewer.h` | LogViewer Composite：关键字输入 + 颜色日志列表 |
+| 🏗️ 新 | `APP/UI/src/Composite/LogViewer.cpp` | Ticker 增量轮询、颜色解析、关键字筛选、deque 5000 行缓存 |
+| 🏗️ 新 | `APP/UI/include/Composite/LogStripe.h` | LogStripe 纯展示层包装 ListBox |
+| 🏗️ 新 | `APP/UI/src/Composite/LogStripe.cpp` | SetEntries 批量填充 |
+| 🔧 改 | `APP/UI/include/Component/TextInput.h` | 加 `OnTextChange` 回调 |
+| 🔧 改 | `APP/UI/src/TextInput.cpp` | `NotifyTextChange()` 在 SetText/OnChar/OnKeyDown 时触发 |
+| 🔧 改 | `APP/UI/src/Container.cpp` | 鼠标点击 hit-test + 焦点转移（ScreenToClient + GetMouseScreenPos） |
+
 ## 2026-07-24 — 自定义窗口拖拽 + Ticker + Docker 停靠重构
 
 | 操作 | 文件 | 说明 |

@@ -37,7 +37,7 @@ public:
         uint64_t needed = message.size() + 1;
         if (buf->Size + needed > buf->Capacity) {
             DataStore::Instance().Flush(m_Key);
-            buf->Allocate(m_Capacity);  // 重置为空 Buffer，下次 Log 写入从头
+            buf->Allocate(0);  // 重置为空 Buffer，下次 Log 写入从头
         }
 
         buf->Append(message.data(), message.size());

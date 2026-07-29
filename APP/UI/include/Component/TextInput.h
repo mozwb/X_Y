@@ -1,6 +1,7 @@
 #pragma once
 #include "Component/Component.h"
 #include <string>
+#include <functional>
 
 namespace X_Y {
 
@@ -23,7 +24,12 @@ namespace X_Y {
         void OnKeyDown(Input_t::KeyCode key) override;
         void OnChar(wchar_t ch) override;
 
+        // 文本变化回调
+        std::function<void(const std::string&)> OnTextChange;
+
     private:
+        void NotifyTextChange();
+
         std::string m_Text;
         std::string m_Placeholder;
         int m_CursorPos = 0;

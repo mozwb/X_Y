@@ -63,6 +63,7 @@ X_Y/
 | Model Generator | ✅ 可用 | 立方体 .obj 生成（每面独立法线） |
 | Model Viewer | 🚧 开发中 | ImGui Shader 切换 + RenderWin 渲染 |
 | UI 原生组件 | ✅ 可用 | Container/Component 两层：Label/ListBox/TextInput/Button/ScrollArea/Overlay |
+| LogViewer Composite | 🚧 建材阶段 | LogViewer（关键字筛选 + Ticker 增量轮询 + 颜色日志列表 + 5000 行 deque 缓存）|
 | Dock 停靠系统 | 🚧 开发中 | Docker 五区域布局 + DockPanel tab 管理 + 自定义拖拽预览 |
 
 ---

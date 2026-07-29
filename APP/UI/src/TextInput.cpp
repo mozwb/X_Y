@@ -1,16 +1,18 @@
-﻿#include "Component/TextInput.h"
-#include"Input/include/MapCode.h"
+#include "Component/TextInput.h"
+#include "Input/include/MapCode.h"
 
 namespace X_Y {
 
     void TextInput::SetText(const char* text) {
         m_Text = text;
         m_CursorPos = (int)m_Text.size();
+        NotifyTextChange();
     }
 
     void TextInput::SetText(const std::string& text) {
         m_Text = text;
         m_CursorPos = (int)m_Text.size();
+        NotifyTextChange();
     }
 
     void TextInput::OnPaint(Canvas& canvas) {
@@ -42,6 +44,7 @@ namespace X_Y {
         using namespace Input_t;
         if (m_ReadOnly) return;
 
+        bool changed = false;
         switch (key) {
             case Key::Left:
                 if (m_CursorPos > 0) m_CursorPos--;
@@ -58,15 +61,18 @@ namespace X_Y {
             case Key::Delete:
                 if (m_CursorPos < (int)m_Text.size()) {
                     m_Text.erase(m_CursorPos, 1);
+                    changed = true;
                 }
                 break;
             case Key::Backspace:
                 if (m_CursorPos > 0) {
                     m_CursorPos--;
                     m_Text.erase(m_CursorPos, 1);
+                    changed = true;
                 }
                 break;
         }
+        if (changed) NotifyTextChange();
     }
 
     void TextInput::OnChar(wchar_t ch) {
@@ -75,7 +81,12 @@ namespace X_Y {
         if (ch >= 32 && ch <= 126) {
             m_Text.insert(m_CursorPos, 1, (char)ch);
             m_CursorPos++;
+            NotifyTextChange();
         }
+    }
+
+    void TextInput::NotifyTextChange() {
+        if (OnTextChange) OnTextChange(m_Text);
     }
 
 }

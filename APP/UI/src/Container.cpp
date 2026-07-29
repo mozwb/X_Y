@@ -31,9 +31,23 @@ Container::Container(XWidget* parent)
 
     // 鼠标按下 → hit-test 并设置焦点
     Connect(this, MovementType::MouseButtonPressed, this, [this](const XMovement& e) {
-        auto& mb = dynamic_cast<const MouseButtonPressed&>(e);
-        // 鼠标事件不是从这里发出的，暂不处理
-        // 实际鼠标 hit-test 由 WM_LBUTTONDOWN 在平台层处理
+        int sx = 0, sy = 0;
+        GetMouseScreenPos(sx, sy);
+        ScreenToClient(sx, sy);
+
+        // 旧焦点取消
+        for (auto* comp : m_Components) {
+            if (comp->IsFocused()) {
+                comp->SetFocused(false);
+                break;
+            }
+        }
+
+        // 新焦点设置
+        Component* hit = HitTest(sx, sy);
+        if (hit) {
+            hit->SetFocused(true);
+        }
     });
 }
 
