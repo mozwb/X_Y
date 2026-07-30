@@ -45,9 +45,8 @@ public:
     }
 
     ~DataStoreDevice() {
-        Buffer* buf = DataStore::Instance().Get(m_Key);
-        if (buf && buf->Data)
-            DataStore::Instance().Flush(m_Key);
+        // 程序退出时不 Flush，此时 DataStore 可能已析构
+		DataStore::Instance().Flush(m_Key);
     }
 
     void SetKey(const std::string& key) { m_Key = key; }

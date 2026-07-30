@@ -45,6 +45,9 @@ public:
     bool    Contains(const std::string& key) const;
     std::vector<std::string> ListKeys() const;
 
+    // ── 生命周期 ──
+    void ClearAll();
+
     // ── 持久化 ──
     bool Save(const std::string& key);
     bool SaveAll();

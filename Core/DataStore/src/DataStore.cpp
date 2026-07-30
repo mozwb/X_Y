@@ -224,6 +224,12 @@ bool DataStore::Save(const std::string& key)
     return FilesSystem::WriteFileBinary(path, it->second);
 }
 
+void DataStore::ClearAll()
+{
+    std::lock_guard<std::shared_mutex> lock(m_Mutex);
+    m_Entries.clear();
+}
+
 bool DataStore::SaveAll()
 {
     std::shared_lock lock(m_Mutex);

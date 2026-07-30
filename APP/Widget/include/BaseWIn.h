@@ -1,6 +1,8 @@
 ﻿#pragma once
 #include <string>
 #include <memory>
+#include <atomic>
+#include <functional>
 #include "WindowImpl.h"
 #include "Canvas.h"
 
@@ -14,8 +16,7 @@ namespace X_Y {
         BaseWin();
         virtual ~BaseWin();
 
-        void* GetNativeHandle() const { return m_NativeHandle; }
-        void SetNativeHandle(void* handle) { m_NativeHandle = handle; }
+        void* GetNativeHandle() const { return m_Impl ? m_Impl->GetNativeHandle() : nullptr; }
 
         uint GetActualWidth() const { return m_ActualWidth; }
         uint GetActualHeight() const { return m_ActualHeight; }
@@ -35,7 +36,12 @@ namespace X_Y {
         void SetCursorStyle(CursorStyle style);
         void MoveAndResize(int x, int y, int w, int h, bool noZOrder = true);
 
-		void RequestRepaint();
+        void RequestRepaint();
+        void ValidateWindow();
+        void PaintDirect(std::function<void(Canvas&)> painter);
+
+        // 主线程跳过此窗口的 WM_PAINT（用于独立线程自绘）
+        std::atomic<bool> m_SkipMainThreadPaint{ false };
 
         static void GetMouseScreenPos(int& x, int& y);
         static BaseWin* GetWindowAt(int screenX, int screenY);
@@ -57,7 +63,6 @@ namespace X_Y {
         virtual std::string toString() const { return "BaseWindow"; }
 
     private:
-        void* m_NativeHandle = nullptr;
         uint m_ActualWidth = 0;
         uint m_ActualHeight = 0;
         std::unique_ptr<WindowImpl> m_Impl;

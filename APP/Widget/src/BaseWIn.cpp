@@ -1,4 +1,5 @@
-#include "BaseWin.h"
+﻿#include "BaseWin.h"
+#include "Canvas.h"
 #ifdef XY_PLATFORM_WINDOWS
 #include <windows.h>
 #endif
@@ -32,10 +33,9 @@ void BaseWin::Close() {
 }
 
 void BaseWin::Destroy() {
-    if (m_Impl) {
-        m_Impl->Destroy();
-        m_NativeHandle = nullptr;
-    }
+    if (!m_Impl) return;
+    m_Impl->Destroy();
+    m_Impl.reset();  // 防止重复 Destroy
 }
 
 void BaseWin::SetTitle(const char* title) {
@@ -87,6 +87,14 @@ void BaseWin::MoveAndResize(int x, int y, int w, int h, bool noZOrder) {
 
 void BaseWin::RequestRepaint() {
     if (m_Impl) m_Impl->RequestRepaint();
+}
+
+void BaseWin::ValidateWindow() {
+    if (m_Impl) m_Impl->ValidateWindow();
+}
+
+void BaseWin::PaintDirect(std::function<void(Canvas&)> painter) {
+    if (m_Impl) m_Impl->PaintDirect(std::move(painter));
 }
 
 void BaseWin::GetMouseScreenPos(int& x, int& y) {

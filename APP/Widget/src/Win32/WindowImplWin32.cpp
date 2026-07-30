@@ -1,5 +1,6 @@
-#include "Win32/WindowImplWin32.h"
+﻿#include "Win32/WindowImplWin32.h"
 #include "Win32/Win32Globals.h"
+#include "Canvas.h"
 #include <windows.h>
 #include <cstdint>
 
@@ -72,8 +73,9 @@ public:
 
     void Destroy() override {
         if (m_Hwnd) {
-            DestroyWindow(m_Hwnd);
+            HWND h = m_Hwnd;
             m_Hwnd = nullptr;
+            DestroyWindow(h);
         }
     }
 
@@ -146,6 +148,29 @@ public:
 
     void RequestRepaint() override {
         if (m_Hwnd) ::InvalidateRect(m_Hwnd, nullptr, TRUE);
+    }
+
+    void ValidateWindow() override {
+        if (m_Hwnd) ::ValidateRect(m_Hwnd, nullptr);
+    }
+
+    void PaintDirect(std::function<void(Canvas&)> painter) override {
+        if (!m_Hwnd) return;
+        HDC hdc = GetDC(m_Hwnd);
+        if (!hdc) return;
+        RECT rc;
+
+        ::GetClientRect(m_Hwnd, &rc);
+
+        int w = rc.right - rc.left;
+        int hc = rc.bottom - rc.top;
+        if (w <= 0 || hc <= 0) {
+            ReleaseDC(m_Hwnd, hdc);
+            return;
+        }
+        Canvas canvas(w, hc, (void*)hdc);
+        painter(canvas);
+        ReleaseDC(m_Hwnd, hdc);
     }
 
 private:

@@ -15,7 +15,7 @@ namespace X_Y {
     class XWidget : public Base {
     public:
         explicit XWidget(XWidget* parent = nullptr);
-        ~XWidget() { destroy(); }
+        ~XWidget() { disConnect(this); }
 
         // ── 窗口生命周期（带事件连接） ──────────────
         bool show(ShowCmd nShow = ShowCmd::Show);

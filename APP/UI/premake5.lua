@@ -35,7 +35,9 @@ project "UI"
 
     links
     {
-        "Widget"
+        "Widget",
+        "DataStore",
+        "Timer"
     }
 
     filter "system:windows"

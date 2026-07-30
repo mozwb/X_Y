@@ -23,13 +23,12 @@ LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
     BaseWin* pThis = nullptr;
     auto* app = Application::instance();
 
-    
+
     // 2. 窗口创建时：绑定 C++ 对象与 HWND，记录初始尺寸
     
     if (msg == WM_NCCREATE) {
         pThis = (BaseWin*)((CREATESTRUCT*)lParam)->lpCreateParams;
         SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pThis);
-        pThis->SetNativeHandle((void*)hwnd);
 
         RECT rect;
         if (GetClientRect(hwnd, &rect))
@@ -44,6 +43,12 @@ LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
     // 3. WM_PAINT：创建 Canvas 后通过虚函数 OnPaint 回调
     
     if (msg == WM_PAINT && pThis) {
+        // 如果窗口标记为独立线程自绘，主线程跳过
+        if (pThis->m_SkipMainThreadPaint) {
+            ValidateRect(hwnd, nullptr);
+            return 0;
+        }
+
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hwnd, &ps);
 

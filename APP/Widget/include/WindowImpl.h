@@ -1,5 +1,9 @@
 ﻿#pragma once
 #include <cstdint>
+#include <functional>
+
+// Canvas 前向声明（PaintDirect 需要）
+namespace X_Y { class Canvas; }
 
 namespace X_Y {
 
@@ -88,7 +92,14 @@ namespace X_Y {
         virtual void ClientToScreen(int& x, int& y) const = 0;
 
         // ── 重绘请求 ──────────────────────────────
+
         virtual void RequestRepaint() = 0;
+        virtual void ValidateWindow() = 0;
+
+        // ── 自绘（线程安全：调用方线程 GetDC，完事 ReleaseDC）──
+        // 在任意线程调用；callback 拿到 Canvas 画即可
+
+        virtual void PaintDirect(std::function<void( Canvas& )> painter) = 0;
 
         // ── 鼠标 & 光标 ───────────────────────────
         
@@ -97,6 +108,7 @@ namespace X_Y {
         virtual void SetCursorStyle(CursorStyle style) = 0;
 
         // ── 静态工具（全局操作，无需实例） ────────
+
         static void GetMouseScreenPos(int& x, int& y);
         static void ReleaseGlobalMouseCapture();
         virtual void MoveAndResize(int x, int y, int w, int h, bool noZOrder) = 0;

@@ -7,12 +7,12 @@
 
 namespace X_Y {
 
-    void LogStripe::SetEntries(const std::vector<LogEntry>& entries) {
-        Clear();
-        for (const auto& entry : entries) {
-            AddItem(entry.text.c_str(), entry.color);
-        }
+void LogStripe::SetEntries(const std::vector<LogEntry>& entries) {
+    Clear();
+    for (const auto& entry : entries) {
+        AddItem(entry.text.c_str(), entry.color);
     }
+}
 
 // ════════════════════════════════════════════════════════════
 // 工具：解析单行日志
@@ -73,10 +73,13 @@ LogViewer::~LogViewer() {
 // ════════════════════════════════════════════════════════════
 
 void LogViewer::SetDataStoreKey(const std::string& key) {
-    m_Key = key;
-    m_LastSize = 0;
-    m_AllEntries.clear();
-    m_LogStripe->Clear();
+    {
+        std::lock_guard<std::shared_mutex> lock(m_EntriesMutex);
+        m_Key = key;
+        m_LastSize = 0;
+        m_AllEntries.clear();
+    }
+    RequestRepaint();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -93,7 +96,8 @@ void LogViewer::Start() {
 
         uint64_t currentSize = buf->Size;
 
-        // Buffer 被 Flush 重置过了（Size 变小），从头开始
+        std::lock_guard<std::shared_mutex> lock(m_EntriesMutex);
+
         if (currentSize < m_LastSize) {
             m_LastSize = 0;
             m_AllEntries.clear();
@@ -105,7 +109,27 @@ void LogViewer::Start() {
         auto* bytes = reinterpret_cast<const char*>(buf->Data) + m_LastSize;
         m_LastSize = currentSize;
 
-        OnIncrementalData(std::string(bytes, tailLen));
+        std::string current;
+        for (uint64_t i = 0; i < tailLen; i++) {
+            char c = bytes[i];
+            if (c == '\n') {
+                if (!current.empty()) {
+                    while (m_AllEntries.size() >= MAX_ENTRIES)
+                        m_AllEntries.pop_front();
+                    m_AllEntries.push_back(ParseLine(current));
+                    current.clear();
+                }
+            } else {
+                current += c;
+            }
+        }
+        if (!current.empty()) {
+            while (m_AllEntries.size() >= MAX_ENTRIES)
+                m_AllEntries.pop_front();
+            m_AllEntries.push_back(ParseLine(current));
+        }
+
+        RequestRepaint();
     });
 }
 
@@ -117,38 +141,11 @@ void LogViewer::Stop() {
 }
 
 // ════════════════════════════════════════════════════════════
-// 处理增量数据
-// ════════════════════════════════════════════════════════════
-
-void LogViewer::OnIncrementalData(const std::string& rawTail) {
-    std::string current;
-    for (char c : rawTail) {
-        if (c == '\n') {
-            if (!current.empty()) {
-                while (m_AllEntries.size() >= MAX_ENTRIES)
-                    m_AllEntries.pop_front();
-                m_AllEntries.push_back(ParseLine(current));
-                current.clear();
-            }
-        } else {
-            current += c;
-        }
-    }
-    if (!current.empty()) {
-        while (m_AllEntries.size() >= MAX_ENTRIES)
-            m_AllEntries.pop_front();
-        m_AllEntries.push_back(ParseLine(current));
-    }
-
-    ApplyFilter();
-}
-
-// ════════════════════════════════════════════════════════════
-// 筛选
+// 筛选（持有共享锁时调用）
 // ════════════════════════════════════════════════════════════
 
 void LogViewer::ApplyFilter() {
-    std::vector<LogEntry> filtered;
+    m_LogStripe->Clear();
 
     for (const auto& entry : m_AllEntries) {
         if (!m_Keyword.empty()) {
@@ -159,11 +156,8 @@ void LogViewer::ApplyFilter() {
                 continue;
         }
 
-        filtered.push_back(entry);
+        m_LogStripe->AddItem(entry.text.c_str(), entry.color);
     }
-
-    m_LogStripe->SetEntries(filtered);
-    RequestRepaint();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -175,17 +169,23 @@ void LogViewer::OnKeywordChanged(const std::string& text) {
     std::transform(m_Keyword.begin(), m_Keyword.end(),
                    m_Keyword.begin(),
                    [](unsigned char c) { return std::tolower(c); });
-    ApplyFilter();
+    RequestRepaint();
 }
 
 // ════════════════════════════════════════════════════════════
-// 绘制
+// 绘制（主线程）
 // ════════════════════════════════════════════════════════════
 
 void LogViewer::OnPaint(Canvas& canvas) {
     LayoutChildren();
-   
+
     canvas.FillRect(0, 0, get_width(), get_height(), 0xFF1E1E1E);
+
+    // 共享锁保护 m_AllEntries 的读取 + 筛选
+    {
+        std::shared_lock<std::shared_mutex> lock(m_EntriesMutex);
+        ApplyFilter();
+    }
 
     Container::OnPaint(canvas);
 }
@@ -208,4 +208,5 @@ void LogViewer::LayoutChildren() {
         m_ScrollArea->SetRect(0, panelY, w, panelH);
 }
 
-} // namespace X_Y
+}
+// namespace X_Y

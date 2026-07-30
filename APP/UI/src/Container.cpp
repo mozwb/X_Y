@@ -52,6 +52,7 @@ Container::Container(XWidget* parent)
 }
 
 Container::~Container() {
+    disConnect(this);
     ClearComponents();
 }
 

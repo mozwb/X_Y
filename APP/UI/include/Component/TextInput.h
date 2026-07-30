@@ -1,5 +1,5 @@
-#pragma once
-#include "Component/Component.h"
+﻿#pragma once
+#include "UI/include/Component/Component.h"
 #include <string>
 #include <functional>
 
