@@ -18,28 +18,50 @@ void LogStripe::SetEntries(const std::vector<LogEntry>& entries) {
 // 工具：解析单行日志
 // ════════════════════════════════════════════════════════════
 
+// 解析 Log 写入的 ANSI 颜色序列，剥离控制字符，提取前景色
+// 支持的序列：\x1B[38;2;R;G;Bm(前景RGB) / \x1B[...m(其他，仅剥离)
+// 注意：\x1B[0m(重置) 不覆盖行色——Log 每行结构为 <颜色>正文<重置>，
+//       行色按该行设置的第一个前景色为准，结尾重置只是收尾，不把整行抹黑。
 static LogEntry ParseLine(const std::string& raw) {
     LogEntry entry;
     entry.color = 0xFF000000;
+    bool hasColor = false;
 
-    size_t p1 = raw.find('%');
-    if (p1 == 0) {
-        size_t p2 = raw.find('%', 1);
-        if (p2 != std::string::npos) {
-            std::string colorStr = raw.substr(p1 + 1, p2 - p1 - 1);
-            int r = 0, g = 0, b = 0;
-            if (sscanf_s(colorStr.c_str(), "%d:%d:%d", &r, &g, &b) == 3)
-                entry.color = 0xFF000000 | (r << 16) | (g << 8) | b;
+    std::string text;
+    text.reserve(raw.size());
 
-            entry.text = raw.substr(p2 + 1);
-            auto pos = entry.text.rfind("%#");
-            if (pos != std::string::npos)
-                entry.text = entry.text.substr(0, pos);
-            return entry;
+    size_t i = 0;
+    const size_t n = raw.size();
+    while (i < n) {
+        if (raw[i] == '\x1B' && i + 1 < n && raw[i + 1] == '[') {
+            size_t j = i + 2;
+            while (j < n && raw[j] != 'm') j++;   // 找到序列结束符 'm'
+            if (j >= n) break;                     // 未闭合，丢弃剩余
+
+            std::string esc = raw.substr(i + 2, j - i - 2); // 不含 ESC[ 和 m 的参数字符串
+            i = j + 1;
+
+            // \x1B[0m 重置：只作为收尾标记，不覆盖已定的行色
+            if (esc == "0" || esc == "0;0")
+                continue;
+
+            // 前景色 RGB：38;2;R;G;B
+            if (esc.rfind("38;2;", 0) == 0) {
+                int r = 0, g = 0, b = 0;
+                if (sscanf_s(esc.c_str() + 5, "%d;%d;%d", &r, &g, &b) == 3) {
+                    entry.color = 0xFF000000 | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
+                    hasColor = true;
+                }
+            }
+            // 其他序列(背景/粗体等)仅剥离，不改变颜色
+            continue;
         }
+
+        text += raw[i];
+        i++;
     }
 
-    entry.text = raw;
+    entry.text = std::move(text);
     return entry;
 }
 

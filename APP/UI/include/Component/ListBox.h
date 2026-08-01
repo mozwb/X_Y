@@ -28,6 +28,8 @@ namespace X_Y {
         int GetLineHeight() const { return m_LineHeight; }
         void SetLineHeight(int h);
 
+        int GetScrollStep() const override { return m_LineHeight; }
+
         int GetRowFromMouseY(int localY) const;
 
         void OnPaint(Canvas& canvas) override;

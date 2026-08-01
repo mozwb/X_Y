@@ -29,7 +29,20 @@ Container::Container(XWidget* parent)
         }
     });
 
-    // 鼠标按下 → hit-test 并设置焦点
+    // 鼠标滚轮 → 转发给命中的组件（ScrollArea 等）
+    Connect(this, MovementType::MouseScrolled, this, [this](const XMovement& e) {
+        auto& ms = dynamic_cast<const MouseScrolled&>(e);
+        int sx = 0, sy = 0;
+        GetMouseScreenPos(sx, sy);
+        ScreenToClient(sx, sy);
+
+        Component* hit = HitTest(sx, sy);
+        if (hit && hit->IsVisible()) {
+            hit->OnScroll(ms.GetYOffset());
+        }
+    });
+
+    // 鼠标按下 → hit-test、设焦点、开始组件交互（可能拖动）
     Connect(this, MovementType::MouseButtonPressed, this, [this](const XMovement& e) {
         int sx = 0, sy = 0;
         GetMouseScreenPos(sx, sy);
@@ -43,10 +56,47 @@ Container::Container(XWidget* parent)
             }
         }
 
-        // 新焦点设置
+        // 新焦点 + 记录交互目标 + 转发坐标
+
         Component* hit = HitTest(sx, sy);
         if (hit) {
             hit->SetFocused(true);
+            m_DragTarget = hit;
+            m_DragStartX = sx;
+            m_DragStartY = sy;
+            hit->OnMousePressed(sx - hit->GetX(), sy - hit->GetY());
+        }
+        else {
+            m_DragTarget = nullptr;
+        }
+    });
+
+    // 鼠标移动 → 若正在交互（拖动中）持续通知目标；否则 hover 通知命中组件
+
+    Connect(this, MovementType::MouseMoved, this, [this](const XMovement& e) {
+        int sx = 0, sy = 0;
+        GetMouseScreenPos(sx, sy);
+        ScreenToClient(sx, sy);
+
+        if (m_DragTarget) {
+            m_DragTarget->OnMouseMoved(sx - m_DragTarget->GetX(), sy - m_DragTarget->GetY());
+        }
+        else {
+            Component* hit = HitTest(sx, sy);
+            if (hit && hit->IsVisible())
+                hit->OnMouseMoved(sx - hit->GetX(), sy - hit->GetY());
+        }
+    });
+
+    // 鼠标抬起 → 结束组件交互
+    Connect(this, MovementType::MouseButtonReleased, this, [this](const XMovement& e) {
+        int sx = 0, sy = 0;
+        GetMouseScreenPos(sx, sy);
+        ScreenToClient(sx, sy);
+
+        if (m_DragTarget) {
+            m_DragTarget->OnMouseReleased(sx - m_DragTarget->GetX(), sy - m_DragTarget->GetY());
+            m_DragTarget = nullptr;
         }
     });
 }
@@ -58,6 +108,8 @@ Container::~Container() {
 
 void Container::AddComponent(Component* comp) {
     if (comp) {
+        // 注入重绘回调：组件 RequestRepaint() → 请求所属窗口重绘
+        comp->SetRepaintCallback([this]() { RequestRepaint(); });
         m_Components.push_back(comp);
     }
 }
@@ -106,4 +158,5 @@ void Container::OnPaint(Canvas* canvas) {
     }
 }
 
-} // namespace X_Y
+} 
+// namespace X_Y

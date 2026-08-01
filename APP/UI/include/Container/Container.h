@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Widget/include/XWidget.h"
 #include "Widget/include/Canvas.h"
 #include <vector>
@@ -24,6 +24,12 @@ namespace X_Y {
         virtual void OnPaint(Canvas& canvas);
         Component* HitTest(int x, int y);
         std::vector<Component*> m_Components;
+
+    private:
+        // 拖拽等需要持续跟踪的交互目标（按下到抬起期间保持）
+
+        Component* m_DragTarget = nullptr;
+        int m_DragStartX = 0, m_DragStartY = 0;
     };
 
 }

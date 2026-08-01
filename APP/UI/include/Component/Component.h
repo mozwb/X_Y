@@ -1,7 +1,7 @@
 ﻿#pragma once
 #include "Widget/include/Canvas.h"
 #include "Input/include/Input.h"
-
+#include<functional>
 namespace X_Y {
 
     class Component {
@@ -30,6 +30,23 @@ namespace X_Y {
         virtual void OnKeyDown(Input_t::KeyCode key) {}
         virtual void OnChar(wchar_t ch) {}
 
+        // 通用滚动输入：yDelta > 0 向上滚，< 0 向下滚（单位=1格）
+        virtual void OnScroll(float yDelta) {}
+
+        // 内容告诉视口：滚动一步的像素粒度（如列表=行高，普通内容=1）
+        virtual int GetScrollStep() const { return 1; }
+
+        // 鼠标交互（localX/localY 为相对本组件的局部坐标）
+
+        virtual void OnMousePressed(int localX, int localY) {}
+        virtual void OnMouseMoved(int localX, int localY) {}
+        virtual void OnMouseReleased(int localX, int localY) {}
+
+        // 请求所属窗口重绘（由 Container 在 AddComponent 时注入实现）
+
+        void RequestRepaint() { if (m_RepaintCallback) m_RepaintCallback(); }
+        void SetRepaintCallback(std::function<void()> cb) { m_RepaintCallback = std::move(cb); }
+
         virtual void OnPaint(Canvas& canvas) = 0;
 
     private:
@@ -37,6 +54,7 @@ namespace X_Y {
         int m_MouseX = 0, m_MouseY = 0;
         bool m_Visible = true;
         bool m_Focused = false;
+        std::function<void()> m_RepaintCallback;
     };
 
 }
