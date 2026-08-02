@@ -100,6 +100,8 @@ void LogViewer::SetDataStoreKey(const std::string& key) {
         m_Key = key;
         m_LastSize = 0;
         m_AllEntries.Clear();
+        m_LogStripe->Clear();       // 换数据源 → stripe 同步清空
+        m_RenderedSeq = 0;          // 序号归零
     }
     RequestRepaint();
 }
@@ -123,6 +125,8 @@ void LogViewer::Start() {
         if (currentSize < m_LastSize) {
             m_LastSize = 0;
             m_AllEntries.Clear();
+            // 数据被重置（换了文件/清空），stripe 也全量重建
+            RebuildAll();
         }
 
         if (currentSize == m_LastSize) return;
@@ -130,6 +134,9 @@ void LogViewer::Start() {
         auto tailLen = currentSize - m_LastSize;
         auto* bytes = reinterpret_cast<const char*>(buf->Data) + m_LastSize;
         m_LastSize = currentSize;
+
+        // 入队前的全局序号，用于增量喂入范围
+        uint64_t before = m_AllEntries.TotalPushed();
 
         std::string current;
         for (uint64_t i = 0; i < tailLen; i++) {
@@ -147,7 +154,8 @@ void LogViewer::Start() {
             m_AllEntries.Push(ParseLine(current));
         }
 
-        RequestRepaint();
+        uint64_t after = m_AllEntries.TotalPushed();
+        IncrementalAppend(before, after);
     });
 }
 
@@ -162,20 +170,48 @@ void LogViewer::Stop() {
 // 筛选（持有共享锁时调用）
 // ════════════════════════════════════════════════════════════
 
-void LogViewer::ApplyFilter() {
+// ════════════════════════════════════════════════════════════
+// 筛选（必须在 m_EntriesMutex 持有锁时调用）
+// ════════════════════════════════════════════════════════════
+
+// 小写化（日志匹配用，ASCII）
+static std::string ToLower(const std::string& s) {
+    std::string r = s;
+    std::transform(r.begin(), r.end(), r.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    return r;
+}
+
+// 判断单条是否命中当前关键词
+bool LogViewer::MatchesKeyword(const LogEntry& e) const {
+    if (m_Keyword.empty()) return true;
+    return ToLower(e.text).find(m_Keyword) != std::string::npos;
+}
+
+// 全量重建：清空 stripe，从队头重筛全部。仅关键词变化 / 数据重置时调用。
+void LogViewer::RebuildAll() {
     m_LogStripe->Clear();
-
-    for (const auto& entry : m_AllEntries) {
-        if (!m_Keyword.empty()) {
-            std::string lowerText = entry.text;
-            std::transform(lowerText.begin(), lowerText.end(), lowerText.begin(),
-                           [](unsigned char c) { return std::tolower(c); });
-            if (lowerText.find(m_Keyword) == std::string::npos)
-                continue;
-        }
-
-        m_LogStripe->AddItem(entry.text.c_str(), entry.color);
+    const size_t cnt = m_AllEntries.Size();
+    for (size_t i = 0; i < cnt; i++) {
+        const LogEntry& e = m_AllEntries[i];  // 相对索引，0 = 最旧
+        if (MatchesKeyword(e))
+            m_LogStripe->AddItem(e.text.c_str(), e.color);
     }
+    m_RenderedSeq = m_AllEntries.TotalPushed();
+    RequestRepaint();
+}
+
+// 增量喂入：把全局序号 [fromSeq, toSeq) 的新条目追加到 stripe（含 filter）。
+// 锁内调用（Ticker 排他锁）。
+void LogViewer::IncrementalAppend(uint64_t fromSeq, uint64_t toSeq) {
+    if (toSeq <= fromSeq) return;
+    for (uint64_t i = fromSeq; i < toSeq; i++) {
+        const LogEntry& e = m_AllEntries.At(i);  // 按全局序号
+        if (MatchesKeyword(e))
+            m_LogStripe->AddItem(e.text.c_str(), e.color);
+    }
+    m_RenderedSeq = toSeq;
+    RequestRepaint();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -187,7 +223,10 @@ void LogViewer::OnKeywordChanged(const std::string& text) {
     std::transform(m_Keyword.begin(), m_Keyword.end(),
                    m_Keyword.begin(),
                    [](unsigned char c) { return std::tolower(c); });
-    RequestRepaint();
+
+    // 关键词变了 → 唯一一次全量重建
+    std::lock_guard<std::shared_mutex> lock(m_EntriesMutex);
+    RebuildAll();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -199,13 +238,11 @@ void LogViewer::OnPaint(Canvas& canvas) {
 
     canvas.FillRect(0, 0, get_width(), get_height(), 0xFF1E1E1E);
 
-    // 共享锁保护 m_AllEntries 的读取 + 筛选
+    // 共享锁：保护 m_LogStripe（Ticker 线程可能正增量写）以及绘制
     {
         std::shared_lock<std::shared_mutex> lock(m_EntriesMutex);
-        ApplyFilter();
+        Container::OnPaint(canvas);
     }
-
-    Container::OnPaint(canvas);
 }
 
 // ════════════════════════════════════════════════════════════
