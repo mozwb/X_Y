@@ -1,4 +1,5 @@
 ﻿#include "CanvasImpl.h"
+#include "Widget/include/Font.h"
 #include <windows.h>
 #ifdef DrawText
 #undef DrawText
@@ -9,7 +10,8 @@ namespace X_Y {
     public:
         CanvasImplWin32(int w, int h, HDC hdc)
             : m_Width(w), m_Height(h), m_Handle(hdc),
-              m_MemDC(nullptr), m_MemBitmap(nullptr), m_OldBitmap(nullptr)
+              m_MemDC(nullptr), m_MemBitmap(nullptr), m_OldBitmap(nullptr),
+              m_CurrentFont(nullptr)
         {
             // 双缓冲：创建与窗口 DC 兼容的内存 DC + 位图
             m_MemDC = ::CreateCompatibleDC(hdc);
@@ -18,12 +20,18 @@ namespace X_Y {
                 if (m_MemBitmap)
                     m_OldBitmap = (HBITMAP)::SelectObject(m_MemDC, m_MemBitmap);
             }
+            // 默认字体：微软雅黑（ClearType 抗锯齿在上层 SetFont 时选定）
+            ApplyDefaultFont();
         }
 
         ~CanvasImplWin32() override {
             // 恢复旧对象再释放，避免 GDI 泄漏
+            if (m_MemDC && m_CurrentFont)
+                ::SelectObject(m_MemDC, ::GetStockObject(DEFAULT_GUI_FONT));
             if (m_MemDC && m_OldBitmap)
                 ::SelectObject(m_MemDC, m_OldBitmap);
+            if (m_CurrentFont)
+                ::DeleteObject(m_CurrentFont);
             if (m_MemBitmap)
                 ::DeleteObject(m_MemBitmap);
             if (m_MemDC)
@@ -38,6 +46,17 @@ namespace X_Y {
             if (!m_MemDC || !m_Handle) return;
             ::BitBlt(m_Handle, 0, 0, m_Width, m_Height,
                      m_MemDC, 0, 0, SRCCOPY);
+        }
+
+        // 设置绘制字体（Font 包装内部持有 HFONT）
+        void SetFont(const Font& font) override {
+            if (!m_MemDC) return;
+            if (m_CurrentFont)
+                ::SelectObject(m_MemDC, ::GetStockObject(DEFAULT_GUI_FONT));
+            HFONT hf = (HFONT)font.GetNativeHandle();
+            if (hf)
+                ::SelectObject(m_MemDC, hf);
+            m_CurrentFont = hf;
         }
 
         void FillRect(int x, int y, int w, int h, uint32_t
@@ -85,11 +104,34 @@ namespace X_Y {
         }
 
     private:
+        // 用微软雅黑作为默认绘制字体（ClearType 抗锯齿）
+        void ApplyDefaultFont() {
+            if (!m_MemDC) return;
+
+            LOGFONTW lf = { 0 };
+            std::wstring family = L"Microsoft YaHei UI";
+            if (family.size() >= (size_t)LF_FACESIZE)
+                family.resize(LF_FACESIZE - 1);
+            wcscpy_s(lf.lfFaceName, family.c_str());
+            lf.lfHeight = -14;            // 14px（像素坐标）
+            lf.lfWeight = FW_NORMAL;
+            lf.lfQuality = CLEARTYPE_QUALITY;   // 抗锯齿
+            lf.lfCharSet = DEFAULT_CHARSET;
+            lf.lfOutPrecision = OUT_TT_PRECIS;
+
+            HFONT f = ::CreateFontIndirectW(&lf);
+            if (f) {
+                ::SelectObject(m_MemDC, f);
+                m_CurrentFont = f;
+            }
+        }
+
         int m_Width, m_Height;
         HDC m_Handle;
         HDC m_MemDC;
         HBITMAP m_MemBitmap;
         HBITMAP m_OldBitmap;
+        HFONT m_CurrentFont = nullptr;
     };
 
     // 工厂实现

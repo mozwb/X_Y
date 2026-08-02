@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include <cstdint>
+#include "Widget/include/Font.h"
 
 #ifdef DrawText
 #undef DrawText
@@ -17,6 +18,9 @@ namespace X_Y {
 
         // 双缓冲：把内存中已画好的一帧一次性上屏
         virtual void Flush() = 0;
+
+        // 设置当前绘制字体（后续 DrawText 采用该字体）
+        virtual void SetFont(const Font& font) = 0;
 
         virtual void FillRect(int x, int y, int w, int h, uint32_t
             color) = 0;
