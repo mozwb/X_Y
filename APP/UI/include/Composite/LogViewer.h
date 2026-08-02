@@ -3,7 +3,7 @@
 #include "UI/include/Component/ListBox.h"
 #include "UI/include/Component/ScrollArea.h"
 #include "UI/include/Component/TextInput.h"
-#include <deque>
+#include "Memory/include/LoopQueue.h"
 #include <string>
 #include <memory>
 #include <cstdint>
@@ -51,7 +51,7 @@ private:
     std::unique_ptr<ScrollArea> m_ScrollArea;
     std::unique_ptr<LogStripe>  m_LogStripe;
 
-    std::deque<LogEntry> m_AllEntries;
+    LoopQueue<LogEntry, MAX_ENTRIES> m_AllEntries;
     mutable std::shared_mutex m_EntriesMutex;
 
     std::string m_Key;

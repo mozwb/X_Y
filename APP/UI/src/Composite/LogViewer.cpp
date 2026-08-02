@@ -99,7 +99,7 @@ void LogViewer::SetDataStoreKey(const std::string& key) {
         std::lock_guard<std::shared_mutex> lock(m_EntriesMutex);
         m_Key = key;
         m_LastSize = 0;
-        m_AllEntries.clear();
+        m_AllEntries.Clear();
     }
     RequestRepaint();
 }
@@ -122,7 +122,7 @@ void LogViewer::Start() {
 
         if (currentSize < m_LastSize) {
             m_LastSize = 0;
-            m_AllEntries.clear();
+            m_AllEntries.Clear();
         }
 
         if (currentSize == m_LastSize) return;
@@ -136,9 +136,7 @@ void LogViewer::Start() {
             char c = bytes[i];
             if (c == '\n') {
                 if (!current.empty()) {
-                    while (m_AllEntries.size() >= MAX_ENTRIES)
-                        m_AllEntries.pop_front();
-                    m_AllEntries.push_back(ParseLine(current));
+                    m_AllEntries.Push(ParseLine(current));
                     current.clear();
                 }
             } else {
@@ -146,9 +144,7 @@ void LogViewer::Start() {
             }
         }
         if (!current.empty()) {
-            while (m_AllEntries.size() >= MAX_ENTRIES)
-                m_AllEntries.pop_front();
-            m_AllEntries.push_back(ParseLine(current));
+            m_AllEntries.Push(ParseLine(current));
         }
 
         RequestRepaint();
