@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <memory>
 #include "CanvasImpl.h"
 
@@ -9,6 +9,7 @@
 namespace X_Y {
 
     // 2D 画布——轻量包装，隐藏平台实现
+
     class Canvas {
     public:
         Canvas(int w, int h, void* nativeHandle)
@@ -21,6 +22,7 @@ namespace X_Y {
         int GetHeight() const { return m_Impl->GetHeight(); }
  
         // 双缓冲：把内存中已画好的一帧一次性上屏
+
         void Flush() {
             m_Impl->Flush();
         }
@@ -48,4 +50,5 @@ namespace X_Y {
         std::unique_ptr<CanvasImpl> m_Impl;
     };
 
-} // namespace X_Y
+} 
+// namespace X_Y

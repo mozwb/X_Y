@@ -34,6 +34,7 @@ namespace X_Y {
         virtual void OnScroll(float yDelta) {}
 
         // 内容告诉视口：滚动一步的像素粒度（如列表=行高，普通内容=1）
+
         virtual int GetScrollStep() const { return 1; }
 
         // 鼠标交互（localX/localY 为相对本组件的局部坐标）

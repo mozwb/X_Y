@@ -147,7 +147,7 @@ public:
     }
 
     void RequestRepaint() override {
-        if (m_Hwnd) ::InvalidateRect(m_Hwnd, nullptr, TRUE);
+        if (m_Hwnd) ::InvalidateRect(m_Hwnd, nullptr, FALSE);
     }
 
     void ValidateWindow() override {

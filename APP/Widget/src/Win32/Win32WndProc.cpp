@@ -66,6 +66,12 @@ LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         return 0;
     }
 
+    // 双缓冲：我们自己每帧全覆盖重绘，不需要系统用白刷擦背景
+    // 拦截 WM_ERASEBKGND，返回非 0 告知系统“背景已处理”，消除滚动/刷新时的白屏闪烁
+    if (msg == WM_ERASEBKGND && pThis) {
+        return 1;
+    }
+
     Movement* movement = nullptr;
     KeyCode key = NULL;
     MouseCode mbutton = NULL;
