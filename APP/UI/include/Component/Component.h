@@ -37,6 +37,14 @@ namespace X_Y {
 
         virtual int GetScrollStep() const { return 1; }
 
+        // 内容被滚动裁剪：通知可视区域
+        //   scrollOffset: 相对内容顶部的滚动偏移（像素）
+        //   viewHeight  : 可视区高度（像素）
+        // 默认空实现；像 ListBox 这类可按行裁剪的内容可 override 以只画可视区
+        virtual void SetViewport(int scrollOffset, int viewHeight) {
+            (void)scrollOffset; (void)viewHeight;
+        }
+
         // 鼠标交互（localX/localY 为相对本组件的局部坐标）
 
         virtual void OnMousePressed(int localX, int localY) {}

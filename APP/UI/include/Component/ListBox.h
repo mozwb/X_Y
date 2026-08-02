@@ -30,6 +30,12 @@ namespace X_Y {
 
         int GetScrollStep() const override { return m_LineHeight; }
 
+        // 记录滚动视口，OnPaint 只画可视区行
+        void SetViewport(int scrollOffset, int viewHeight) override {
+            m_ViewOffset = scrollOffset;
+            m_ViewHeight = viewHeight;
+        }
+
         int GetRowFromMouseY(int localY) const;
 
         void OnPaint(Canvas& canvas) override;
@@ -40,6 +46,8 @@ namespace X_Y {
         std::vector<ListBoxItem> m_Items;
         int m_SelectedIndex = -1;
         int m_LineHeight = 18;
+        int m_ViewOffset = 0;    // 滚动偏移（像素）
+        int m_ViewHeight = 0;    // 可视区高（像素）
     };
 
 }

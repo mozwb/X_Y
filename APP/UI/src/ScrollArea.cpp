@@ -71,6 +71,8 @@ namespace X_Y {
         int oldX = m_Content->GetX();
         int oldY = m_Content->GetY();
         m_Content->SetRect(x, y - m_ScrollOffset, viewW, m_Content->GetHeight());
+        // 通知内容本次可视范围（供支持可视裁剪的内容如 ListBox 只画可视行）
+        m_Content->SetViewport(m_ScrollOffset, h);
         m_Content->OnPaint(canvas);
         m_Content->SetRect(oldX, oldY, viewW, m_Content->GetHeight());
 

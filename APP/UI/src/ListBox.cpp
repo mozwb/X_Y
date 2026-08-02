@@ -27,8 +27,22 @@ namespace X_Y {
 
     void ListBox::OnPaint(Canvas& canvas) {
         int x = GetX(), y = GetY(), w = GetWidth();
+        int total = (int)m_Items.size();
+        if (total <= 0) return;
 
-        for (int i = 0; i < (int)m_Items.size(); i++) {
+        // 可视裁剪：只在 ScrollArea 里（m_ViewHeight 已设置）时生效，
+        // 只画屏上可视区 [rowFirst, rowLast) 的行，避免全量 DrawText。
+        int rowFirst = 0;
+        int rowLast = total;
+        if (m_ViewHeight > 0 && m_LineHeight > 0) {
+            rowFirst = m_ViewOffset / m_LineHeight;
+            rowLast  = (m_ViewOffset + m_ViewHeight) / m_LineHeight + 1;
+            if (rowFirst < 0) rowFirst = 0;
+            if (rowLast > total) rowLast = total;
+            if (rowFirst > rowLast) rowFirst = rowLast;
+        }
+
+        for (int i = rowFirst; i < rowLast; i++) {
             int rowY = y + i * m_LineHeight;
             int rowH = m_LineHeight;
 
