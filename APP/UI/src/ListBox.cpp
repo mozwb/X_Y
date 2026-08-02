@@ -1,4 +1,4 @@
-#include "Component/ListBox.h"
+﻿#include "UI/include/Component/ListBox.h"
 
 namespace X_Y {
 
@@ -32,6 +32,7 @@ namespace X_Y {
 
         // 可视裁剪：只在 ScrollArea 里（m_ViewHeight 已设置）时生效，
         // 只画屏上可视区 [rowFirst, rowLast) 的行，避免全量 DrawText。
+
         int rowFirst = 0;
         int rowLast = total;
         if (m_ViewHeight > 0 && m_LineHeight > 0) {
