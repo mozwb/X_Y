@@ -170,6 +170,8 @@ public:
         }
         Canvas canvas(w, hc, (void*)hdc);
         painter(canvas);
+        // 双缓冲：把内存位图一次性上屏
+        canvas.Flush();
         ReleaseDC(m_Hwnd, hdc);
     }
 

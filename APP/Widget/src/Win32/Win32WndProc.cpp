@@ -59,6 +59,8 @@ LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 
         Canvas canvas(w, h, (void*)hdc);
         pThis->OnPaint(&canvas);
+        // 双缓冲：把内存位图一次性上屏
+        canvas.Flush();
 
         EndPaint(hwnd, &ps);
         return 0;

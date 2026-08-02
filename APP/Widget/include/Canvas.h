@@ -20,6 +20,11 @@ namespace X_Y {
         int GetWidth() const { return m_Impl->GetWidth(); }
         int GetHeight() const { return m_Impl->GetHeight(); }
  
+        // 双缓冲：把内存中已画好的一帧一次性上屏
+        void Flush() {
+            m_Impl->Flush();
+        }
+
         void FillRect(int x, int y, int w, int h, uint32_t
             color) {
             m_Impl->FillRect(x, y, w, h, color);

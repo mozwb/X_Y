@@ -15,6 +15,9 @@ namespace X_Y {
         virtual int GetWidth() const = 0;
         virtual int GetHeight() const = 0;
 
+        // 双缓冲：把内存中已画好的一帧一次性上屏
+        virtual void Flush() = 0;
+
         virtual void FillRect(int x, int y, int w, int h, uint32_t
             color) = 0;
         virtual void DrawText(int x, int y, const char* text,
