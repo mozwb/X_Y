@@ -45,7 +45,8 @@ namespace X_Y {
 
         std::vector<ListBoxItem> m_Items;
         int m_SelectedIndex = -1;
-        int m_LineHeight = 18;
+        int m_LineHeight = 20;   // 行高 = 文字带高 + 行距
+        int m_LineSpacing = 4;   // 行距（文字带之间留白，防止背景吞 descender）
         int m_ViewOffset = 0;    // 滚动偏移（像素）
         int m_ViewHeight = 0;    // 可视区高（像素）
     };

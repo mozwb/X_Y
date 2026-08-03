@@ -35,7 +35,8 @@ public:
         if (height == 0) height = 600;
 
         wchar_t wTitle[256] = { 0 };
-        MultiByteToWideChar(CP_ACP, 0, title, -1, wTitle, _countof(wTitle));
+        // 标题按 UTF-8 转宽（全链路统一 UTF-8）
+        MultiByteToWideChar(CP_UTF8, 0, title, -1, wTitle, _countof(wTitle));
 
         DWORD dwStyle = TranslateWindowStyle(style);
 

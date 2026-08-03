@@ -79,7 +79,9 @@ namespace X_Y {
                 color & 0xFF
             ));
             SetBkMode(m_MemDC, TRANSPARENT);
-            TextOutA(m_MemDC, x, y, text, (int)strlen(text));
+            // UTF-8 → UTF-16，统一走宽字符（配合全局 /utf-8）
+            std::wstring ws = Utf8ToWide(text);
+            TextOutW(m_MemDC, x, y, ws.c_str(), (int)ws.size());
         }
 
         void DrawText(int x, int y, const wchar_t* text,
@@ -93,17 +95,12 @@ namespace X_Y {
             TextOutW(m_MemDC, x, y, text, (int)wcslen(text));
         }
 
-        // 组合拳：铺背景 + 写字（窄版，内部转宽再走宽版实现）
+        // 组合拳：铺背景 + 写字（窄版，UTF-8 转宽再走宽版实现）
         void FillText(int x, int y, int w, int h, int tx, int ty,
             const char* text, uint32_t textColor, uint32_t
             bgColor) override {
-            int len = ::MultiByteToWideChar(CP_UTF8, 0, text, -1,
-                nullptr, 0);
-            if (len <= 0) return;
-            std::wstring ws(len, L'\0');
-            ::MultiByteToWideChar(CP_UTF8, 0, text, -1, &ws[0], len);
-            if (!ws.empty() && ws.back() == L'\0')
-                ws.pop_back();
+            std::wstring ws = Utf8ToWide(text);
+            if (ws.empty()) return;
             FillText(x, y, w, h, tx, ty, ws.c_str(), textColor,
                 bgColor);
         }
@@ -163,6 +160,19 @@ namespace X_Y {
                 ::SelectObject(m_MemDC, f);
                 m_CurrentFont = f;
             }
+        }
+
+        // 简单 UTF-8 → UTF-16 转换（配合全局 /utf-8 编译，全链路 UTF-8）
+        static std::wstring Utf8ToWide(const char* text) {
+            if (!text) return L"";
+            int len = ::MultiByteToWideChar(CP_UTF8, 0, text, -1,
+                nullptr, 0);
+            if (len <= 0) return L"";
+            std::wstring ws(len, L'\0');
+            ::MultiByteToWideChar(CP_UTF8, 0, text, -1, &ws[0], len);
+            if (!ws.empty() && ws.back() == L'\0')
+                ws.pop_back();
+            return ws;
         }
 
         int m_Width, m_Height;

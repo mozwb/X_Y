@@ -7,6 +7,9 @@ workspace "X_Y"
     cppdialect "C++20"
     staticruntime "On"
 
+    -- 全局编译选项：强制源码 + 窄字符串字面量为 UTF-8（全链路统一编码）
+    buildoptions "/utf-8"
+
     -- �?全局包含：整个解决方案根目录（所有项目自动生效！�?
       includedirs
     {

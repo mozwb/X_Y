@@ -44,18 +44,19 @@ namespace X_Y {
         }
 
         for (int i = rowFirst; i < rowLast; i++) {
+            // 行定位：整行高(含行距)错开
             int rowY = y + i * m_LineHeight;
-            int rowH = m_LineHeight;
 
             // 行背景色：选中行用高亮，其余用窗口底色（LogViewer 铺的深底）
             uint32_t bgColor = 0xFF1E1E1E;
             if (i == m_SelectedIndex)
                 bgColor = 0x00D0E8FF;
 
-            // 组合拳：铺行背景 + 同背景色写字（ClearType 亚像素用真实背景）
-            // 背景整行 (x,rowY,w,rowH)；文字起点带缩进 (x+4,rowY+2)
-
-            canvas.FillText(x, rowY, w, rowH, x + 4, rowY + 2,
+            // 组合拳：铺行背景 + 同背景色写字。
+            // 背景盖整行高(m_LineHeight)；行间有 m_LineSpacing 留白隔离，
+            // 下一行背景起点在 rowY+m_LineHeight，不会覆盖上一行文字的
+            // descender（q/y/g 底部）。文字起点带缩进 (x+4,rowY+2)。
+            canvas.FillText(x, rowY, w, m_LineHeight, x + 4, rowY + 2,
                 m_Items[i].text.c_str(),
                 m_Items[i].textColor, bgColor);
         }
