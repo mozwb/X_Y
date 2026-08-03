@@ -7,6 +7,7 @@
 #include "Movement/include/KeyMovement.h"
 #include "Movement/include/MouseMovement.h"
 #include "Canvas.h"
+#include "Dpi.h"
 #include "Input/include/MapCode.h"
 
 namespace X_Y::Win32 {
@@ -31,8 +32,11 @@ LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pThis);
 
         RECT rect;
-        if (GetClientRect(hwnd, &rect))
-            pThis->SetActualSize(rect.right, rect.bottom);
+        if (GetClientRect(hwnd, &rect)) {
+            // 物理客户区 → 逻辑尺寸（DPI 缩放），存进 XWidget 供上层逻辑布局
+            float s = Dpi::GetScale();
+            pThis->SetActualSize((int)(rect.right / s), (int)(rect.bottom / s));
+        }
 
         return DefWindowProc(hwnd, msg, wParam, lParam);
     }
@@ -90,8 +94,12 @@ LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             return 0;
         }
         case WM_SIZE: {
-            int width = LOWORD(lParam);
+            int width = LOWORD(lParam);   // 物理像素
             int height = HIWORD(lParam);
+            // 物理 → 逻辑（DPI 缩放），存进 XWidget + 上层布局用逻辑
+            float s = Dpi::GetScale();
+            width = (int)(width / s);
+            height = (int)(height / s);
             pThis->SetActualSize(width, height);
             movement = new WindowResize(pThis, width, height);
             app->GetEventQueue().Push(movement);

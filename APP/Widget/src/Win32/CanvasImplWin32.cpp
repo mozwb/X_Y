@@ -1,5 +1,6 @@
 ﻿#include "CanvasImpl.h"
 #include "Widget/include/Font.h"
+#include "Dpi.h"
 #include <windows.h>
 #ifdef DrawText
 #undef DrawText
@@ -13,7 +14,14 @@ namespace X_Y {
               m_MemDC(nullptr), m_MemBitmap(nullptr), m_OldBitmap(nullptr),
               m_CurrentFont(nullptr)
         {
-            // 双缓冲：创建与窗口 DC 兼容的内存 DC + 位图
+            m_Scale = Dpi::GetScale();
+            // 位图用物理像素大小；逻辑尺寸 = 物理 / scale，供上层按逻辑布局。
+            m_LogicW = (int)(w / m_Scale);
+            m_LogicH = (int)(h / m_Scale);
+            if (m_LogicW < 1) m_LogicW = 1;
+            if (m_LogicH < 1) m_LogicH = 1;
+
+            // 双缓冲：创建与窗口 DC 兼容的内存 DC + 位图（物理像素）
             m_MemDC = ::CreateCompatibleDC(hdc);
             if (m_MemDC) {
                 m_MemBitmap = ::CreateCompatibleBitmap(hdc, w, h);
@@ -38,8 +46,8 @@ namespace X_Y {
                 ::DeleteDC(m_MemDC);
         }
 
-        int GetWidth() const override { return m_Width; }
-        int GetHeight() const override { return m_Height; }
+        int GetWidth() const override { return m_LogicW; }
+        int GetHeight() const override { return m_LogicH; }
 
         // 双缓冲：把内存位图一次性 BitBlt 到窗口 DC
         void Flush() override {
@@ -61,7 +69,8 @@ namespace X_Y {
 
         void FillRect(int x, int y, int w, int h, uint32_t
             color) override {
-            RECT rect = { x, y, x + w, y + h };
+            int px = S(x), py = S(y), pw = S(w), ph = S(h);
+            RECT rect = { px, py, px + pw, py + ph };
             HBRUSH brush = CreateSolidBrush(RGB(
                 (color >> 16) & 0xFF,
                 (color >> 8) & 0xFF,
@@ -81,7 +90,7 @@ namespace X_Y {
             SetBkMode(m_MemDC, TRANSPARENT);
             // UTF-8 → UTF-16，统一走宽字符（配合全局 /utf-8）
             std::wstring ws = Utf8ToWide(text);
-            TextOutW(m_MemDC, x, y, ws.c_str(), (int)ws.size());
+            TextOutW(m_MemDC, S(x), S(y), ws.c_str(), (int)ws.size());
         }
 
         void DrawText(int x, int y, const wchar_t* text,
@@ -92,7 +101,7 @@ namespace X_Y {
                 color & 0xFF
             ));
             SetBkMode(m_MemDC, TRANSPARENT);
-            TextOutW(m_MemDC, x, y, text, (int)wcslen(text));
+            TextOutW(m_MemDC, S(x), S(y), text, (int)wcslen(text));
         }
 
         // 组合拳：铺背景 + 写字（窄版，UTF-8 转宽再走宽版实现）
@@ -124,13 +133,14 @@ namespace X_Y {
                 (textColor >> 8) & 0xFF,
                 textColor & 0xFF
             ));
-            TextOutW(m_MemDC, tx, ty, text, (int)wcslen(text));
+            TextOutW(m_MemDC, S(tx), S(ty), text, (int)wcslen(text));
             // 4. 恢复 TRANSPARENT，防止污染后续绘制
             SetBkMode(m_MemDC, TRANSPARENT);
         }
 
         void SetClip(int x, int y, int w, int h) override {
-            HRGN rgn = CreateRectRgn(x, y, x + w, y + h);
+            int px = S(x), py = S(y), pw = S(w), ph = S(h);
+            HRGN rgn = CreateRectRgn(px, py, px + pw, py + ph);
             SelectClipRgn(m_MemDC, rgn);
             DeleteObject(rgn);
         }
@@ -140,6 +150,11 @@ namespace X_Y {
         }
 
     private:
+        // 逻辑坐标 → 物理像素（DPI 缩放）
+        int S(int v) const {
+            return (int)(v * m_Scale + 0.5f);
+        }
+
         // 用微软雅黑作为默认绘制字体（ClearType 抗锯齿）
         void ApplyDefaultFont() {
             if (!m_MemDC) return;
@@ -149,7 +164,7 @@ namespace X_Y {
             if (family.size() >= (size_t)LF_FACESIZE)
                 family.resize(LF_FACESIZE - 1);
             wcscpy_s(lf.lfFaceName, family.c_str());
-            lf.lfHeight = -14;            // 14px（像素坐标）
+            lf.lfHeight = -(int)(14 * m_Scale + 0.5f);  // 14px 逻辑字号，物理放大
             lf.lfWeight = FW_NORMAL;
             lf.lfQuality = CLEARTYPE_QUALITY;   // 抗锯齿
             lf.lfCharSet = DEFAULT_CHARSET;
@@ -175,7 +190,9 @@ namespace X_Y {
             return ws;
         }
 
-        int m_Width, m_Height;
+        int m_Width, m_Height;      // 物理像素（位图/窗口尺寸）
+        int m_LogicW, m_LogicH;     // 逻辑尺寸（供上层布局）
+        float m_Scale = 1.0f;       // DPI 缩放系数
         HDC m_Handle;
         HDC m_MemDC;
         HBITMAP m_MemBitmap;

@@ -1,4 +1,5 @@
 ﻿#include "Widget/include/Font.h"
+#include "Dpi.h"
 #include <windows.h>
 
 #ifdef DrawText
@@ -40,8 +41,9 @@ namespace X_Y {
             wcscpy_s(lf.lfFaceName, wfamily.c_str());
 
             // 负值 = 以像素为单位（与窗口/Canvas 像素坐标一致，避免 DPI 混淆）
-
-            lf.lfHeight = -m_Desc.size;
+            // 逻辑字号 → 物理像素（DPI-aware 后需自行放大）
+            float s = Dpi::GetScale();
+            lf.lfHeight = -(int)(m_Desc.size * s + 0.5f);
             lf.lfWeight = m_Desc.bold ? FW_BOLD : FW_NORMAL;
             lf.lfQuality = ToGdiQuality(m_Desc.quality);
             lf.lfCharSet = DEFAULT_CHARSET;

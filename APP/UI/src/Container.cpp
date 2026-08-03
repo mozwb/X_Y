@@ -2,6 +2,7 @@
 #include "Component/Component.h"
 #include "Movement/include/KeyMovement.h"
 #include "Movement/include/MouseMovement.h"
+#include "Widget/include/Dpi.h"
 
 namespace X_Y {
 
@@ -36,6 +37,10 @@ Container::Container(XWidget* parent)
         GetMouseScreenPos(sx, sy);
         ScreenToClient(sx, sy);
 
+        // 物理 → 逻辑（DPI 缩放），命中测试用逻辑坐标
+        float s = Dpi::GetScale();
+        sx = (int)(sx / s); sy = (int)(sy / s);
+
         Component* hit = HitTest(sx, sy);
         if (hit && hit->IsVisible()) {
             hit->OnScroll(ms.GetYOffset());
@@ -47,6 +52,10 @@ Container::Container(XWidget* parent)
         int sx = 0, sy = 0;
         GetMouseScreenPos(sx, sy);
         ScreenToClient(sx, sy);
+
+        // 物理 → 逻辑（DPI 缩放），命中测试用逻辑坐标
+        float s = Dpi::GetScale();
+        sx = (int)(sx / s); sy = (int)(sy / s);
 
         // 旧焦点取消
         for (auto* comp : m_Components) {
@@ -78,6 +87,10 @@ Container::Container(XWidget* parent)
         GetMouseScreenPos(sx, sy);
         ScreenToClient(sx, sy);
 
+        // 物理 → 逻辑（DPI 缩放），命中测试用逻辑坐标
+        float s = Dpi::GetScale();
+        sx = (int)(sx / s); sy = (int)(sy / s);
+
         if (m_DragTarget) {
             m_DragTarget->OnMouseMoved(sx - m_DragTarget->GetX(), sy - m_DragTarget->GetY());
         }
@@ -93,6 +106,10 @@ Container::Container(XWidget* parent)
         int sx = 0, sy = 0;
         GetMouseScreenPos(sx, sy);
         ScreenToClient(sx, sy);
+
+        // 物理 → 逻辑（DPI 缩放），命中测试用逻辑坐标
+        float s = Dpi::GetScale();
+        sx = (int)(sx / s); sy = (int)(sy / s);
 
         if (m_DragTarget) {
             m_DragTarget->OnMouseReleased(sx - m_DragTarget->GetX(), sy - m_DragTarget->GetY());

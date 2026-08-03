@@ -1,6 +1,7 @@
 ﻿#include "Win32/WindowImplWin32.h"
 #include "Win32/Win32Globals.h"
 #include "Canvas.h"
+#include "Dpi.h"
 #include <windows.h>
 #include <cstdint>
 
@@ -33,6 +34,11 @@ public:
     {
         if (width == 0) width = 800;
         if (height == 0) height = 600;
+
+        // 逻辑尺寸 → 物理像素（DPI-aware 后窗口不再自动缩放）
+        float s = Dpi::GetScale();
+        width  = (uint32_t)(width  * s);
+        height = (uint32_t)(height * s);
 
         wchar_t wTitle[256] = { 0 };
         // 标题按 UTF-8 转宽（全链路统一 UTF-8）

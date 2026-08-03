@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include "UI/include/Component/Component.h"
+#include "Widget/include/Dpi.h"
 
 namespace X_Y {
 
@@ -31,8 +32,11 @@ namespace X_Y {
         }
 
         // 滚轮输入：yDelta>0 向上滚(看更早)，<0 向下滚
+        // yDelta 是物理滚轮单位，需转逻辑(÷scale)再乘逻辑步长，
+        // 否则 150% 屏下次滚动量偏大。
         void OnScroll(float yDelta) override {
-            ScrollBy((int)(yDelta * GetScrollStep()));
+            float s = Dpi::GetScale();
+            ScrollBy((int)(yDelta / s * GetScrollStep()));
         }
 
         // 滑块交互：拖动 + 点击轨道翻页
