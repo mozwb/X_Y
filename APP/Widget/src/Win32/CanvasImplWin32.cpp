@@ -93,6 +93,45 @@ namespace X_Y {
             TextOutW(m_MemDC, x, y, text, (int)wcslen(text));
         }
 
+        // 组合拳：铺背景 + 写字（窄版，内部转宽再走宽版实现）
+        void FillText(int x, int y, int w, int h, int tx, int ty,
+            const char* text, uint32_t textColor, uint32_t
+            bgColor) override {
+            int len = ::MultiByteToWideChar(CP_UTF8, 0, text, -1,
+                nullptr, 0);
+            if (len <= 0) return;
+            std::wstring ws(len, L'\0');
+            ::MultiByteToWideChar(CP_UTF8, 0, text, -1, &ws[0], len);
+            if (!ws.empty() && ws.back() == L'\0')
+                ws.pop_back();
+            FillText(x, y, w, h, tx, ty, ws.c_str(), textColor,
+                bgColor);
+        }
+
+        // 组合拳：铺背景 + 写字（宽版核心）
+        void FillText(int x, int y, int w, int h, int tx, int ty,
+            const wchar_t* text, uint32_t textColor, uint32_t
+            bgColor) override {
+            // 1. 铺背景（底是啥不用管，反正我们填）
+            FillRect(x, y, w, h, bgColor);
+            // 2. 文字透明背景 = 同一背景色（ClearType 亚像素需已知背景）
+            SetBkMode(m_MemDC, OPAQUE);
+            SetBkColor(m_MemDC, RGB(
+                (bgColor >> 16) & 0xFF,
+                (bgColor >> 8) & 0xFF,
+                bgColor & 0xFF
+            ));
+            // 3. 写文字（起点用 tx,ty，可与背景错开）
+            SetTextColor(m_MemDC, RGB(
+                (textColor >> 16) & 0xFF,
+                (textColor >> 8) & 0xFF,
+                textColor & 0xFF
+            ));
+            TextOutW(m_MemDC, tx, ty, text, (int)wcslen(text));
+            // 4. 恢复 TRANSPARENT，防止污染后续绘制
+            SetBkMode(m_MemDC, TRANSPARENT);
+        }
+
         void SetClip(int x, int y, int w, int h) override {
             HRGN rgn = CreateRectRgn(x, y, x + w, y + h);
             SelectClipRgn(m_MemDC, rgn);

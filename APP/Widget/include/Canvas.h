@@ -18,6 +18,7 @@ namespace X_Y {
                 nativeHandle)), m_DefaultFont()
         {
             // 默认字体：微软雅黑 ClearType，让所有 DrawText 立即清晰抗锯齿
+
             m_Impl->SetFont(m_DefaultFont);
         }
 
@@ -49,6 +50,38 @@ namespace X_Y {
             uint32_t color) {
             m_Impl->DrawText(x, y, text, color);
         }
+
+        // ============================================================
+        // 文字渲染背景策略预留（别写死，将来别瞎加接口）
+        //   文字就两种场景；若将来又冒出第三种，先停下来想清楚，
+        //   别造新参数/新函数：
+        //   场景1「要一块背景」→ 用 FillText：填底 + 写字，
+        //                       底是啥不用管，反正都是我们填。
+        //   场景2「只写字」   → 将来写在任意位置(图片/渐变/已有内容)
+        //                       之上，需要读取底层真实背景给
+        //                       ClearType，到时再补读底层背景的接口，
+        //                       现在不做。
+        //   禁止事项：不搞"全局默认背景色"状态、不做 TextBg
+        //   枚举策略、不上全能 DrawTextEx，两个场景对应两个函数就够。
+        // ============================================================
+
+        void FillText(int x, int y, int w, int h, int tx, int ty,
+            const char* text, uint32_t textColor, uint32_t bgColor,
+            const Font* font = nullptr) {
+            if (font)
+                m_Impl->SetFont(*font);
+            m_Impl->FillText(x, y, w, h, tx, ty, text, textColor,
+                bgColor);
+        }
+        void FillText(int x, int y, int w, int h, int tx, int ty,
+            const wchar_t* text, uint32_t textColor, uint32_t
+            bgColor, const Font* font = nullptr) {
+            if (font)
+                m_Impl->SetFont(*font);
+            m_Impl->FillText(x, y, w, h, tx, ty, text, textColor,
+                bgColor);
+        }
+
         void SetClip(int x, int y, int w, int h) {
             m_Impl->SetClip(x, y, w, h);
         }

@@ -47,13 +47,17 @@ namespace X_Y {
             int rowY = y + i * m_LineHeight;
             int rowH = m_LineHeight;
 
-            if (i == m_SelectedIndex) {
-                canvas.FillRect(x, rowY, w, rowH, 0x00D0E8FF);
-            }
+            // 行背景色：选中行用高亮，其余用窗口底色（LogViewer 铺的深底）
+            uint32_t bgColor = 0xFF1E1E1E;
+            if (i == m_SelectedIndex)
+                bgColor = 0x00D0E8FF;
 
-            canvas.DrawText(x + 4, rowY + 2,
+            // 组合拳：铺行背景 + 同背景色写字（ClearType 亚像素用真实背景）
+            // 背景整行 (x,rowY,w,rowH)；文字起点带缩进 (x+4,rowY+2)
+
+            canvas.FillText(x, rowY, w, rowH, x + 4, rowY + 2,
                 m_Items[i].text.c_str(),
-                m_Items[i].textColor);
+                m_Items[i].textColor, bgColor);
         }
     }
 

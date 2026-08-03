@@ -28,6 +28,16 @@ namespace X_Y {
             uint32_t color) = 0;
         virtual void DrawText(int x, int y, const wchar_t* text,
             uint32_t color) = 0;
+
+        // 组合拳：铺背景 + 写字（背景一次传入，ClearType 用同一背景色）
+        // (x,y,w,h)=背景矩形；(tx,ty)=文字起点，可与背景错开(缩进/偏移)。
+        // 窄/宽字符两版，窄版在平台实现层转宽。
+        virtual void FillText(int x, int y, int w, int h, int tx,
+            int ty, const char* text, uint32_t textColor, uint32_t
+            bgColor) = 0;
+        virtual void FillText(int x, int y, int w, int h, int tx,
+            int ty, const wchar_t* text, uint32_t textColor,
+            uint32_t bgColor) = 0;
         virtual void SetClip(int x, int y, int w, int h) = 0;
         virtual void ResetClip() = 0;
     };
