@@ -1,0 +1,269 @@
+[38;2;80;220;100m[D:\workbench\X_Y\APP\Widget\src\Entry.cpp:18:WinMain][2026-08-03][15:54:13][log][INFO]:程序运行到入口[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:10:X_Y::XWidget::XWidget][2026-08-03][15:54:13][log][DEBUG]:XWidget 构造执行，parent=0[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:10:X_Y::XWidget::XWidget][2026-08-03][15:54:13][log][DEBUG]:XWidget 构造执行，parent=62816[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:18:X_Y::XWidget::XWidget][2026-08-03][15:54:13][log][DEBUG]:子窗口构造执行[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:10:X_Y::XWidget::XWidget][2026-08-03][15:54:13][log][DEBUG]:XWidget 构造执行，parent=62816[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:18:X_Y::XWidget::XWidget][2026-08-03][15:54:13][log][DEBUG]:子窗口构造执行[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:10:X_Y::XWidget::XWidget][2026-08-03][15:54:13][log][DEBUG]:XWidget 构造执行，parent=62816[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:18:X_Y::XWidget::XWidget][2026-08-03][15:54:13][log][DEBUG]:子窗口构造执行[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:10:X_Y::XWidget::XWidget][2026-08-03][15:54:13][log][DEBUG]:XWidget 构造执行，parent=62816[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:18:X_Y::XWidget::XWidget][2026-08-03][15:54:13][log][DEBUG]:子窗口构造执行[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:10:X_Y::XWidget::XWidget][2026-08-03][15:54:13][log][DEBUG]:XWidget 构造执行，parent=62816[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:18:X_Y::XWidget::XWidget][2026-08-03][15:54:13][log][DEBUG]:子窗口构造执行[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:38:X_Y::XWidget::show][2026-08-03][15:54:13][log][INFO]:窗口未创建，自动创建窗口: [0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:10:X_Y::XWidget::XWidget][2026-08-03][15:54:13][log][DEBUG]:XWidget 构造执行，parent=0[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:38:X_Y::XWidget::show][2026-08-03][15:54:13][log][INFO]:窗口未创建，自动创建窗口: X_Y[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:10:X_Y::XWidget::XWidget][2026-08-03][15:54:13][log][DEBUG]:XWidget 构造执行，parent=0[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:13][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:38:X_Y::XWidget::show][2026-08-03][15:54:13][log][INFO]:窗口未创建，自动创建窗口: 窗口 2 - 进制面板[0m
+[38;2;80;220;100m[D:\workbench\X_Y\Test\src\main.cpp:27:main][2026-08-03][15:54:13][log][INFO]:LogViewer 测试启动 —— 日志将通过 DataStore 显示[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:13][log][DEBUG]:窗口resize: 1265x682[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:13][log][DEBUG]:窗口resize: 785x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:13][log][DEBUG]:窗口resize: 285x162[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\UI\src\DockLayer.cpp:50:X_Y::DockLayer::OnEvent][2026-08-03][15:54:18][log][INFO]:[DockLayer] drag BEGIN: X_Y[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:23][log][DEBUG]:窗口resize: 786x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:23][log][DEBUG]:窗口resize: 794x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:23][log][DEBUG]:窗口resize: 823x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:23][log][DEBUG]:窗口resize: 880x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:23][log][DEBUG]:窗口resize: 941x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:23][log][DEBUG]:窗口resize: 977x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:23][log][DEBUG]:窗口resize: 990x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:23][log][DEBUG]:窗口resize: 990x562[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\UI\src\DockLayer.cpp:50:X_Y::DockLayer::OnEvent][2026-08-03][15:54:24][log][INFO]:[DockLayer] drag BEGIN: X_Y[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:38:X_Y::XWidget::show][2026-08-03][15:54:25][log][INFO]:窗口未创建，自动创建窗口: X_Y[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:38:X_Y::XWidget::show][2026-08-03][15:54:25][log][INFO]:窗口未创建，自动创建窗口: X_Y[0m
+[38;2;255;80;80m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:43:X_Y::XWidget::show][2026-08-03][15:54:25][log][ERROR]:窗口创建失败[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:38:X_Y::XWidget::show][2026-08-03][15:54:25][log][INFO]:窗口未创建，自动创建窗口: X_Y[0m
+[38;2;255;80;80m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:43:X_Y::XWidget::show][2026-08-03][15:54:25][log][ERROR]:窗口创建失败[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:38:X_Y::XWidget::show][2026-08-03][15:54:25][log][INFO]:窗口未创建，自动创建窗口: X_Y[0m
+[38;2;255;80;80m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:43:X_Y::XWidget::show][2026-08-03][15:54:25][log][ERROR]:窗口创建失败[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:38:X_Y::XWidget::show][2026-08-03][15:54:25][log][INFO]:窗口未创建，自动创建窗口: X_Y[0m
+[38;2;255;80;80m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:43:X_Y::XWidget::show][2026-08-03][15:54:25][log][ERROR]:窗口创建失败[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\UI\src\DockLayer.cpp:82:X_Y::DockLayer::OnEvent][2026-08-03][15:54:25][log][INFO]:[DockLayer] dock done: X_Y -> area 2[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:25][log][DEBUG]:窗口resize: 100x100[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:25][log][DEBUG]:窗口resize: 843x454[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\UI\src\DockLayer.cpp:50:X_Y::DockLayer::OnEvent][2026-08-03][15:54:29][log][INFO]:[DockLayer] drag BEGIN: X_Y[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:35][log][DEBUG]:回调被删除[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\Widget\src\Entry.cpp:18:WinMain][2026-08-03][15:54:37][log][INFO]:程序运行到入口[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:10:X_Y::XWidget::XWidget][2026-08-03][15:54:37][log][DEBUG]:XWidget 构造执行，parent=0[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:10:X_Y::XWidget::XWidget][2026-08-03][15:54:37][log][DEBUG]:XWidget 构造执行，parent=62624[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:18:X_Y::XWidget::XWidget][2026-08-03][15:54:37][log][DEBUG]:子窗口构造执行[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:10:X_Y::XWidget::XWidget][2026-08-03][15:54:37][log][DEBUG]:XWidget 构造执行，parent=62624[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:18:X_Y::XWidget::XWidget][2026-08-03][15:54:37][log][DEBUG]:子窗口构造执行[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:10:X_Y::XWidget::XWidget][2026-08-03][15:54:37][log][DEBUG]:XWidget 构造执行，parent=62624[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:18:X_Y::XWidget::XWidget][2026-08-03][15:54:37][log][DEBUG]:子窗口构造执行[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:10:X_Y::XWidget::XWidget][2026-08-03][15:54:37][log][DEBUG]:XWidget 构造执行，parent=62624[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:18:X_Y::XWidget::XWidget][2026-08-03][15:54:37][log][DEBUG]:子窗口构造执行[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:10:X_Y::XWidget::XWidget][2026-08-03][15:54:37][log][DEBUG]:XWidget 构造执行，parent=62624[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:18:X_Y::XWidget::XWidget][2026-08-03][15:54:37][log][DEBUG]:子窗口构造执行[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:38:X_Y::XWidget::show][2026-08-03][15:54:37][log][INFO]:窗口未创建，自动创建窗口: [0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:10:X_Y::XWidget::XWidget][2026-08-03][15:54:37][log][DEBUG]:XWidget 构造执行，parent=0[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:38:X_Y::XWidget::show][2026-08-03][15:54:37][log][INFO]:窗口未创建，自动创建窗口: X_Y[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:10:X_Y::XWidget::XWidget][2026-08-03][15:54:37][log][DEBUG]:XWidget 构造执行，parent=0[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:99:X_Y::MovementDispatcher::Connect][2026-08-03][15:54:37][log][DEBUG]:入队加一；X_Y::MovementType)[0m
+[38;2;80;220;100m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:38:X_Y::XWidget::show][2026-08-03][15:54:37][log][INFO]:窗口未创建，自动创建窗口: 窗口 2 - 进制面板[0m
+[38;2;80;220;100m[D:\workbench\X_Y\Test\src\main.cpp:27:main][2026-08-03][15:54:37][log][INFO]:LogViewer 测试启动 —— 日志将通过 DataStore 显示[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:37][log][DEBUG]:窗口resize: 1265x682[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:37][log][DEBUG]:窗口resize: 785x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:37][log][DEBUG]:窗口resize: 285x162[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 786x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 789x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 794x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 803x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 814x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 828x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 843x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 859x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 879x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 899x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 916x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 934x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 948x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 961x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 973x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 981x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 988x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 993x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 998x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 1000x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 1004x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 1006x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 1007x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Widget\src\XWidget.cpp:32:X_Y::XWidget::{ctor}::<lambda_1>::operator ()][2026-08-03][15:54:40][log][DEBUG]:窗口resize: 1008x562[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m
+[38;2;90;180;255m[D:\workbench\X_Y\APP\Movement\include\movements.h:170:X_Y::MovementDispatcher::disConnect][2026-08-03][15:54:47][log][DEBUG]:回调被删除[0m

@@ -38,6 +38,8 @@ void DockLayer::OnEvent(XMovement* event)
         int screenX, screenY;
         BaseWin::GetMouseScreenPos(screenX, screenY);
         int clientX = screenX, clientY = screenY;
+        // 停靠判定用逻辑坐标：与 Docker 内部布局(HitTestArea/预览/Canvas)一致，
+        // 鼠标屏幕物理坐标经 ScreenToClient 已转逻辑。
         m_Owner->ScreenToClient(clientX, clientY);
         int w = m_Owner->GetActualWidth();
         int h = m_Owner->GetActualHeight();
@@ -72,6 +74,7 @@ void DockLayer::OnEvent(XMovement* event)
         
         {
             int clientX = mx, clientY = my;
+            // 停靠判定用逻辑坐标，与 Docker 内部布局一致
             m_Owner->ScreenToClient(clientX, clientY);
             int w = m_Owner->GetActualWidth();
             int h = m_Owner->GetActualHeight();
@@ -110,6 +113,7 @@ void DockLayer::OnEvent(XMovement* event)
         BaseWin::GetMouseScreenPos(screenX, screenY);
 
         int clientX = screenX, clientY = screenY;
+        // 停靠判定用逻辑坐标，与 Docker 内部布局一致
         m_Owner->ScreenToClient(clientX, clientY);
         int w = m_Owner->GetActualWidth();
         int h = m_Owner->GetActualHeight();

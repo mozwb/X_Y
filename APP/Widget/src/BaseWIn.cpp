@@ -67,6 +67,18 @@ void BaseWin::ClientToScreen(int& x, int& y) const {
     if (m_Impl) m_Impl->ClientToScreen(x, y);
 }
 
+void BaseWin::ScreenToClientPhysical(int& x, int& y) const {
+    if (m_Impl) m_Impl->ScreenToClientPhysical(x, y);
+}
+
+void BaseWin::ClientToScreenPhysical(int& x, int& y) const {
+    if (m_Impl) m_Impl->ClientToScreenPhysical(x, y);
+}
+
+void BaseWin::GetClientRectPhysical(int& l, int& t, int& r, int& b) const {
+    if (m_Impl) m_Impl->GetClientRectPhysical(l, t, r, b);
+}
+
 // ── 鼠标 & 光标 ───────────────────────────────
 
 void BaseWin::CaptureMouse() {

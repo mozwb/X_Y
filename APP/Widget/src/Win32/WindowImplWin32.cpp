@@ -101,33 +101,60 @@ public:
         return true;
     }
 
-    void GetClientRect(int& l, int& t, int& r, int& b) const override {
+    void GetClientRect(int& l, int& t, int& r, int& b) const override { // 逻辑
+        if (!m_Hwnd) { l = t = r = b = 0; return; }
+        RECT rc; ::GetClientRect(m_Hwnd, &rc);
+        float s = Dpi::GetScale();
+        l = (int)(rc.left  / s); t = (int)(rc.top    / s);
+        r = (int)(rc.right / s); b = (int)(rc.bottom / s);
+    }
+
+    uint32_t GetClientWidth() const override {  // 逻辑
+        int l, t, r, b; GetClientRect(l, t, r, b); return (uint32_t)(r - l);
+    }
+
+    uint32_t GetClientHeight() const override { // 逻辑
+        int l, t, r, b; GetClientRect(l, t, r, b); return (uint32_t)(b - t);
+    }
+
+    void GetClientRectPhysical(int& l, int& t, int& r, int& b) const override { // 物理
         if (!m_Hwnd) { l = t = r = b = 0; return; }
         RECT rc; ::GetClientRect(m_Hwnd, &rc);
         l = rc.left; t = rc.top; r = rc.right; b = rc.bottom;
     }
 
-    uint32_t GetClientWidth() const override {
-        if (!m_Hwnd) return 0;
-        RECT rc; ::GetClientRect(m_Hwnd, &rc);
-        return rc.right - rc.left;
+    uint32_t GetClientWidthPhysical() const override { // 物理
+        int l, t, r, b; GetClientRectPhysical(l, t, r, b); return (uint32_t)(r - l);
     }
 
-    uint32_t GetClientHeight() const override {
-        if (!m_Hwnd) return 0;
-        RECT rc; ::GetClientRect(m_Hwnd, &rc);
-        return rc.bottom - rc.top;
+    uint32_t GetClientHeightPhysical() const override { // 物理
+        int l, t, r, b; GetClientRectPhysical(l, t, r, b); return (uint32_t)(b - t);
     }
 
-    void SetClientSize(uint32_t width, uint32_t height) override {}
+    void SetClientSize(uint32_t width, uint32_t height) override {} // 逻辑宽高
 
-    void ScreenToClient(int& x, int& y) const override {
+    void ScreenToClient(int& x, int& y) const override {  // 输入物理, 输出逻辑
+        if (!m_Hwnd) return;
+        POINT pt = { x, y }; ::ScreenToClient(m_Hwnd, &pt);
+        float s = Dpi::GetScale();
+        x = (int)(pt.x / s); y = (int)(pt.y / s);
+    }
+
+    void ClientToScreen(int& x, int& y) const override {  // 输入逻辑, 输出物理
+        if (!m_Hwnd) return;
+        float s = Dpi::GetScale();
+        POINT pt = { (LONG)(x * s), (LONG)(y * s) };
+        ::ClientToScreen(m_Hwnd, &pt);
+        x = pt.x; y = pt.y;
+    }
+
+    void ScreenToClientPhysical(int& x, int& y) const override { // 物理 → 物理
         if (!m_Hwnd) return;
         POINT pt = { x, y }; ::ScreenToClient(m_Hwnd, &pt);
         x = pt.x; y = pt.y;
     }
 
-    void ClientToScreen(int& x, int& y) const override {
+    void ClientToScreenPhysical(int& x, int& y) const override { // 物理 → 物理
         if (!m_Hwnd) return;
         POINT pt = { x, y }; ::ClientToScreen(m_Hwnd, &pt);
         x = pt.x; y = pt.y;

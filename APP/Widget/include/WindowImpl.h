@@ -80,16 +80,27 @@ namespace X_Y {
         virtual bool SetParent(void* newParent) = 0;
 
         // ── 窗口尺寸 ──────────────────────────────
-        
-        virtual void GetClientRect(int& left, int& top, int& right, int& bottom) const = 0;
-        virtual uint32_t GetClientWidth() const = 0;
-        virtual uint32_t GetClientHeight() const = 0;
-        virtual void SetClientSize(uint32_t width, uint32_t height) = 0;
+        // ⚠️ 下列方法默认返回/接收【逻辑坐标】（已按 DPI ÷scale）。
+        //   物理版本用带 Physical 后缀的接口。
+
+        virtual void GetClientRect(int& left, int& top, int& right, int& bottom) const = 0; // 逻辑
+        virtual uint32_t GetClientWidth() const = 0;   // 逻辑
+        virtual uint32_t GetClientHeight() const = 0;  // 逻辑
+        virtual void SetClientSize(uint32_t width, uint32_t height) = 0; // 逻辑宽高
+
+        // ── 窗口尺寸（物理像素，供需要真实像素的系统级功能使用）──
+        virtual void GetClientRectPhysical(int& left, int& top, int& right, int& bottom) const = 0;
+        virtual uint32_t GetClientWidthPhysical() const = 0;
+        virtual uint32_t GetClientHeightPhysical() const = 0;
 
         // ── 坐标转换 ──────────────────────────────
-        
-        virtual void ScreenToClient(int& x, int& y) const = 0;
-        virtual void ClientToScreen(int& x, int& y) const = 0;
+        // ScreenToClient / ClientToScreen 默认【逻辑】，物理版带 Physical 后缀。
+        // 注意：滚动派生量（滚轮 delta）不是经此接口，需调用方按需 ÷scale。
+
+        virtual void ScreenToClient(int& x, int& y) const = 0;   // 输出逻辑
+        virtual void ClientToScreen(int& x, int& y) const = 0;   // 输入逻辑
+        virtual void ScreenToClientPhysical(int& x, int& y) const = 0; // 输出物理
+        virtual void ClientToScreenPhysical(int& x, int& y) const = 0; // 输入物理
 
         // ── 重绘请求 ──────────────────────────────
 

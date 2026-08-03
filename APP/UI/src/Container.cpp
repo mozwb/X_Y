@@ -35,11 +35,7 @@ Container::Container(XWidget* parent)
         auto& ms = dynamic_cast<const MouseScrolled&>(e);
         int sx = 0, sy = 0;
         GetMouseScreenPos(sx, sy);
-        ScreenToClient(sx, sy);
-
-        // 物理 → 逻辑（DPI 缩放），命中测试用逻辑坐标
-        float s = Dpi::GetScale();
-        sx = (int)(sx / s); sy = (int)(sy / s);
+        ScreenToClient(sx, sy);   // 已返回逻辑坐标
 
         Component* hit = HitTest(sx, sy);
         if (hit && hit->IsVisible()) {
@@ -51,11 +47,7 @@ Container::Container(XWidget* parent)
     Connect(this, MovementType::MouseButtonPressed, this, [this](const XMovement& e) {
         int sx = 0, sy = 0;
         GetMouseScreenPos(sx, sy);
-        ScreenToClient(sx, sy);
-
-        // 物理 → 逻辑（DPI 缩放），命中测试用逻辑坐标
-        float s = Dpi::GetScale();
-        sx = (int)(sx / s); sy = (int)(sy / s);
+        ScreenToClient(sx, sy);   // 已返回逻辑坐标
 
         // 旧焦点取消
         for (auto* comp : m_Components) {
@@ -85,11 +77,7 @@ Container::Container(XWidget* parent)
     Connect(this, MovementType::MouseMoved, this, [this](const XMovement& e) {
         int sx = 0, sy = 0;
         GetMouseScreenPos(sx, sy);
-        ScreenToClient(sx, sy);
-
-        // 物理 → 逻辑（DPI 缩放），命中测试用逻辑坐标
-        float s = Dpi::GetScale();
-        sx = (int)(sx / s); sy = (int)(sy / s);
+        ScreenToClient(sx, sy);   // 已返回逻辑坐标
 
         if (m_DragTarget) {
             m_DragTarget->OnMouseMoved(sx - m_DragTarget->GetX(), sy - m_DragTarget->GetY());
@@ -105,11 +93,7 @@ Container::Container(XWidget* parent)
     Connect(this, MovementType::MouseButtonReleased, this, [this](const XMovement& e) {
         int sx = 0, sy = 0;
         GetMouseScreenPos(sx, sy);
-        ScreenToClient(sx, sy);
-
-        // 物理 → 逻辑（DPI 缩放），命中测试用逻辑坐标
-        float s = Dpi::GetScale();
-        sx = (int)(sx / s); sy = (int)(sy / s);
+        ScreenToClient(sx, sy);   // 已返回逻辑坐标
 
         if (m_DragTarget) {
             m_DragTarget->OnMouseReleased(sx - m_DragTarget->GetX(), sy - m_DragTarget->GetY());

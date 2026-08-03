@@ -18,16 +18,30 @@ namespace X_Y {
 
         void* GetNativeHandle() const { return m_Impl ? m_Impl->GetNativeHandle() : nullptr; }
 
-        uint GetActualWidth() const { return m_ActualWidth; }
-        uint GetActualHeight() const { return m_ActualHeight; }
-        void SetActualSize(uint width, uint height) {
+        uint GetActualWidth() const { return m_ActualWidth; }       // 逻辑宽
+        uint GetActualHeight() const { return m_ActualHeight; }     // 逻辑高
+        // 物理宽/高（真实像素，供系统级功能如 DockLayer 停靠）
+        uint GetActualWidthPhysical() const {
+            return m_Impl ? m_Impl->GetClientWidthPhysical() : m_ActualWidth;
+        }
+        uint GetActualHeightPhysical() const {
+            return m_Impl ? m_Impl->GetClientHeightPhysical() : m_ActualHeight;
+        }
+        void SetActualSize(uint width, uint height) {   // 逻辑宽高
             m_ActualWidth = width; m_ActualHeight = height;
         }
 
         // ── 跨平台工具方法 ──────────────────────────────
+        // ⚠️ 坐标约定（重要，改代码前先看）：
+        //   默认方法（无后缀）返回/接收【逻辑坐标】，供 UI 布局/绘制/命中测试用。
+        //   需要真实像素的地方（如 DockLayer 停靠区判定、跨窗口坐标）
+        //   用带 Physical 后缀的方法。上层不用自己乘/除 scale。
         void GetScreenRect(int& left, int& top, int& right, int& bottom) const;
-        void ScreenToClient(int& x, int& y) const;
-        void ClientToScreen(int& x, int& y) const;
+        void ScreenToClient(int& x, int& y) const;          // 物理屏幕→逻辑客户区
+        void ClientToScreen(int& x, int& y) const;          // 逻辑客户区→物理屏幕
+        void ScreenToClientPhysical(int& x, int& y) const;  // 物理屏幕→物理客户区
+        void ClientToScreenPhysical(int& x, int& y) const;  // 物理客户区→物理屏幕
+        void GetClientRectPhysical(int& l, int& t, int& r, int& b) const; // 物理客户区
         void CaptureMouse();
         void ReleaseMouseCapture();
         void* GetParentNativeHandle() const;
