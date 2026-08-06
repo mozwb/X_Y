@@ -1,17 +1,7 @@
 #include "UI/include/Component/TagBar.h"
 #include <algorithm>
-#include <cstdio>
 
 namespace X_Y {
-
-    // —— 临时调试：记录鼠标事件，定位"删除不生效" ——
-    static void LogDebug(const std::string& msg) {
-        // 追加写文件，避免跨平台依赖；定位完删掉
-        if (FILE* f = std::fopen("D:/workbench/tagbar_debug.txt", "a")) {
-            std::fprintf(f, "%s\n", msg.c_str());
-            std::fclose(f);
-        }
-    }
 
     void TagBar::AddTag(const std::string& tag) {
         if (tag.empty()) return;
@@ -135,14 +125,10 @@ namespace X_Y {
     }
 
     void TagBar::OnMousePressed(int localX, int localY) {
-        LogDebug("OnMousePressed local=(" + std::to_string(localX) + "," + std::to_string(localY) + ") tags=" + std::to_string(m_Tags.size()));
         int idx = HitTest(localX, localY);
-        LogDebug("  HitTest idx=" + std::to_string(idx));
-        bool inClose = idx >= 0 && IsInClose(idx, localX, localY);
-        LogDebug("  inClose=" + std::to_string(inClose) + " OnTagRemove=" + std::to_string(OnTagRemove != nullptr));
-        if (inClose && OnTagRemove) {
-            LogDebug("  -> remove tag: " + m_Tags[idx]);
-            OnTagRemove(m_Tags[idx]);
+        if (idx >= 0 && IsInClose(idx, localX, localY)) {
+            if (idx < (int)m_Tags.size() && OnTagRemove)
+                OnTagRemove(m_Tags[idx]);
         }
     }
 
