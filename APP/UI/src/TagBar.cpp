@@ -30,10 +30,10 @@ namespace X_Y {
 
     int TagBar::Measure(Canvas& canvas) {
         int contentW = GetWidth();
-        if (contentW <= 0) {
+        if (contentW <= 0 || m_Tags.empty()) {
             m_TagRects.clear();
             m_CloseRects.clear();
-            SetRect(GetX(), GetY(), 0, 0);
+            SetRect(GetX(), GetY(), 0, 0);   // 无 tag 时高度压为 0，不占顶部空间
             return 0;
         }
 
