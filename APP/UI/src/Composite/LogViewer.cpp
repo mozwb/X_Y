@@ -2,8 +2,6 @@
 #include "DataStore/include/DataStore.h"
 #include "Timer/include/Timer.h"
 #include "Widget/include/BaseWin.h"
-#include <algorithm>
-#include <cctype>
 
 namespace X_Y {
 
@@ -174,18 +172,10 @@ void LogViewer::Stop() {
 // 筛选（必须在 m_EntriesMutex 持有锁时调用）
 // ════════════════════════════════════════════════════════════
 
-// 小写化（日志匹配用，ASCII）
-static std::string ToLower(const std::string& s) {
-    std::string r = s;
-    std::transform(r.begin(), r.end(), r.begin(),
-                   [](unsigned char c) { return std::tolower(c); });
-    return r;
-}
-
-// 判断单条是否命中当前关键词
+// 判断单条是否命中当前关键词（区分大小写，严格子串匹配）
 bool LogViewer::MatchesKeyword(const LogEntry& e) const {
     if (m_Keyword.empty()) return true;
-    return ToLower(e.text).find(m_Keyword) != std::string::npos;
+    return e.text.find(m_Keyword) != std::string::npos;
 }
 
 // 全量重建：清空 stripe，从队头重筛全部。仅关键词变化 / 数据重置时调用。
@@ -219,10 +209,8 @@ void LogViewer::IncrementalAppend(uint64_t fromSeq, uint64_t toSeq) {
 // ════════════════════════════════════════════════════════════
 
 void LogViewer::OnKeywordChanged(const std::string& text) {
+    // 保留关键词原样（区分大小写，不做 tolower）
     m_Keyword = text;
-    std::transform(m_Keyword.begin(), m_Keyword.end(),
-                   m_Keyword.begin(),
-                   [](unsigned char c) { return std::tolower(c); });
 
     // 关键词变了 → 唯一一次全量重建
     std::lock_guard<std::shared_mutex> lock(m_EntriesMutex);
