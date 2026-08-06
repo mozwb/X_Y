@@ -188,6 +188,11 @@ public:
         x = (float)pt.x;
         y = (float)pt.y;
     }
+
+    void SetMousePos(float x, float y) override {
+        // 移动真实系统光标到全局屏幕坐标
+        ::SetCursorPos((int)x, (int)y);
+    }
 };
 
 // ── 工厂实现 ──────────────────────────────────────

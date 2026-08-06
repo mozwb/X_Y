@@ -39,5 +39,9 @@ float Input::GetMouseY() {
     return GetMousePosition().y;
 }
 
+void Input::SetMousePosition(float x, float y) {
+    GetMapper()->SetMousePos(x, y);
+}
+
 } // namespace Input_t
 } // namespace X_Y

@@ -20,8 +20,12 @@ public:
     virtual bool IsKeyPressed(uint32_t keyCode) const = 0;
     // 鼠标状态查询
     virtual bool IsMousePressed(uint32_t mouseCode) const = 0;
-    // 鼠标位置
+    // 鼠标位置（返回的是全局屏幕坐标，非窗口客户区坐标）
+    // 需要窗口客户区坐标时，去 BaseWin 找 ScreenToClient / GetMouseScreenPos 等接口
     virtual void GetMousePos(float& x, float& y) const = 0;
+    // 设置鼠标位置（全局屏幕坐标）；移动真实系统光标
+    // 需要窗口客户区坐标时，去 BaseWin 找 ScreenToClient / GetMouseScreenPos 等接口
+    virtual void SetMousePos(float x, float y) = 0;
 };
 
 // 平台工厂

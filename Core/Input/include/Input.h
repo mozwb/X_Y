@@ -10,9 +10,16 @@ namespace X_Y {
 		public:
 			static bool IsKeyPressed(KeyCode key);
 			static bool IsMouseButtonPressed(MouseCode button);
+
+			// 获取鼠标位置。返回的是全局屏幕坐标，非窗口客户区坐标。
+			// 需要窗口客户区坐标时，去 BaseWin 找 ScreenToClient / GetMouseScreenPos 等接口。
 			static xpos GetMousePosition();
 			static float GetMouseX();
 			static float GetMouseY();
+
+			// 设置鼠标位置。参数为全局屏幕坐标，直接移动真实系统光标。
+			// 需要窗口客户区坐标时，去 BaseWin 找 ScreenToClient / GetMouseScreenPos 等接口。
+			static void SetMousePosition(float x, float y);
 		};
 		namespace Key
 		{
