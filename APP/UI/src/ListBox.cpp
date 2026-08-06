@@ -1,4 +1,4 @@
-#include "UI/include/Component/ListBox.h"
+﻿#include "UI/include/Component/ListBox.h"
 #include <algorithm>
 
 namespace X_Y {
@@ -142,6 +142,7 @@ namespace X_Y {
 
         m_Fold.resize(n);
         // 只补算新增的 [m_FoldedCount, n)
+
         for (size_t i = m_FoldedCount; i < n; i++)
             FoldItem(i, canvas);
 
