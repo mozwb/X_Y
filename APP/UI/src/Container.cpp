@@ -70,6 +70,9 @@ Container::Container(XWidget* parent)
         else {
             m_DragTarget = nullptr;
         }
+
+        // 焦点变化（获得/失去）会改变组件外观（如 TextInput 光标立即出现），请求重绘
+        RequestRepaint();
     });
 
     // 鼠标移动 → 若正在交互（拖动中）持续通知目标；否则 hover 通知命中组件
