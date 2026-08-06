@@ -247,6 +247,8 @@ void LogViewer::OnTagRemoved(const std::string& tag) {
     auto it = std::find(m_Keywords.begin(), m_Keywords.end(), tag);
     if (it != m_Keywords.end())
         m_Keywords.erase(it);
+    // tag 也要从 TagBar 上移除，否则视觉上删不掉
+    m_TagBar->RemoveTag(tag);
     RebuildAll();
 }
 

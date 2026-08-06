@@ -1,7 +1,17 @@
 #include "UI/include/Component/TagBar.h"
 #include <algorithm>
+#include <cstdio>
 
 namespace X_Y {
+
+    // —— 临时调试：记录鼠标事件，定位"删除不生效" ——
+    static void LogDebug(const std::string& msg) {
+        // 追加写文件，避免跨平台依赖；定位完删掉
+        if (FILE* f = std::fopen("D:/workbench/tagbar_debug.txt", "a")) {
+            std::fprintf(f, "%s\n", msg.c_str());
+            std::fclose(f);
+        }
+    }
 
     void TagBar::AddTag(const std::string& tag) {
         if (tag.empty()) return;
@@ -26,7 +36,7 @@ namespace X_Y {
 
     // 排版并返回总高：测每个 tag 文字宽，横排 + 自动换行，算出整体矩形并更新自身高。
     // 宿主布局前先 SetRect 设宽再调它量高；OnPaint 也会调它保证绘制一致。
-    // 布局：tag = 圆角矩形。左上角留「× 删除按钮」小方块，文字从按钮右侧开始。
+    // 布局：tag = 圆角矩形。右上角留「× 删除按钮」小方块，文字从左侧开始。
 
     int TagBar::Measure(Canvas& canvas) {
         int contentW = GetWidth();
@@ -42,10 +52,10 @@ namespace X_Y {
         m_TagRects.reserve(m_Tags.size());
         m_CloseRects.reserve(m_Tags.size());
 
-        const int btnSize = 12;         // 左上角 × 按钮边长
-        const int btnPad = 3;           // 按钮距 tag 左/上内边距
-        const int textPadLeft = btnSize + btnPad * 2;  // 文字起点过了按钮区
-        const int textPadRight = 8;     // 右侧内边距
+        const int btnSize = 12;         // 删除按钮边长
+        const int btnPad = 3;           // 按钮距 tag 上/右内边距
+        const int textPadLeft = 8;      // 文字左侧内边距
+        const int textPadRight = btnSize + btnPad * 3;  // 右侧留按钮区
 
         int x = 0, y = 0;
         int rowH = m_TagHeight;
@@ -64,8 +74,8 @@ namespace X_Y {
             }
 
             m_TagRects.push_back({ x, y + m_MarginY, tagW, rowH });
-            // × 删除按钮：tag 左上角小方块
-            m_CloseRects.push_back({ x + btnPad, y + m_MarginY + btnPad, btnSize, btnSize });
+            // × 删除按钮：tag 右上角小方块
+            m_CloseRects.push_back({ x + tagW - btnSize - btnPad, y + m_MarginY + btnPad, btnSize, btnSize });
             x += tagW + m_Gap;
         }
 
@@ -105,15 +115,14 @@ namespace X_Y {
             // 圆角 tag 背景
             canvas.FillRoundRect(rx, ry, r.w, r.h, 6, bg);
 
-            // 左上角 × 删除按钮（圆角小方块 + × 字符）
+            // 文字：从左侧开始，垂直居中
+            canvas.DrawText(rx + m_PadX_text, ry + (r.h - 14) / 2, m_Tags[i].c_str(), textColor);
+
+            // 右上角 × 删除按钮（圆角小方块 + × 字符）
             const Rect& c = m_CloseRects[i];
             int cx = x0 + c.x, cy = y0 + c.y;
-            canvas.FillRoundRect(cx, cy, c.w, c.h, 3, 0x00555A63);
-            canvas.DrawText(cx + 2, cy + (c.h - 12) / 2, L"×", 0xFFCCCCCC);
-
-            // 文字：从按钮右侧开始，垂直居中
-            int textX = rx + m_CloseRects[i].w + 3;   // 按钮宽 + 3 间距
-            canvas.DrawText(textX, ry + (r.h - 14) / 2, m_Tags[i].c_str(), textColor);
+            canvas.FillRoundRect(cx, cy, c.w, c.h, 3, hover ? 0xFF6A7280 : 0xFF555A63);
+            canvas.DrawText(cx + (c.w - 10) / 2, cy + (c.h - 12) / 2, L"×", 0xFFEEEEEE);
         }
     }
 
@@ -126,10 +135,14 @@ namespace X_Y {
     }
 
     void TagBar::OnMousePressed(int localX, int localY) {
+        LogDebug("OnMousePressed local=(" + std::to_string(localX) + "," + std::to_string(localY) + ") tags=" + std::to_string(m_Tags.size()));
         int idx = HitTest(localX, localY);
-        if (idx >= 0 && IsInClose(idx, localX, localY)) {
-            if (idx < (int)m_Tags.size() && OnTagRemove)
-                OnTagRemove(m_Tags[idx]);
+        LogDebug("  HitTest idx=" + std::to_string(idx));
+        bool inClose = idx >= 0 && IsInClose(idx, localX, localY);
+        LogDebug("  inClose=" + std::to_string(inClose) + " OnTagRemove=" + std::to_string(OnTagRemove != nullptr));
+        if (inClose && OnTagRemove) {
+            LogDebug("  -> remove tag: " + m_Tags[idx]);
+            OnTagRemove(m_Tags[idx]);
         }
     }
 

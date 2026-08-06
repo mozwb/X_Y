@@ -50,8 +50,8 @@ namespace X_Y {
 
         int m_TagHeight = 24;   // 单行 tag 高
         int m_Gap = 6;          // tag 间横向间距
-        int m_PadX = 8;         // tag 内左右内边距（文字 + × 留白）
-        int m_CloseW = 14;      // × 区宽度
+        int m_PadX_text = 8;    // tag 内文字左内边距
+        int m_CloseW = 14;      // 保留（未用，删除按钮区尺寸现由 Measure 内部计算）
         int m_MarginY = 2;      // 上下留白
     };
 
