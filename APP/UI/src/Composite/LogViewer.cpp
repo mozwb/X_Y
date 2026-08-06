@@ -182,12 +182,49 @@ void LogViewer::Stop() {
 // 筛选（必须在 m_EntriesMutex 持有锁时调用）
 // ════════════════════════════════════════════════════════════
 
-// 判断单条是否命中当前筛选（OR 语义：命中任一关键词即通过）
-// 无任何筛选词时全部通过；否则任一关键词为正文子串（区分大小写）即通过
+// 拆一个筛选 tag 的 AND 子项：按 "&&" 分割，去除空白。
+// 示例："error && info" → {"error","info"}；"error" → {"error"}
+static std::vector<std::string> SplitAndParts(const std::string& tag) {
+    std::vector<std::string> parts;
+    std::string cur;
+    const size_t n = tag.size();
+    size_t i = 0;
+    // 逐段找 "&&"
+    while (i < n) {
+        size_t found = tag.find("&&", i);
+        if (found == std::string::npos) {
+            cur = tag.substr(i);
+            i = n;
+        } else {
+            cur = tag.substr(i, found - i);
+            i = found + 2;
+        }
+        // 去首尾空白（空格/Tab），空段忽略
+        size_t b = cur.find_first_not_of(" 	");
+        size_t e2 = cur.find_last_not_of(" 	");
+        if (b != std::string::npos && e2 >= b)
+            parts.push_back(cur.substr(b, e2 - b + 1));
+        cur.clear();
+    }
+    return parts;
+}
+
+// 判断单条是否命中当前筛选：
+//   tag 之间 OR（命中任一 tag 即通过）；单个 tag 内用 "&&" 表达 AND（需同时命中所有子项）
+//   （区分大小写，严格子串匹配）
 bool LogViewer::MatchesKeyword(const LogEntry& e) const {
     if (m_Keywords.empty()) return true;
     for (const auto& kw : m_Keywords) {
-        if (e.text.find(kw) != std::string::npos)
+        std::vector<std::string> parts = SplitAndParts(kw);
+        if (parts.empty()) continue;
+        bool all = true;
+        for (const auto& part : parts) {
+            if (part.empty() || e.text.find(part) == std::string::npos) {
+                all = false;
+                break;
+            }
+        }
+        if (all)
             return true;
     }
     return false;
