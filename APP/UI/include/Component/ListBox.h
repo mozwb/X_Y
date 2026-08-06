@@ -1,7 +1,8 @@
-﻿#pragma once
+#pragma once
 #include "UI/include/Component/Component.h"
 #include <string>
 #include <vector>
+#include <cstdint>
 
 namespace X_Y {
 
@@ -10,6 +11,14 @@ namespace X_Y {
         uint32_t textColor = 0x00000000;
         uint32_t bgColor = 0x00FFFFFF;
         void* userData = nullptr;
+    };
+
+    // 折行模式（扫码 A/B 行为，由使用方挑选）
+    //   Wrap   ：自动折行（不定高，长行按可用宽切多物理行）—— 终端式
+    //   NoWrap ：不折行（每行固定一物理行，超出部分横向滚动，需 ScrollArea 补横向能力）
+    enum class WrapMode {
+        Wrap,
+        NoWrap,
     };
 
     class ListBox : public Component {
@@ -22,11 +31,21 @@ namespace X_Y {
         int GetItemCount() const { return (int)m_Items.size(); }
         const ListBoxItem& GetItem(int index) const { return m_Items[index]; }
 
+        // 某逻辑 item 占几个物理行（折行结果）
+        int GetItemLineCount(int index) const;
+
+        // 总物理行数（滚动高度 = 总物理行 × 行高）
+        int GetTotalLines() const { return m_TotalLines; }
+
         int GetSelectedIndex() const { return m_SelectedIndex; }
         void SetSelectedIndex(int idx) { m_SelectedIndex = idx; }
 
         int GetLineHeight() const { return m_LineHeight; }
         void SetLineHeight(int h);
+
+        // 折行模式（默认 Wrap）。NoWrap 需 ScrollArea 支持横向滚动。
+        void SetWrapMode(WrapMode mode);
+        WrapMode GetWrapMode() const { return m_WrapMode; }
 
         int GetScrollStep() const override { return m_LineHeight; }
 
@@ -36,19 +55,40 @@ namespace X_Y {
             m_ViewHeight = viewHeight;
         }
 
+        // 鼠标 y → 命中的逻辑 item 索引（-1 = 未命中）
         int GetRowFromMouseY(int localY) const;
 
         void OnPaint(Canvas& canvas) override;
 
     private:
+        // UTF-8 单字符字节数（按首字节前导判断；非法字节按 1）
+        static int Utf8CharLen(unsigned char lead);
+
+        // 折一行（按当前 m_LastFoldWidth 切段），把段文本写入 m_Fold[idx]
+        void FoldItem(size_t idx, Canvas& canvas);
+
+        // 惰性折叠：OnPaint 里驱动。宽度变化全量重折；否则只补新增条目。
+        void EnsureFold(Canvas& canvas);
+
+        // 重建 m_LineStartIndex（每 item 的起始物理行，前缀和）与 m_TotalLines
+        void BuildLineIndex();
+
         void UpdateHeight();
 
         std::vector<ListBoxItem> m_Items;
+        std::vector<std::vector<std::string>> m_Fold;   // 每 item 的折行段（物理行文本，UTF-8）
+        std::vector<int> m_LineStartIndex;              // item 的起始物理行（前缀和）
+        int m_TotalLines = 0;                           // 全部物理行数
+
+        WrapMode m_WrapMode = WrapMode::Wrap;
+        int m_LastFoldWidth = -1;   // 上次折行时的内容宽（用于检测宽度变化）
+        int m_FoldedCount = 0;      // 已惰性折叠的 item 数（增量折行游标）
+
         int m_SelectedIndex = -1;
-        int m_LineHeight = 20;   // 行高 = 文字带高 + 行距
-        int m_LineSpacing = 4;   // 行距（文字带之间留白，防止背景吞 descender）
-        int m_ViewOffset = 0;    // 滚动偏移（像素）
-        int m_ViewHeight = 0;    // 可视区高（像素）
+        int m_LineHeight = 20;      // 物理行高（文字带 + 行距）
+        int m_LineSpacing = 4;      // 行距（文字带之间留白，防背景吞 descender）
+        int m_ViewOffset = 0;       // 滚动偏移（像素）
+        int m_ViewHeight = 0;       // 可视区高（像素）
     };
 
 }

@@ -38,6 +38,12 @@ namespace X_Y {
         virtual void FillText(int x, int y, int w, int h, int tx,
             int ty, const wchar_t* text, uint32_t textColor,
             uint32_t bgColor) = 0;
+
+        // 测量文字宽度（用当前已设置字体），返回逻辑像素宽。
+        // 供折行/布局判断文字是否超出可用宽度。
+
+        virtual int MeasureText(const wchar_t* text) = 0;
+        virtual int MeasureText(const char* text) = 0;
         virtual void SetClip(int x, int y, int w, int h) = 0;
         virtual void ResetClip() = 0;
     };

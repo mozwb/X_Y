@@ -82,6 +82,15 @@ namespace X_Y {
                 bgColor);
         }
 
+        // 测量文字宽度（用当前字体），返回逻辑像素宽。供折行判断。
+
+        int MeasureText(const char* text) const {
+            return m_Impl->MeasureText(text);
+        }
+        int MeasureText(const wchar_t* text) const {
+            return m_Impl->MeasureText(text);
+        }
+
         void SetClip(int x, int y, int w, int h) {
             m_Impl->SetClip(x, y, w, h);
         }

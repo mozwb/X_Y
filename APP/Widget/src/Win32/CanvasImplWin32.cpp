@@ -145,6 +145,20 @@ namespace X_Y {
             DeleteObject(rgn);
         }
 
+        // 测量文字宽度（当前字体），返回逻辑像素宽。
+        int MeasureText(const char* text) override {
+            std::wstring ws = Utf8ToWide(text);
+            return MeasureText(ws.c_str());
+        }
+
+        int MeasureText(const wchar_t* text) override {
+            if (!m_MemDC || !text || !*text) return 0;
+            SIZE sz = { 0, 0 };
+            ::GetTextExtentPoint32W(m_MemDC, text, (int)wcslen(text), &sz);
+            // 物理宽 → 逻辑宽（DPI 缩放还原）
+            return (int)(sz.cx / m_Scale + 0.5f);
+        }
+
         void ResetClip() override {
             SelectClipRgn(m_MemDC, nullptr);
         }
