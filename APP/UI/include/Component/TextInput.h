@@ -27,6 +27,9 @@ namespace X_Y {
         // 文本变化回调
         std::function<void(const std::string&)> OnTextChange;
 
+        // 回车回调（在 OnKeyDown 命中 Enter 时触发）
+        std::function<void()> OnEnter;
+
     private:
         void NotifyTextChange();
 

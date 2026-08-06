@@ -80,6 +80,23 @@ namespace X_Y {
             DeleteObject(brush);
         }
 
+        // 圆角矩形填充：用选区实现圆角，再填充（逻辑坐标）
+        void FillRoundRect(int x, int y, int w, int h, int r,
+            uint32_t color) override {
+            if (r < 0) r = 0;
+            int px = S(x), py = S(y), pw = S(w), ph = S(h);
+            int pr = S(r);
+            if (pw <= 0 || ph <= 0) return;
+            HRGN rgn = ::CreateRoundRectRgn(px, py, px + pw,
+                py + ph, pr * 2, pr * 2);
+            if (!rgn) return;
+            HBRUSH brush = ::CreateSolidBrush(RGB(
+                (color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF));
+            ::FillRgn(m_MemDC, rgn, brush);
+            ::DeleteObject(brush);
+            ::DeleteObject(rgn);
+        }
+
         void DrawText(int x, int y, const char* text, uint32_t
             color) override {
             SetTextColor(m_MemDC, RGB(

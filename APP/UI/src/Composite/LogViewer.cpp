@@ -2,6 +2,7 @@
 #include "DataStore/include/DataStore.h"
 #include "Timer/include/Timer.h"
 #include "Widget/include/BaseWin.h"
+#include <algorithm>
 
 namespace X_Y {
 
@@ -70,9 +71,17 @@ static LogEntry ParseLine(const std::string& raw) {
 LogViewer::LogViewer() {
     m_Key = SysClock::NowFormat("YY-MM-DD") + ".log";
 
+    m_TagBar = std::make_unique<TagBar>();
+    // 点某个 tag 的 × → 移除该筛选关键词并重筛
+    m_TagBar->OnTagRemove = [this](const std::string& tag) {
+        OnTagRemoved(tag);
+    };
+
     m_KeywordInput = std::make_unique<TextInput>();
-    m_KeywordInput->OnTextChange = [this](const std::string& text) {
-        OnKeywordChanged(text);
+    m_KeywordInput->SetPlaceholder("输入关键词，回车添加到筛选");
+    // 输入框回车 → 添加为筛选规则
+    m_KeywordInput->OnEnter = [this]() {
+        OnEnterKeyword();
     };
 
     m_LogStripe = std::make_unique<LogStripe>();
@@ -80,6 +89,7 @@ LogViewer::LogViewer() {
     m_ScrollArea = std::make_unique<ScrollArea>();
     m_ScrollArea->SetContent(m_LogStripe.get());
 
+    AddComponent(m_TagBar.get());
     AddComponent(m_KeywordInput.get());
     AddComponent(m_ScrollArea.get());
 }
@@ -172,10 +182,15 @@ void LogViewer::Stop() {
 // 筛选（必须在 m_EntriesMutex 持有锁时调用）
 // ════════════════════════════════════════════════════════════
 
-// 判断单条是否命中当前关键词（区分大小写，严格子串匹配）
+// 判断单条是否命中当前筛选（OR 语义：命中任一关键词即通过）
+// 无任何筛选词时全部通过；否则任一关键词为正文子串（区分大小写）即通过
 bool LogViewer::MatchesKeyword(const LogEntry& e) const {
-    if (m_Keyword.empty()) return true;
-    return e.text.find(m_Keyword) != std::string::npos;
+    if (m_Keywords.empty()) return true;
+    for (const auto& kw : m_Keywords) {
+        if (e.text.find(kw) != std::string::npos)
+            return true;
+    }
+    return false;
 }
 
 // 全量重建：清空 stripe，从队头重筛全部。仅关键词变化 / 数据重置时调用。
@@ -208,12 +223,30 @@ void LogViewer::IncrementalAppend(uint64_t fromSeq, uint64_t toSeq) {
 // 交互回调
 // ════════════════════════════════════════════════════════════
 
-void LogViewer::OnKeywordChanged(const std::string& text) {
-    // 保留关键词原样（区分大小写，不做 tolower）
-    m_Keyword = text;
+// 输入框回车：把当前输入作为一条筛选规则添加，并清空输入框
+void LogViewer::OnEnterKeyword() {
+    std::string kw = m_KeywordInput->GetText();
+    // 空关键词忽略
+    if (kw.empty()) return;
 
-    // 关键词变了 → 唯一一次全量重建
     std::lock_guard<std::shared_mutex> lock(m_EntriesMutex);
+    // 去重：已存在同样的关键词则不重复添加
+    for (const auto& k : m_Keywords)
+        if (k == kw) return;
+
+    m_Keywords.push_back(kw);
+    m_TagBar->AddTag(kw);
+    RebuildAll();
+
+    m_KeywordInput->SetText("");
+}
+
+// 删除某条筛选规则并重筛
+void LogViewer::OnTagRemoved(const std::string& tag) {
+    std::lock_guard<std::shared_mutex> lock(m_EntriesMutex);
+    auto it = std::find(m_Keywords.begin(), m_Keywords.end(), tag);
+    if (it != m_Keywords.end())
+        m_Keywords.erase(it);
     RebuildAll();
 }
 
@@ -222,6 +255,10 @@ void LogViewer::OnKeywordChanged(const std::string& text) {
 // ════════════════════════════════════════════════════════════
 
 void LogViewer::OnPaint(Canvas& canvas) {
+    // 先让 TagBar 用真实 Canvas 量高（测字宽 + 自动换行），布局时才能用当下正确的高度，
+    // 避免日志区一帧错位（TagBar 高度随 tag 增减/换行实时变化）
+    m_TagBar->SetRect(0, 0, get_width(), m_TagBar->GetHeight());
+    m_TagBar->Measure(canvas);
     LayoutChildren();
 
     canvas.FillRect(0, 0, get_width(), get_height(), 0xFF1E1E1E);
@@ -243,10 +280,18 @@ void LogViewer::LayoutChildren() {
     if (w <= 0 || h <= 0) return;
 
     const int inputH = 22;
-    m_KeywordInput->SetRect(0, 0, w, inputH);
+    const int gap = 2;
 
-    const int panelY = inputH + 1;
-    const int panelH = h - panelY;
+    // 顶栏：TagBar（筛选规则条，高度已在 OnPaint 用 canvas 量好）
+    m_TagBar->SetRect(0, 0, w, m_TagBar->GetHeight());
+
+    // 输入框：TagBar 之下
+    int inputY = m_TagBar->GetHeight() + gap;
+    m_KeywordInput->SetRect(0, inputY, w, inputH);
+
+    // 日志区：占满剩余
+    int panelY = inputY + inputH + gap;
+    int panelH = h - panelY;
     if (panelH > 0)
         m_ScrollArea->SetRect(0, panelY, w, panelH);
 }

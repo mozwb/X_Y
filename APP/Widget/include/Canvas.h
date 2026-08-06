@@ -42,6 +42,10 @@ namespace X_Y {
             color) {
             m_Impl->FillRect(x, y, w, h, color);
         }
+        void FillRoundRect(int x, int y, int w, int h, int r,
+            uint32_t color) {
+            m_Impl->FillRoundRect(x, y, w, h, r, color);
+        }
         void DrawText(int x, int y, const char* text, uint32_t
             color) {
             m_Impl->DrawText(x, y, text, color);

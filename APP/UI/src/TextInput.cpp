@@ -98,6 +98,10 @@ namespace X_Y {
             case Key::Home:
                 m_CursorPos = 0;
                 break;
+            case Key::Enter:
+                // 回车：通知外部（如“添加到筛选规则”），不清空文本，由外部决定
+                if (OnEnter) OnEnter();
+                break;
             case Key::End:
                 m_CursorPos = (int)m_Text.size();
                 break;

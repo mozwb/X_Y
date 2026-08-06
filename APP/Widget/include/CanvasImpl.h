@@ -24,6 +24,10 @@ namespace X_Y {
 
         virtual void FillRect(int x, int y, int w, int h, uint32_t
             color) = 0;
+
+        // 圆角矩形填充（r=圆角半径像素，逻辑坐标）
+        virtual void FillRoundRect(int x, int y, int w, int h,
+            int r, uint32_t color) = 0;
         virtual void DrawText(int x, int y, const char* text,
             uint32_t color) = 0;
         virtual void DrawText(int x, int y, const wchar_t* text,
