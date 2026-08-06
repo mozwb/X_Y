@@ -199,6 +199,21 @@ LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
             app->GetEventQueue().Push(movement);
             return 0;
         }
+
+        // 字符输入：WM_CHAR 的 wParam 是 Unicode 字符码（非 VK 键码），
+        // 已由系统完成按键组合/输入法/键盘布局的翻译，直接作为字符传入。
+        // 不做按键映射（Translate 只适用于"哪个键被按"，这里是"输入了什么字"）。
+        case WM_CHAR: {
+            // 过滤控制字符（回车/退格等已由 WM_KEYDOWN → OnKeyDown 处理，
+            // 这里只放行可见字符：>=32 且非 DEL(127)）
+            WPARAM wc = wParam;
+            if (wc >= 32 && wc != 127) {
+                movement = new KeyTyped(pThis, (KeyCode)wc);
+                app->GetEventQueue().Push(movement);
+                return 0;
+            }
+            break;
+        }
         case WM_LBUTTONDOWN: {
             mbutton = InputMapping::TranslateMouse(VK_LBUTTON);
             movement = new MouseButtonPressed(pThis, mbutton);
