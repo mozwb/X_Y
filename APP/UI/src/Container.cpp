@@ -66,6 +66,8 @@ Container::Container(XWidget* parent)
             m_DragStartX = sx;
             m_DragStartY = sy;
             hit->OnMousePressed(sx - hit->GetX(), sy - hit->GetY());
+            // 开始交互（拖滑块等）：捕获鼠标，避免移出窗口后 move/up 事件丢失
+            CaptureMouse();
         }
         else {
             m_DragTarget = nullptr;
@@ -102,6 +104,8 @@ Container::Container(XWidget* parent)
             m_DragTarget->OnMouseReleased(sx - m_DragTarget->GetX(), sy - m_DragTarget->GetY());
             m_DragTarget = nullptr;
         }
+        // 交互结束，释放鼠标捕获（即使松手发生在窗口外也保证触发）
+        ReleaseMouseCapture();
     });
 }
 
