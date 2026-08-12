@@ -1,0 +1,239 @@
+﻿#include "BaseWin.h"
+#include "Canvas.h"
+#include "Input/Input.h"
+#include <set>
+#ifdef XY_PLATFORM_WINDOWS
+#include <windows.h>
+#endif
+
+namespace X_Y {
+
+BaseWin::BaseWin()
+    : m_Impl(PlatformFactory::CreateWindowImpl())
+{
+}
+
+BaseWin::~BaseWin() {
+    Destroy();
+}
+
+// ── 窗口生命周期 ──────────────────────────────
+
+bool BaseWin::Create(const char* title, uint width, uint height,
+                     WindowStyleFlag style, void* parentHandle)
+{
+    if (!m_Impl) return false;
+    return m_Impl->Create(title, width, height, style, parentHandle, this);
+}
+
+bool BaseWin::Show(ShowCmd nshow) {
+    return m_Impl ? m_Impl->Show(nshow) : false;
+}
+
+void BaseWin::Close() {
+    if (m_Impl) m_Impl->Close();
+}
+
+void BaseWin::Destroy() {
+    if (!m_Impl) return;
+    m_Impl->Destroy();
+    m_Impl.reset();  // 防止重复 Destroy
+}
+
+void BaseWin::SetTitle(const char* title) {
+    if (m_Impl) m_Impl->SetTitle(title);
+}
+
+// ── 窗口信息 ──────────────────────────────────
+
+void BaseWin::GetScreenRect(int& left, int& top, int& right, int& bottom) const {
+    if (m_Impl) m_Impl->GetClientRect(left, top, right, bottom);
+}
+
+void* BaseWin::GetParentNativeHandle() const {
+    if (m_Impl) return m_Impl->GetParentNativeHandle();
+    return nullptr;
+}
+
+bool BaseWin::SetParent(void* newParent) {
+    return m_Impl ? m_Impl->SetParent(newParent) : false;
+}
+
+// ── 坐标转换 ──────────────────────────────────
+
+void BaseWin::ScreenToClient(int& x, int& y) const {
+    if (m_Impl) m_Impl->ScreenToClient(x, y);
+}
+
+void BaseWin::ClientToScreen(int& x, int& y) const {
+    if (m_Impl) m_Impl->ClientToScreen(x, y);
+}
+
+void BaseWin::ScreenToClientPhysical(int& x, int& y) const {
+    if (m_Impl) m_Impl->ScreenToClientPhysical(x, y);
+}
+
+void BaseWin::ClientToScreenPhysical(int& x, int& y) const {
+    if (m_Impl) m_Impl->ClientToScreenPhysical(x, y);
+}
+
+void BaseWin::GetClientRectPhysical(int& l, int& t, int& r, int& b) const {
+    if (m_Impl) m_Impl->GetClientRectPhysical(l, t, r, b);
+}
+
+// ── 鼠标相对本窗口客户区坐标(逻辑) ──────────────
+
+bool BaseWin::GetMouseClientPos(int& x, int& y) const {
+    x = y = -1;   // 默认：不在窗口内
+    int sx, sy;
+    GetMouseScreenPos(sx, sy);   // 物理屏幕坐标
+    ScreenToClient(sx, sy);      // → 逻辑客户区(输入物理，输出逻辑)
+    // 判断是否落在本窗口客户区矩形内(用 BaseWin 自带的逻辑版 GetClientRect)
+    int l, t, r, b;
+    GetScreenRect(l, t, r, b);   // 逻辑客户区
+    if (sx >= l && sx < r && sy >= t && sy < b) {
+        x = sx;
+        y = sy;
+        return true;
+    }
+    return false;
+}
+
+void BaseWin::SetMouseClientPos(int x, int y) const {
+    // 逻辑客户区 → 物理屏幕(全局坐标)
+    ClientToScreen(x, y);
+    // 复用 Input 层搬光标，不在此重复封装 Win32 API
+    Input_t::Input::SetMousePosition((float)x, (float)y);
+}
+
+// ── 鼠标 & 光标 ───────────────────────────────
+
+void BaseWin::CaptureMouse() {
+    if (m_Impl) m_Impl->CaptureMouse();
+}
+
+void BaseWin::ReleaseMouseCapture() {
+    if (m_Impl) m_Impl->ReleaseMouseCapture();
+}
+
+void BaseWin::SetCursorStyle(CursorStyle style) {
+    if (m_Impl) m_Impl->SetCursorStyle(style);
+}
+
+void BaseWin::SetTopMost(bool topmost) {
+    if (m_Impl) m_Impl->SetTopMost(topmost);
+}
+
+void BaseWin::SetLayeredAttribute(uint32_t colorKey, uint8_t alpha, uint32_t flags) {
+    if (m_Impl) m_Impl->SetLayeredAttribute(colorKey, alpha, flags);
+}
+
+void BaseWin::MoveAndResize(int x, int y, int w, int h, bool noZOrder) {
+    if (m_Impl) m_Impl->MoveAndResize(x, y, w, h, noZOrder);
+}
+
+// ── 离屏自绘(方案B)：窗口常驻画布 + 主动刷新，不走系统循环 ──
+// 组件们 GetCanvas() 往同一张位图上叠画，最后 Flush() 一次上屏。
+
+Canvas& BaseWin::GetCanvas() {
+    // 用窗口客户区物理像素作为画布尺寸(离屏位图分辨率)
+    int cw = (int)GetActualWidthPhysical();
+    int ch = (int)GetActualHeightPhysical();
+    if (cw < 1 || ch < 1) cw = 1, ch = 1;
+
+    if (m_Canvas) {
+        // 尺寸变了(窗口 resize) → 重建画布
+        if (m_Canvas->GetWidth() != cw || m_Canvas->GetHeight() != ch) {
+            m_Canvas.reset();
+        } else {
+            return *m_Canvas;
+        }
+    }
+
+#ifdef XY_PLATFORM_WINDOWS
+    // Canvas 构造接收窗口句柄(HWND)，内部 Flush 时动态 GetDC/ReleaseDC，常驻安全
+    m_Canvas.reset(new Canvas(cw, ch, GetNativeHandle()));
+#else
+    m_Canvas.reset(new Canvas(cw, ch, nullptr));
+#endif
+    return *m_Canvas;
+}
+
+void BaseWin::Flush() {
+    if (m_Canvas) m_Canvas->Flush();
+}
+
+void BaseWin::ClearBackBuffer(uint32_t color) {
+    Canvas& c = GetCanvas();
+    // 用物理尺寸填满整幅位图(GetWidth 是逻辑尺寸,可能因 DPI 缩放覆盖不全 → 残留黑区)
+    c.FillRect(0, 0, c.GetPhysicalWidth(), c.GetPhysicalHeight(), color);
+}
+
+void BaseWin::RequestRepaint() {
+    if (m_Impl) m_Impl->RequestRepaint();
+}
+
+void BaseWin::ValidateWindow() {
+    if (m_Impl) m_Impl->ValidateWindow();
+}
+
+void BaseWin::PaintDirect(std::function<void(Canvas&)> painter) {
+    if (m_Impl) m_Impl->PaintDirect(std::move(painter));
+}
+
+void BaseWin::GetMouseScreenPos(int& x, int& y) {
+    WindowImpl::GetMouseScreenPos(x, y);
+}
+
+BaseWin* BaseWin::GetWindowAt(int screenX, int screenY) {
+#ifdef XY_PLATFORM_WINDOWS
+    POINT pt = { screenX, screenY };
+    HWND hwnd = ::WindowFromPoint(pt);
+    if (!hwnd) return nullptr;
+    return (BaseWin*)::GetWindowLongPtr(hwnd, GWLP_USERDATA);
+#else
+    return nullptr;
+#endif
+}
+
+bool BaseWin::IsXYWindow(void* hwnd) {
+#ifdef XY_PLATFORM_WINDOWS
+    if (!hwnd) return false;
+    HWND h = (HWND)hwnd;
+    // 实时查 (而非直接读 GWLP_USERDATA)：防止窗口已被销毁但句柄仍被外部持有
+    if (!::IsWindow(h)) return false;
+    return ::GetWindowLongPtr(h, GWLP_USERDATA) != 0;
+#else
+    return false;
+#endif
+}
+
+std::vector<void*> BaseWin::GetWindowsAt(int screenX, int screenY) {
+    std::vector<void*> result;
+#ifdef XY_PLATFORM_WINDOWS
+    POINT pt = { screenX, screenY };
+    // 最顶层的窗口(可能含子窗口：WindowFromPoint 默认只在同线程/子窗口间的顶层生效，
+    // 这里用 GetAncestor 归一化到顶层窗口，保证列表是顶层 z 序)。
+    HWND top = ::GetAncestor(::WindowFromPoint(pt), GA_ROOT);
+    if (!top) return result;
+    // 记录已处理句柄，防同一窗口经不同路径重复出现
+    std::set<HWND> seen;
+    for (HWND h = top; h; h = ::GetNextWindow(h, GW_HWNDNEXT)) {
+        if (seen.count(h)) break;
+        seen.insert(h);
+        // 只收“包含该点”的窗口(在屏幕坐标矩形内)
+        RECT rc;
+        if (::GetWindowRect(h, &rc)) {
+            bool pointsInside = pt.x >= rc.left && pt.x < rc.right &&
+                                pt.y >= rc.top && pt.y < rc.bottom;
+            if (pointsInside)
+                result.push_back((void*)h);
+        }
+    }
+#else
+    (void)screenX; (void)screenY;
+#endif
+    return result;
+}
+
+} // namespace X_Y
