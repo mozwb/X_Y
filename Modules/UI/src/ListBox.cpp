@@ -1,4 +1,5 @@
 ﻿#include "UI/Component/ListBox.h"
+#include "Widget/FontLibrary.h"
 #include <algorithm>
 
 namespace X_Y {
@@ -65,6 +66,7 @@ namespace X_Y {
 
     void ListBox::FoldItem(size_t idx, Canvas& canvas) {
         const std::string& src = m_Items[idx].text;
+        const Font& font = FontLibrary::Instance().GetDefault();
         std::vector<std::string> segs;
         segs.reserve(src.size() / 8 + 1);
 
@@ -84,7 +86,7 @@ namespace X_Y {
             }
             else {
                 // 若能塞下整行则单段；否则逐字符切（按 UTF-8 完整字符）
-                if (canvas.MeasureText(src.c_str()) <= usable) {
+                if (font.MeasureText(src.c_str()) <= usable) {
                     segs.push_back(src);
                 }
                 else {
@@ -97,7 +99,7 @@ namespace X_Y {
                         int clen = Utf8CharLen((unsigned char)src[p]);
                         if (p + clen > n) clen = 1;
                         std::string one = src.substr(p, clen);
-                        int w = canvas.MeasureText(one.c_str());
+                        int w = font.MeasureText(one.c_str());
                         // 首字符宽度已超可用宽 → 整行一个字符都放不下，丢弃
                         if (cur.empty() && w > usable) {
                             segs.clear();
@@ -229,14 +231,15 @@ namespace X_Y {
             int itemStart = m_LineStartIndex[i];
             uint32_t bgColor = 0xFF1E1E1E;   // 默认窗口深底
             if (i == m_SelectedIndex)
-                bgColor = 0x00D0E8FF;
+                bgColor = 0xFFD0E8FF;
 
             for (int s = 0; s < segCount; s++) {
                 int rowY = y + (itemStart + s) * m_LineHeight;
 
                 // 组合拳：铺行背景 + 同背景色写字。
                 // 背景盖整行高；文字起点带缩进 (x+4, rowY+2)。
-                canvas.FillText(x, rowY, w, m_LineHeight, x + 4,
+                auto& font = FontLibrary::Instance().GetDefault();
+                canvas.FillText(font, x, rowY, w, m_LineHeight, x + 4,
                     rowY + 2, segs[s].c_str(),
                     m_Items[i].textColor, bgColor);
             }

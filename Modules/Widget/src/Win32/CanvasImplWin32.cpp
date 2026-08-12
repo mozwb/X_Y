@@ -1,53 +1,61 @@
 ﻿#include "CanvasImpl.h"
-#include "Widget/Font.h"
 #include "Dpi.h"
 #include <windows.h>
+#include <cstring>
+
 #ifdef DrawText
 #undef DrawText
 #endif
+
 namespace X_Y {
 
-    class CanvasImplWin32 : public CanvasImpl {
+    // ── CanvasImpl 软件 ARGB 后端 ──────────────────────────
+    // 图形：直接往 32bpp ARGB 像素缓冲软件光栅化（支持 alpha 合成）。
+    // 文字：GDI 后端经桥梁 DC（共享同一 DIB）TextOut 直写（alpha 截断）；
+    //       FreeType 后端(未来)直接写 pixels。
+    // 上屏：普通窗 BitBlt(忽略 alpha)；Layered 窗 UpdateLayeredWindow(alpha 生效)。
+    // ⚠️ 逻辑/物理：逻辑坐标(布局) × DPI scale = 物理像素(缓冲)。
+
+    class CanvasImplSoftware : public CanvasImpl {
     public:
-        // nativeHandle = 窗口句柄(HWND)。画布持窗口句柄，Flush 时动态 GetDC/ReleaseDC，
-        // 支持常驻画布(方案B离屏自绘)而不悬空。
-        CanvasImplWin32(int w, int h, HWND hwnd)
+        CanvasImplSoftware(int w, int h, HWND hwnd)
             : m_Width(w), m_Height(h), m_Hwnd(hwnd),
-              m_MemDC(nullptr), m_MemBitmap(nullptr), m_OldBitmap(nullptr),
-              m_CurrentFont(nullptr)
+              m_Pixels(nullptr), m_DIB(nullptr), m_DC(nullptr), m_OldBitmap(nullptr),
+              m_ClipSet(false)
         {
             m_Scale = Dpi::GetScale();
-            // 位图用物理像素大小；逻辑尺寸 = 物理 / scale，供上层按逻辑布局。
             m_LogicW = (int)(w / m_Scale);
             m_LogicH = (int)(h / m_Scale);
             if (m_LogicW < 1) m_LogicW = 1;
             if (m_LogicH < 1) m_LogicH = 1;
 
-            // 双缓冲：创建与窗口 DC 兼容的内存 DC + 位图（物理像素）
-            HDC hdc = hwnd ? ::GetDC(hwnd) : ::GetDC(nullptr);
-            m_MemDC = ::CreateCompatibleDC(hdc);
-            if (m_MemDC) {
-                m_MemBitmap = ::CreateCompatibleBitmap(hdc, w, h);
-                if (m_MemBitmap)
-                    m_OldBitmap = (HBITMAP)::SelectObject(m_MemDC, m_MemBitmap);
+            // 创建 32bpp ARGB DIB 段（同时拿像素指针 + 关联 DC 作 GDI 桥梁）
+            BITMAPINFO bi = {};
+            bi.bmiHeader.biSize     = sizeof(BITMAPINFOHEADER);
+            bi.bmiHeader.biWidth    = w;
+            bi.bmiHeader.biHeight   = -h;            // 负 = 自顶向下（与内存布局一致）
+            bi.bmiHeader.biPlanes   = 1;
+            bi.bmiHeader.biBitCount = 32;
+            bi.bmiHeader.biCompression = BI_RGB;
+            m_DIB = ::CreateDIBSection(nullptr, &bi, DIB_RGB_COLORS,
+                                       (void**)&m_Pixels, nullptr, 0);
+            if (m_DIB) {
+                // 清一次零，避免垃圾像素
+                if (m_Pixels)
+                    ::memset(m_Pixels, 0, (size_t)w * h * 4);
+                m_DC = ::CreateCompatibleDC(nullptr);
+                if (m_DC)
+                    m_OldBitmap = (HBITMAP)::SelectObject(m_DC, m_DIB);
             }
-            if (hwnd) ::ReleaseDC(hwnd, hdc); else ::ReleaseDC(nullptr, hdc);
-            // 默认字体：微软雅黑（ClearType 抗锯齿在上层 SetFont 时选定）
-            ApplyDefaultFont();
         }
 
-        ~CanvasImplWin32() override {
-            // 恢复旧对象再释放，避免 GDI 泄漏
-            if (m_MemDC && m_CurrentFont)
-                ::SelectObject(m_MemDC, ::GetStockObject(DEFAULT_GUI_FONT));
-            if (m_MemDC && m_OldBitmap)
-                ::SelectObject(m_MemDC, m_OldBitmap);
-            if (m_CurrentFont)
-                ::DeleteObject(m_CurrentFont);
-            if (m_MemBitmap)
-                ::DeleteObject(m_MemBitmap);
-            if (m_MemDC)
-                ::DeleteDC(m_MemDC);
+        ~CanvasImplSoftware() override {
+            if (m_DC && m_OldBitmap)
+                ::SelectObject(m_DC, m_OldBitmap);
+            if (m_DC)
+                ::DeleteDC(m_DC);
+            if (m_DIB)
+                ::DeleteObject(m_DIB);
         }
 
         int GetWidth() const override { return m_LogicW; }
@@ -55,215 +63,178 @@ namespace X_Y {
         int GetPhysicalWidth() const override { return m_Width; }
         int GetPhysicalHeight() const override { return m_Height; }
 
-        // 双缓冲：把内存位图一次性 BitBlt 到窗口 DC。
-        // 每次 Flush 动态 GetDC(窗口)/ReleaseDC，支持常驻画布而 DC 不悬空。
+        uint32_t* GetPixelBuffer() override { return m_Pixels; }
+        void* GetBridgeDC() override { return m_DC; }
+
         void Flush() override {
-            if (!m_MemDC) return;
+            if (!m_Pixels) return;
             HDC target = m_Hwnd ? ::GetDC(m_Hwnd) : ::GetDC(nullptr);
-            if (target) {
+            if (!target) return;
+
+            bool layered = m_Hwnd &&
+                (::GetWindowLongPtrW(m_Hwnd, GWL_EXSTYLE) & WS_EX_LAYERED) != 0;
+
+            if (layered) {
+                // Layered 窗口：per-pixel alpha（DIB 已是自顶向下 ARGB）
+                BLENDFUNCTION bf = {};
+                bf.BlendOp = AC_SRC_OVER;
+                bf.SourceConstantAlpha = 255;
+                bf.AlphaFormat = AC_SRC_ALPHA;
+                POINT ptSrc = { 0, 0 };
+                SIZE size = { m_Width, m_Height };
+                POINT ptDst = { 0, 0 };
+                ::UpdateLayeredWindow(m_Hwnd, nullptr, &ptDst, &size,
+                                      m_DC, &ptSrc, 0, &bf, ULW_ALPHA);
+            } else {
+                // 普通窗口：BitBlt（忽略 alpha，显示 RGB）
                 ::BitBlt(target, 0, 0, m_Width, m_Height,
-                         m_MemDC, 0, 0, SRCCOPY);
-                if (m_Hwnd) ::ReleaseDC(m_Hwnd, target);
-                else        ::ReleaseDC(nullptr, target);
+                         m_DC, 0, 0, SRCCOPY);
             }
+
+            if (m_Hwnd) ::ReleaseDC(m_Hwnd, target);
+            else        ::ReleaseDC(nullptr, target);
         }
 
-        // 设置绘制字体（Font 包装内部持有 HFONT）
-        void SetFont(const Font& font) override {
-            if (!m_MemDC) return;
-            if (m_CurrentFont)
-                ::SelectObject(m_MemDC, ::GetStockObject(DEFAULT_GUI_FONT));
-            HFONT hf = (HFONT)font.GetNativeHandle();
-            if (hf)
-                ::SelectObject(m_MemDC, hf);
-            m_CurrentFont = hf;
+        void Clear(uint32_t color) override {
+            if (!m_Pixels) return;
+            // 整幅填（物理尺寸），含 alpha。逐像素覆盖，不合成。
+            uint32_t c = ToARGBPremult(color);
+            uint32_t* p = m_Pixels;
+            uint32_t n = (uint32_t)m_Width * (uint32_t)m_Height;
+            for (uint32_t i = 0; i < n; ++i) *p++ = c;
         }
 
-        void FillRect(int x, int y, int w, int h, uint32_t
-            color) override {
+        void FillRect(int x, int y, int w, int h, uint32_t color) override {
             int px = S(x), py = S(y), pw = S(w), ph = S(h);
-            RECT rect = { px, py, px + pw, py + ph };
-            HBRUSH brush = CreateSolidBrush(RGB(
-                (color >> 16) & 0xFF,
-                (color >> 8) & 0xFF,
-                color & 0xFF
-            ));
-            ::FillRect(m_MemDC, &rect, brush);
-            DeleteObject(brush);
+            FillRectPhys(px, py, pw, ph, color);
         }
 
-        // 圆角矩形填充：用选区实现圆角，再填充（逻辑坐标）
-        void FillRoundRect(int x, int y, int w, int h, int r,
-            uint32_t color) override {
+        void FillRoundRect(int x, int y, int w, int h, int r, uint32_t color) override {
             if (r < 0) r = 0;
             int px = S(x), py = S(y), pw = S(w), ph = S(h);
             int pr = S(r);
             if (pw <= 0 || ph <= 0) return;
-            HRGN rgn = ::CreateRoundRectRgn(px, py, px + pw,
-                py + ph, pr * 2, pr * 2);
-            if (!rgn) return;
-            HBRUSH brush = ::CreateSolidBrush(RGB(
-                (color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF));
-            ::FillRgn(m_MemDC, rgn, brush);
-            ::DeleteObject(brush);
-            ::DeleteObject(rgn);
-        }
-
-        // 填充三角形：三个顶点(逻辑坐标) → DPI 缩放 → CreatePolygonRgn → FillRgn
-        void FillTriangle(int x1, int y1, int x2, int y2,
-            int x3, int y3, uint32_t color) override {
-            POINT pts[3] = {
-                { S(x1), S(y1) },
-                { S(x2), S(y2) },
-                { S(x3), S(y3) }
-            };
-            HRGN rgn = ::CreatePolygonRgn(pts, 3, WINDING);
-            if (!rgn) return;
-            HBRUSH brush = ::CreateSolidBrush(RGB(
-                (color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF));
-            ::FillRgn(m_MemDC, rgn, brush);
-            ::DeleteObject(brush);
-            ::DeleteObject(rgn);
-        }
-
-        void DrawText(int x, int y, const char* text, uint32_t
-            color) override {
-            SetTextColor(m_MemDC, RGB(
-                (color >> 16) & 0xFF,
-                (color >> 8) & 0xFF,
-                color & 0xFF
-            ));
-            SetBkMode(m_MemDC, TRANSPARENT);
-            // UTF-8 → UTF-16，统一走宽字符（配合全局 /utf-8）
-            std::wstring ws = Utf8ToWide(text);
-            TextOutW(m_MemDC, S(x), S(y), ws.c_str(), (int)ws.size());
-        }
-
-        void DrawText(int x, int y, const wchar_t* text,
-            uint32_t color) override {
-            SetTextColor(m_MemDC, RGB(
-                (color >> 16) & 0xFF,
-                (color >> 8) & 0xFF,
-                color & 0xFF
-            ));
-            SetBkMode(m_MemDC, TRANSPARENT);
-            TextOutW(m_MemDC, S(x), S(y), text, (int)wcslen(text));
-        }
-
-        // 组合拳：铺背景 + 写字（窄版，UTF-8 转宽再走宽版实现）
-        void FillText(int x, int y, int w, int h, int tx, int ty,
-            const char* text, uint32_t textColor, uint32_t
-            bgColor) override {
-            std::wstring ws = Utf8ToWide(text);
-            if (ws.empty()) return;
-            FillText(x, y, w, h, tx, ty, ws.c_str(), textColor,
-                bgColor);
-        }
-
-        // 组合拳：铺背景 + 写字（宽版核心）
-        void FillText(int x, int y, int w, int h, int tx, int ty,
-            const wchar_t* text, uint32_t textColor, uint32_t
-            bgColor) override {
-            // 1. 铺背景（底是啥不用管，反正我们填）
-            FillRect(x, y, w, h, bgColor);
-            // 2. 文字透明背景 = 同一背景色（ClearType 亚像素需已知背景）
-            SetBkMode(m_MemDC, OPAQUE);
-            SetBkColor(m_MemDC, RGB(
-                (bgColor >> 16) & 0xFF,
-                (bgColor >> 8) & 0xFF,
-                bgColor & 0xFF
-            ));
-            // 3. 写文字（起点用 tx,ty，可与背景错开）
-            SetTextColor(m_MemDC, RGB(
-                (textColor >> 16) & 0xFF,
-                (textColor >> 8) & 0xFF,
-                textColor & 0xFF
-            ));
-            TextOutW(m_MemDC, S(tx), S(ty), text, (int)wcslen(text));
-            // 4. 恢复 TRANSPARENT，防止污染后续绘制
-            SetBkMode(m_MemDC, TRANSPARENT);
-        }
-
-        void SetClip(int x, int y, int w, int h) override {
-            int px = S(x), py = S(y), pw = S(w), ph = S(h);
-            HRGN rgn = CreateRectRgn(px, py, px + pw, py + ph);
-            SelectClipRgn(m_MemDC, rgn);
-            DeleteObject(rgn);
-        }
-
-        // 测量文字宽度（当前字体），返回逻辑像素宽。
-        int MeasureText(const char* text) override {
-            std::wstring ws = Utf8ToWide(text);
-            return MeasureText(ws.c_str());
-        }
-
-        int MeasureText(const wchar_t* text) override {
-            if (!m_MemDC || !text || !*text) return 0;
-            SIZE sz = { 0, 0 };
-            ::GetTextExtentPoint32W(m_MemDC, text, (int)wcslen(text), &sz);
-            // 物理宽 → 逻辑宽（DPI 缩放还原）
-            return (int)(sz.cx / m_Scale + 0.5f);
-        }
-
-        void ResetClip() override {
-            SelectClipRgn(m_MemDC, nullptr);
-        }
-
-    private:
-        // 逻辑坐标 → 物理像素（DPI 缩放）
-        int S(int v) const {
-            return (int)(v * m_Scale + 0.5f);
-        }
-
-        // 用微软雅黑作为默认绘制字体（ClearType 抗锯齿）
-        void ApplyDefaultFont() {
-            if (!m_MemDC) return;
-
-            LOGFONTW lf = { 0 };
-            std::wstring family = L"Microsoft YaHei UI";
-            if (family.size() >= (size_t)LF_FACESIZE)
-                family.resize(LF_FACESIZE - 1);
-            wcscpy_s(lf.lfFaceName, family.c_str());
-            lf.lfHeight = -(int)(14 * m_Scale + 0.5f);  // 14px 逻辑字号，物理放大
-            lf.lfWeight = FW_NORMAL;
-            lf.lfQuality = CLEARTYPE_QUALITY;   // 抗锯齿
-            lf.lfCharSet = DEFAULT_CHARSET;
-            lf.lfOutPrecision = OUT_TT_PRECIS;
-
-            HFONT f = ::CreateFontIndirectW(&lf);
-            if (f) {
-                ::SelectObject(m_MemDC, f);
-                m_CurrentFont = f;
+            // 软件画圆角：逐行判断 4 个圆角象限，落在圆角外则跳过。
+            // 拆成矩形(中心区)+四角(逐像素判距)简单起见，这里直接整块逐像素判距。
+            uint32_t c = ToARGBPremult(color);
+            for (int yy = 0; yy < ph; ++yy) {
+                for (int xx = 0; xx < pw; ++xx) {
+                    int cx = xx, cy = yy;
+                    // 距离最近角
+                    int dx = 0, dy = 0;
+                    if (cx < pr && cy < pr)            { dx = cx;        dy = cy; }        // 左上
+                    else if (cx >= pw - pr && cy < pr) { dx = pw - 1 - cx; dy = cy; }      // 右上
+                    else if (cx < pr && cy >= ph - pr) { dx = cx;        dy = ph - 1 - cy; }// 左下
+                    else if (cx >= pw - pr && cy >= ph - pr) { dx = pw - 1 - cx; dy = ph - 1 - cy; } // 右下
+                    else { dx = -1; }
+                    bool inside;
+                    if (dx < 0) inside = true;   // 非角落区域
+                    else        inside = (dx*dx + dy*dy) <= pr*pr;
+                    if (!inside) continue;
+                    BlitPixel(px + xx, py + yy, c);
+                }
             }
         }
 
-        // 简单 UTF-8 → UTF-16 转换（配合全局 /utf-8 编译，全链路 UTF-8）
-        static std::wstring Utf8ToWide(const char* text) {
-            if (!text) return L"";
-            int len = ::MultiByteToWideChar(CP_UTF8, 0, text, -1,
-                nullptr, 0);
-            if (len <= 0) return L"";
-            std::wstring ws(len, L'\0');
-            ::MultiByteToWideChar(CP_UTF8, 0, text, -1, &ws[0], len);
-            if (!ws.empty() && ws.back() == L'\0')
-                ws.pop_back();
-            return ws;
+        void FillTriangle(int x1, int y1, int x2, int y2,
+                          int x3, int y3, uint32_t color) override {
+            int ax = S(x1), ay = S(y1);
+            int bx = S(x2), by = S(y2);
+            int cx = S(x3), cy = S(y3);
+            // 包围盒
+            int minX = min3(ax, bx, cx), maxX = max3(ax, bx, cx);
+            int minY = min3(ay, by, cy), maxY = max3(ay, by, cy);
+            uint32_t c = ToARGBPremult(color);
+            for (int y = minY; y <= maxY; ++y) {
+                for (int x = minX; x <= maxX; ++x) {
+                    if (PointInTri(x, y, ax, ay, bx, by, cx, cy))
+                        BlitPixel(x, y, c);
+                }
+            }
         }
 
-        int m_Width, m_Height;      // 物理像素（位图/窗口尺寸）
-        int m_LogicW, m_LogicH;     // 逻辑尺寸（供上层布局）
-        float m_Scale = 1.0f;       // DPI 缩放系数
-        HWND m_Hwnd = nullptr;      // 目标窗口句柄（Flush 时动态取/放 DC）
-        HDC m_MemDC;
-        HBITMAP m_MemBitmap;
-        HBITMAP m_OldBitmap;
-        HFONT m_CurrentFont = nullptr;
+        void SetClip(int x, int y, int w, int h) override {
+            m_ClipX = S(x); m_ClipY = S(y);
+            m_ClipW = S(w); m_ClipH = S(h);
+            m_ClipSet = true;
+        }
+
+        void ResetClip() override { m_ClipSet = false; }
+
+    private:
+        void FillRectPhys(int x, int y, int w, int h, uint32_t color) {
+            if (w <= 0 || h <= 0) return;
+            uint32_t c = ToARGBPremult(color);
+            for (int yy = 0; yy < h; ++yy)
+                for (int xx = 0; xx < w; ++xx)
+                    BlitPixel(x + xx, y + yy, c);
+        }
+
+        // 写一像素（含裁剪 + 越界 + alpha 合成）
+        void BlitPixel(int x, int y, uint32_t src) {
+            if (m_ClipSet &&
+                (x < m_ClipX || x >= m_ClipX + m_ClipW ||
+                 y < m_ClipY || y >= m_ClipY + m_ClipH)) return;
+            if (x < 0 || x >= m_Width || y < 0 || y >= m_Height) return;
+            uint32_t* d = &m_Pixels[(size_t)y * m_Width + x];
+            // 源 alpha
+            uint32_t sa = (src >> 24) & 0xFF;
+            if (sa >= 255) { *d = src; return; }
+            if (sa == 0)   { return; }
+            // alpha 合成（源已 premult）
+            uint32_t da = (*d >> 24) & 0xFF;
+            uint32_t sr = (src >> 16) & 0xFF, sg = (src >> 8) & 0xFF, sb = src & 0xFF;
+            uint32_t dr = (*d >> 16) & 0xFF, dg = (*d >> 8) & 0xFF, db = *d & 0xFF;
+            uint32_t oa = sa + da * (255 - sa) / 255;
+            uint32_t r  = (sa * sr + (255 - sa) * dr) / 255;
+            uint32_t g  = (sa * sg + (255 - sa) * dg) / 255;
+            uint32_t b  = (sa * sb + (255 - sa) * db) / 255;
+            *d = (oa << 24) | (r << 16) | (g << 8) | b;
+        }
+
+        // 0xAARRGGBB → premultiplied（Flush 给 UpdateLayeredWindow；软件合成用）
+        static uint32_t ToARGBPremult(uint32_t c) {
+            uint32_t a = (c >> 24) & 0xFF;
+            uint32_t r = ((c >> 16) & 0xFF) * a / 255;
+            uint32_t g = ((c >> 8 ) & 0xFF) * a / 255;
+            uint32_t b = (c & 0xFF) * a / 255;
+            return (a << 24) | (r << 16) | (g << 8) | b;
+        }
+
+        static int min3(int a, int b, int c) { return a<b ? (a<c?a:c) : (b<c?b:c); }
+        static int max3(int a, int b, int c) { return a>b ? (a>c?a:c) : (b>c?b:c); }
+
+        // 点在三角形内（重心坐标，含边界）
+        static bool PointInTri(int px, int py,
+                               int x1, int y1, int x2, int y2, int x3, int y3) {
+            auto sign = [](int p1x,int p1y,int p2x,int p2y,int p3x,int p3y)->int{
+                return (p1x-p3x)*(p2y-p3y)-(p2x-p3x)*(p1y-p3y);
+            };
+            int d1 = sign(px,py,x1,y1,x2,y2);
+            int d2 = sign(px,py,x2,y2,x3,y3);
+            int d3 = sign(px,py,x3,y3,x1,y1);
+            bool neg = (d1<0)||(d2<0)||(d3<0);
+            bool pos = (d1>0)||(d2>0)||(d3>0);
+            return !(neg && pos);
+        }
+
+        int S(int v) const { return (int)(v * m_Scale + 0.5f); }
+
+        int m_Width, m_Height;      // 物理像素
+        int m_LogicW, m_LogicH;     // 逻辑尺寸
+        float m_Scale = 1.0f;
+        HWND m_Hwnd = nullptr;
+        uint32_t* m_Pixels = nullptr;
+        HBITMAP m_DIB = nullptr;
+        HDC m_DC = nullptr;         // GDI 桥梁 DC（共享 DIB 像素）
+        HBITMAP m_OldBitmap = nullptr;
+        bool m_ClipSet = false;
+        int m_ClipX = 0, m_ClipY = 0, m_ClipW = 0, m_ClipH = 0;
     };
 
-    // 工厂实现：nativeHandle 当前为窗口句柄(HWND)
-    CanvasImpl* CanvasFactory::CreateCanvasImpl(int w, int h,
-        void* nativeHandle) {
-        return new CanvasImplWin32(w, h, (HWND)nativeHandle);
+    // 工厂：nativeHandle = 窗口句柄(HWND)。创建软件 ARGB 后端。
+    CanvasImpl* CanvasFactory::CreateCanvasImpl(int w, int h, void* nativeHandle) {
+        return new CanvasImplSoftware(w, h, (HWND)nativeHandle);
     }
 
 } // namespace X_Y

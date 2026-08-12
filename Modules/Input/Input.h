@@ -1,10 +1,15 @@
 ﻿#pragma once
 #include <stdint.h>
-namespace X_Y {
-	namespace Input_t {
-		using KeyCode  =unsigned int;
-		using MouseCode = unsigned int ;
-		struct xpos {float x, y;};
+namespace X_Y
+{
+	namespace Input_t
+	{
+		using KeyCode = unsigned int;
+		using MouseCode = unsigned int;
+		struct xpos
+		{
+			float x, y;
+		};
 		class Input
 		{
 		public:
@@ -35,7 +40,7 @@ namespace X_Y {
 			// 适合游戏/高频/全局输入(如 MouseFlight)，实时、无焦点限制。
 			// 注：现有 IsKeyPressed/IsMouseButtonPressed 走 KeyMapper(供 UI/窗口事件)，
 			//     与这里的硬件轮询并存，各司其职。
-			static bool IsKeyDown(KeyCode key);      // GetAsyncKeyState 直读
+			static bool IsKeyDown(KeyCode key);		   // GetAsyncKeyState 直读
 			static bool IsMouseDown(MouseCode button); // GetAsyncKeyState 直读
 		};
 		namespace Key
@@ -45,10 +50,10 @@ namespace X_Y {
 				// From glfw3.h
 				Space = 32,
 				Apostrophe = 39, /* ' */
-				Comma = 44, /* , */
-				Minus = 45, /* - */
-				Period = 46, /* . */
-				Slash = 47, /* / */
+				Comma = 44,		 /* , */
+				Minus = 45,		 /* - */
+				Period = 46,	 /* . */
+				Slash = 47,		 /* / */
 
 				D0 = 48, /* 0 */
 				D1 = 49, /* 1 */
@@ -62,7 +67,7 @@ namespace X_Y {
 				D9 = 57, /* 9 */
 
 				Semicolon = 59, /* ; */
-				Equal = 61, /* = */
+				Equal = 61,		/* = */
 
 				A = 65,
 				B = 66,
@@ -92,8 +97,8 @@ namespace X_Y {
 				Z = 90,
 
 				LeftBracket = 91,  /* [ */
-				Backslash = 92,  /* \ */
-				RightBracket = 93,  /* ] */
+				Backslash = 92,	   /* \ */
+				RightBracket = 93, /* ] */
 				GraveAccent = 96,  /* ` */
 
 				World1 = 161, /* non-US #1 */

@@ -1,4 +1,5 @@
 ﻿#include "dock/DockPanel.h"
+#include "Widget/FontLibrary.h"
 
 namespace X_Y {
 
@@ -132,7 +133,8 @@ void DockPanel::OnPaint(Canvas& canvas)
         bool active = (i == m_ActiveTab);
         if (active)
         canvas.FillRect(x, 0, c_TabW, c_TabH, Color_TabActive);
-        canvas.DrawText(x + 4, 4, m_Tabs[i].Title.c_str(),
+        auto& font = FontLibrary::Instance().GetDefault();
+        canvas.DrawText(font, x + 4, 4, m_Tabs[i].Title.c_str(),
                         active ? Color_TabTextActive : Color_TabText);
         x += c_TabW + c_Pad;
     }

@@ -21,8 +21,8 @@ namespace X_Y {
 
     private:
         std::string m_Text;
-        uint32_t m_Color = 0x00000000;
-        uint32_t m_BgColor = 0x00FFFFFF;
+        uint32_t m_Color = 0xFF000000;
+        uint32_t m_BgColor = 0xFFFFFFFF;
     };
 
 }

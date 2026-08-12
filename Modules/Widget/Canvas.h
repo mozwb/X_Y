@@ -9,17 +9,16 @@
 
 namespace X_Y {
 
-    // 2D 画布——轻量包装，隐藏平台实现
+    // 2D 画布——轻量包装，隐藏平台实现。
+    // 职责：**只做填充图形 + 双缓冲**。文字不在此持有，文字属于 Font。
+    // 文字 API（DrawText/FillText）是**薄转发壳**：把本画布的目标缓冲组装成
+    // CanvasTarget 传给 font 真渲染（文字后端选择归 Font，GDI alpha 截断 / FreeType 透明）。
 
     class Canvas {
     public:
         Canvas(int w, int h, void* nativeHandle)
-            : m_Impl(CanvasFactory::CreateCanvasImpl(w, h,
-                nativeHandle)), m_DefaultFont()
+            : m_Impl(CanvasFactory::CreateCanvasImpl(w, h, nativeHandle))
         {
-            // 默认字体：微软雅黑 ClearType，让所有 DrawText 立即清晰抗锯齿
-
-            m_Impl->SetFont(m_DefaultFont);
         }
 
         int GetWidth() const { return m_Impl->GetWidth(); }
@@ -29,93 +28,64 @@ namespace X_Y {
         // 供整幅清屏/填充等必须覆盖全部物理像素的场景使用。
         int GetPhysicalWidth() const { return m_Impl->GetPhysicalWidth(); }
         int GetPhysicalHeight() const { return m_Impl->GetPhysicalHeight(); }
- 
+
         // 双缓冲：把内存中已画好的一帧一次性上屏
+        void Flush() { m_Impl->Flush(); }
 
-        void Flush() {
-            m_Impl->Flush();
-        }
+        // 整幅清屏填色（物理尺寸，带 alpha）
+        void Clear(uint32_t color) { m_Impl->Clear(color); }
 
-        // 设置绘制字体（可传自定义 Font，含自下载的 ttf）
-        void SetFont(const Font& font) {
-            // 复制描述重建一个（Font 持有 unique_ptr 不可拷，复制 desc 最安全）
-            m_DefaultFont = Font(font.GetDesc());
-            m_Impl->SetFont(m_DefaultFont);
-        }
-
-        void FillRect(int x, int y, int w, int h, uint32_t
-            color) {
+        void FillRect(int x, int y, int w, int h, uint32_t color) {
             m_Impl->FillRect(x, y, w, h, color);
         }
-        void FillRoundRect(int x, int y, int w, int h, int r,
-            uint32_t color) {
+        void FillRoundRect(int x, int y, int w, int h, int r, uint32_t color) {
             m_Impl->FillRoundRect(x, y, w, h, r, color);
         }
-        // 填充三角形（三个顶点，逻辑坐标）
         void FillTriangle(int x1, int y1, int x2, int y2,
-            int x3, int y3, uint32_t color) {
+                          int x3, int y3, uint32_t color) {
             m_Impl->FillTriangle(x1, y1, x2, y2, x3, y3, color);
         }
-        void DrawText(int x, int y, const char* text, uint32_t
-            color) {
-            m_Impl->DrawText(x, y, text, color);
+
+        // ── 文字（薄转发壳，文字逻辑归 Font）──
+        // font = "用哪款字体画这段字"（每次显式指定，无 SetFont 状态）。
+        void DrawText(const Font& font, int x, int y,
+                      const char* text, uint32_t color) {
+            font.DrawText(MakeTarget(), x, y, text, color);
         }
-        void DrawText(int x, int y, const wchar_t* text,
-            uint32_t color) {
-            m_Impl->DrawText(x, y, text, color);
+        void DrawText(const Font& font, int x, int y,
+                      const wchar_t* text, uint32_t color) {
+            font.DrawText(MakeTarget(), x, y, text, color);
+        }
+        void FillText(const Font& font, int x, int y, int w, int h,
+                      int tx, int ty, const char* text,
+                      uint32_t textColor, uint32_t bgColor) {
+            font.FillText(MakeTarget(), x, y, w, h, tx, ty, text, textColor, bgColor);
+        }
+        void FillText(const Font& font, int x, int y, int w, int h,
+                      int tx, int ty, const wchar_t* text,
+                      uint32_t textColor, uint32_t bgColor) {
+            font.FillText(MakeTarget(), x, y, w, h, tx, ty, text, textColor, bgColor);
         }
 
-        // ============================================================
-        // 文字渲染背景策略预留（别写死，将来别瞎加接口）
-        //   文字就两种场景；若将来又冒出第三种，先停下来想清楚，
-        //   别造新参数/新函数：
-        //   场景1「要一块背景」→ 用 FillText：填底 + 写字，
-        //                       底是啥不用管，反正都是我们填。
-        //   场景2「只写字」   → 将来写在任意位置(图片/渐变/已有内容)
-        //                       之上，需要读取底层真实背景给
-        //                       ClearType，到时再补读底层背景的接口，
-        //                       现在不做。
-        //   禁止事项：不搞"全局默认背景色"状态、不做 TextBg
-        //   枚举策略、不上全能 DrawTextEx，两个场景对应两个函数就够。
-        // ============================================================
+        void SetClip(int x, int y, int w, int h) { m_Impl->SetClip(x, y, w, h); }
+        void ResetClip() { m_Impl->ResetClip(); }
 
-        void FillText(int x, int y, int w, int h, int tx, int ty,
-            const char* text, uint32_t textColor, uint32_t bgColor,
-            const Font* font = nullptr) {
-            if (font)
-                m_Impl->SetFont(*font);
-            m_Impl->FillText(x, y, w, h, tx, ty, text, textColor,
-                bgColor);
-        }
-        void FillText(int x, int y, int w, int h, int tx, int ty,
-            const wchar_t* text, uint32_t textColor, uint32_t
-            bgColor, const Font* font = nullptr) {
-            if (font)
-                m_Impl->SetFont(*font);
-            m_Impl->FillText(x, y, w, h, tx, ty, text, textColor,
-                bgColor);
-        }
-
-        // 测量文字宽度（用当前字体），返回逻辑像素宽。供折行判断。
-
-        int MeasureText(const char* text) const {
-            return m_Impl->MeasureText(text);
-        }
-        int MeasureText(const wchar_t* text) const {
-            return m_Impl->MeasureText(text);
-        }
-
-        void SetClip(int x, int y, int w, int h) {
-            m_Impl->SetClip(x, y, w, h);
-        }
-        void ResetClip() {
-            m_Impl->ResetClip();
-        }
+        // ── 软件 ARGB 缓冲直取（供 Font 拼目标 / 特殊上层直读）──
+        uint32_t* GetPixelBuffer() { return m_Impl->GetPixelBuffer(); }
+        void* GetBridgeDC() { return m_Impl->GetBridgeDC(); }
 
     private:
+        // 组装文字绘制目标（本画布软件缓冲 + 尺寸 + GDI 桥 DC）
+        CanvasTarget MakeTarget() {
+            CanvasTarget t;
+            t.pixels = m_Impl->GetPixelBuffer();
+            t.width  = m_Impl->GetPhysicalWidth();
+            t.height = m_Impl->GetPhysicalHeight();
+            t.dc     = m_Impl->GetBridgeDC();
+            return t;
+        }
+
         std::unique_ptr<CanvasImpl> m_Impl;
-        Font m_DefaultFont;   // 当前绘制字体（默认微软雅黑 ClearType）
     };
 
-} 
-// namespace X_Y
+} // namespace X_Y

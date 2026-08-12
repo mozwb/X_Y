@@ -8,8 +8,8 @@ namespace X_Y {
 
     struct ListBoxItem {
         std::string text;
-        uint32_t textColor = 0x00000000;
-        uint32_t bgColor = 0x00FFFFFF;
+        uint32_t textColor = 0xFF000000;
+        uint32_t bgColor = 0xFFFFFFFF;
         void* userData = nullptr;
     };
 
@@ -25,7 +25,7 @@ namespace X_Y {
     public:
         ListBox() = default;
 
-        void AddItem(const char* text, uint32_t textColor = 0x00000000);
+        void AddItem(const char* text, uint32_t textColor = 0xFF000000);
         void Clear();
 
         int GetItemCount() const { return (int)m_Items.size(); }

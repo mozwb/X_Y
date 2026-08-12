@@ -1,5 +1,6 @@
 ﻿#include "Component/TextInput.h"
 #include "Input/MapCode.h"
+#include "Widget/FontLibrary.h"
 
 namespace X_Y {
 
@@ -42,7 +43,7 @@ namespace X_Y {
     void TextInput::OnPaint(Canvas& canvas) {
         int x = GetX(), y = GetY(), w = GetWidth(), h = GetHeight();
 
-        canvas.FillRect(x, y, w, h, IsFocused() ? 0x00FFFFFF : 0x00F0F0F0);
+        canvas.FillRect(x, y, w, h, IsFocused() ? 0xFFFFFFFF : 0xFFF0F0F0);
 
         canvas.FillRect(x, y, w, 1, m_BorderColor);
         canvas.FillRect(x, y + h - 1, w, 1, m_BorderColor);
@@ -51,17 +52,18 @@ namespace X_Y {
 
         int textX = x + 4;
         int textY = y + (h - 14) / 2;
+        auto& font = FontLibrary::Instance().GetDefault();
         if (!m_Text.empty()) {
-            canvas.DrawText(textX, textY, m_Text.c_str(), m_TextColor);
+            canvas.DrawText(font, textX, textY, m_Text.c_str(), m_TextColor);
         } else if (!this->IsFocused() && !m_Placeholder.empty()) {
-            canvas.DrawText(textX, textY, m_Placeholder.c_str(), 0x00AAAAAA);
+            canvas.DrawText(font, textX, textY, m_Placeholder.c_str(), 0xFFAAAAAA);
         }
 
         if (IsFocused()) {
             std::string before = m_Text.substr(0, m_CursorPos);
             // 用实际字体测宽（中文/全角宽度不同，不能硬编码 *8）
-            int cx = textX + canvas.MeasureText(before.c_str());
-            canvas.FillRect(cx, textY, 1, 14, 0x00000000);
+            int cx = textX + font.MeasureText(before.c_str());
+            canvas.FillRect(cx, textY, 1, 14, 0xFF000000);
         }
     }
 

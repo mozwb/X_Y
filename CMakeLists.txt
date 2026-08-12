@@ -105,6 +105,15 @@ target_link_libraries(Log PUBLIC DataStore)
 xy_module(Image)
 target_link_libraries(Image PUBLIC Log Memory FilesSystem)
 
+# ── vendor：freetype(文字后端，per-pixel alpha 透明文字) ──
+# add_subdirectory 源码编译，静态链接进 X_Y。关掉非必要外部依赖(zlib/png/svg…)。
+set(FT_DISABLE_ZLIB TRUE)
+set(FT_DISABLE_BZIP2 TRUE)
+set(FT_DISABLE_PNG TRUE)
+set(FT_DISABLE_HARFBUZZ TRUE)
+set(FT_DISABLE_BROTLI TRUE)
+add_subdirectory(vendor/freetype ${CMAKE_BINARY_DIR}/freetype EXCLUDE_FROM_ALL)
+
 # ══════════════════════════════════════════════════════
 # ── APP 层 ──
 # 注：Application 已并入 Widget 模块（Widget/Application.h + src/Application.cpp）
@@ -115,7 +124,7 @@ xy_module(GraphicsContext)
 target_link_libraries(GraphicsContext PUBLIC Log glad)
 
 xy_module(Widget)
-target_link_libraries(Widget PUBLIC Log Input GraphicsContext Movement XMath)
+target_link_libraries(Widget PUBLIC Log Input GraphicsContext Movement XMath freetype)
 
 # ── UI（含 imgui，依赖 Widget/DataStore/Timer + opengl32）──
 xy_module(UI)

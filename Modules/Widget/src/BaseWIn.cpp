@@ -142,8 +142,9 @@ Canvas& BaseWin::GetCanvas() {
     if (cw < 1 || ch < 1) cw = 1, ch = 1;
 
     if (m_Canvas) {
-        // 尺寸变了(窗口 resize) → 重建画布
-        if (m_Canvas->GetWidth() != cw || m_Canvas->GetHeight() != ch) {
+        // 尺寸变了(窗口 resize) → 重建画布（画布内部存物理缓冲，按物理尺寸比较）
+        if (m_Canvas->GetPhysicalWidth() != cw ||
+            m_Canvas->GetPhysicalHeight() != ch) {
             m_Canvas.reset();
         } else {
             return *m_Canvas;
@@ -165,8 +166,8 @@ void BaseWin::Flush() {
 
 void BaseWin::ClearBackBuffer(uint32_t color) {
     Canvas& c = GetCanvas();
-    // 用物理尺寸填满整幅位图(GetWidth 是逻辑尺寸,可能因 DPI 缩放覆盖不全 → 残留黑区)
-    c.FillRect(0, 0, c.GetPhysicalWidth(), c.GetPhysicalHeight(), color);
+    // 整幅物理尺寸清屏填色（软件后端 Clear 带 alpha 填充）
+    c.Clear(color);
 }
 
 void BaseWin::RequestRepaint() {

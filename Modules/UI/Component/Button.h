@@ -19,9 +19,9 @@ namespace X_Y {
 
     private:
         std::string m_Text;
-        uint32_t m_TextColor = 0x00000000;
-        uint32_t m_BgColor = 0x00F0F0F0;
-        uint32_t m_HoverColor = 0x00E0E0E0;
+        uint32_t m_TextColor = 0xFF000000;
+        uint32_t m_BgColor = 0xFFF0F0F0;
+        uint32_t m_HoverColor = 0xFFE0E0E0;
         bool m_MouseHover = false;
     };
 

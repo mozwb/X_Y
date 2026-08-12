@@ -39,9 +39,9 @@ namespace X_Y {
         std::string m_Text;
         std::string m_Placeholder;
         int m_CursorPos = 0;    // 字节偏移（UTF-8），非字符数
-        uint32_t m_TextColor = 0x00000000;
-        uint32_t m_BgColor = 0x00FFFFFF;
-        uint32_t m_BorderColor = 0x00CCCCCC;
+        uint32_t m_TextColor = 0xFF000000;
+        uint32_t m_BgColor = 0xFFFFFFFF;
+        uint32_t m_BorderColor = 0xFFCCCCCC;
         bool m_ReadOnly = false;
     };
 

@@ -1,4 +1,5 @@
 #include "Component/Button.h"
+#include "Widget/FontLibrary.h"
 
 namespace X_Y {
 
@@ -9,14 +10,15 @@ namespace X_Y {
 
         canvas.FillRect(x, y, w, h, bg);
 
-        canvas.FillRect(x, y, w, 1, 0x00CCCCCC);
-        canvas.FillRect(x, y + h - 1, w, 1, 0x00CCCCCC);
-        canvas.FillRect(x, y, 1, h, 0x00CCCCCC);
-        canvas.FillRect(x + w - 1, y, 1, h, 0x00CCCCCC);
+        canvas.FillRect(x, y, w, 1, 0xFFCCCCCC);
+        canvas.FillRect(x, y + h - 1, w, 1, 0xFFCCCCCC);
+        canvas.FillRect(x, y, 1, h, 0xFFCCCCCC);
+        canvas.FillRect(x + w - 1, y, 1, h, 0xFFCCCCCC);
 
         int textX = x + (w - (int)m_Text.size() * 8) / 2;
         int textY = y + (h - 14) / 2;
-        canvas.DrawText(textX, textY, m_Text.c_str(), m_TextColor);
+        auto& font = FontLibrary::Instance().GetDefault();
+        canvas.DrawText(font, textX, textY, m_Text.c_str(), m_TextColor);
     }
 
 }

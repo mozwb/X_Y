@@ -1,4 +1,5 @@
 ﻿#include "UI/Component/TagBar.h"
+#include "Widget/FontLibrary.h"
 #include <algorithm>
 
 namespace X_Y {
@@ -52,7 +53,8 @@ namespace X_Y {
         int rows = 1;
 
         for (size_t i = 0; i < m_Tags.size(); i++) {
-            int textW = canvas.MeasureText(m_Tags[i].c_str());
+            const Font& font = FontLibrary::Instance().GetDefault();
+            int textW = font.MeasureText(m_Tags[i].c_str());
             int tagW = textW + textPadLeft + textPadRight;
             if (tagW < rowH) tagW = rowH;
 
@@ -106,13 +108,14 @@ namespace X_Y {
             canvas.FillRoundRect(rx, ry, r.w, r.h, 6, bg);
 
             // 文字：从左侧开始，垂直居中
-            canvas.DrawText(rx + m_PadX_text, ry + (r.h - 14) / 2, m_Tags[i].c_str(), textColor);
+            auto& font = FontLibrary::Instance().GetDefault();
+            canvas.DrawText(font, rx + m_PadX_text, ry + (r.h - 14) / 2, m_Tags[i].c_str(), textColor);
 
             // 右上角 × 删除按钮（圆角小方块 + × 字符）
             const Rect& c = m_CloseRects[i];
             int cx = x0 + c.x, cy = y0 + c.y;
             canvas.FillRoundRect(cx, cy, c.w, c.h, 3, hover ? 0xFF6A7280 : 0xFF555A63);
-            canvas.DrawText(cx + (c.w - 10) / 2, cy + (c.h - 12) / 2, L"×", 0xFFEEEEEE);
+            canvas.DrawText(font, cx + (c.w - 10) / 2, cy + (c.h - 12) / 2, L"×", 0xFFEEEEEE);
         }
     }
 
