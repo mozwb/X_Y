@@ -20,6 +20,19 @@ namespace X_Y {
         virtual int GetPhysicalWidth() const = 0;
         virtual int GetPhysicalHeight() const = 0;
 
+        // ── 逻辑 ↔ 物理 互译 ──────────────────────────────
+        // 统一坐标体系：上层(布局/物理引擎)一律用逻辑坐标，绘制时后端内部
+        // 会自动 ×scale 落到物理像素。需要跟物理像素打交道(鼠标原始坐标/
+        // 位图尺寸)时，用 PToL/LToP 换算，不必处处自己乘除 scale。
+        // scale 由各后端自持（软件后端 = Dpi::GetScale()，多后端各自独立）。
+        virtual float GetScale() const = 0;
+
+        // 逻辑 → 物理像素（与绘制内部 ×scale 同一份换算，保证画在"输入处"）
+        virtual int LToP(int logical) const = 0;
+
+        // 物理像素 → 逻辑坐标（鼠标原始坐标/物理位图坐标转入逻辑体系用）
+        virtual int PToL(int physical) const = 0;
+
         // 双缓冲：把内存中已画好的一帧一次性上屏
         virtual void Flush() = 0;
 

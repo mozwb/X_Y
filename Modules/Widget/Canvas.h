@@ -29,6 +29,11 @@ namespace X_Y {
         int GetPhysicalWidth() const { return m_Impl->GetPhysicalWidth(); }
         int GetPhysicalHeight() const { return m_Impl->GetPhysicalHeight(); }
 
+        // 逻辑 ↔ 物理 互译（薄转发到后端，scale 由各后端自持）
+        float GetScale() const { return m_Impl->GetScale(); }
+        int LToP(int logical) const { return m_Impl->LToP(logical); }
+        int PToL(int physical) const { return m_Impl->PToL(physical); }
+
         // 双缓冲：把内存中已画好的一帧一次性上屏
         void Flush() { m_Impl->Flush(); }
 

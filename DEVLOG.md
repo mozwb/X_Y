@@ -1,3 +1,60 @@
+## 2026-08-14 — X_Y::Physics 物理引擎落地（可换后端 + 耳切剖分分层碰撞）
+
+> 砚台主导设计，琉璃实现。全新模块：**三层架构 + 工厂**（对齐 Widget 层）。
+> ⚠️ 涉及 X_Y Modules/Physics 改动 + CMake（Physics 从 INTERFACE 改回 xy_module）。
+
+### 架构（三层 + 工厂）
+```
+Modules/Physics/
+├─ Physics.h          # 上层稳定接口：Body门面(Pimpl持BodyImpl*) + Test模板 + SetCollisionBackend + Contact
+├─ PhysicsImpl.h      # 中间纯虚接口：BodyImpl + CollisionBackend + using Vec=MATH::Vec2(换维改这) + Tri2D
+├─ PhysicsFactory.h   # 工厂：CreateBodyImpl(type)/CreateCollisionBackend(type)
+├─ src/
+│   ├─ Physics.cpp          # Body构造/移动(工厂建) + 全局后端 g_backend(默认工厂建2D)
+│   ├─ PhysicsFactory.cpp   # switch 按 PhysicsBackendType::Builtin2D 返回具体实现
+│   └─ Builtin2D/
+│       ├─ BodyImpl2D.h/.cpp        # Vec2实现 + 耳切剖分缓存 + prevPos
+│       └─ CollisionBackend2D.h/.cpp # 三层碰撞算法
+```
+- `PhysicsBackendType` 枚举：Builtin2D（将来加 Builtin3D/Box2D）
+- `Vec`（点/向量）暴露给上层传参，贯穿 上层+虚接口+实现。当前 2D=Vec2，换 3D 改别名一处（2D 时 z=0，上层逻辑不变）
+- `Body` 构造用 `CreateBodyImpl()`，全方法一行转发 `m_impl->xxx()`
+- 全局后端 `GetCollisionBackend()/SetCollisionBackend()`，Test 用它
+
+### 用法（上层只碰 Body + Physics::Test）
+```cpp
+body.SetPos({0,0});
+body.SetRadius(8);                       // 圆
+// 或 body.AddPoint({0,0}); body.AddPoint({10,0}); body.AddPoint({5,8});  // 多边形
+body.SetVel({0,0}); body.SetMass(1);
+X_Y::Physics::Test(a, b, [](Body& x, Body& y){ /*碰撞处理*/ });
+```
+
+### 三层碰撞算法（耳切剖分 + 穿透）
+- **L1 扫掠矩形(AABB)粗筛 O(1)**：SweptBox=覆盖 min(prevPos,pos)..max 外扩 boundingRadius，两盒不相交→排除。高速物体 prevPos≠pos 时扫掠盒变宽，**不会被当前 pos 排除**（否则穿透检测跑不到）；未动退化为静态盒
+- **L2 关键点三角形包含**：耳切三角剖分**离线缓存**（设置形状 AddPoint 时算一次，运行时零开销）；取中心点+顶点均匀采样(上限8)测是否在对方三角形内
+- **L3 高速穿透**：L2 未命中才跑；中心点扫掠线段 prevPos→pos vs 对方三角形（隧道效应）
+- 形状=有序多边形顶点（逆/顺时针皆可，内部统一逆时针），凹多边形也支持
+
+### ⚠️ 两个踩坑（要记住）
+1. **SetPos 必须同步 prevPos**：否则静态物体 prevPos 停在初始(0,0)，扫掠矩形变大斜矩形误判。修法：`SetPos` 里 `prevPos=新pos`（瞬移/静止无路径）；真正的运动路径由 `Integrate` 记录（积分前 m_prevPos=m_pos）。
+2. L1 不能用“当前 pos 距离”，必须用扫掠矩形盖住路径（否则高速穿透被排除）。
+
+### 边界处理（砚台认可，未实现）
+- 方法一：四周放大箱子当障碍物（引擎一视同仁刚体，走碰撞回调）
+- 方法二：积分后夹紧 pos 不超边界（最省，小型演示推荐）
+
+### 验证
+- 语法自检全过；自测 8/8 全过（圆圆/圆在正方形/圆在外/三角包含/凹L形不碰/凹L形臂碰/高速穿透）
+- ⚠️ 完整 X_Y 工程构建交砚台（新增 multi .cpp，需 cmake configure 重扫 GLOB）
+
+### 遗留/待定
+- 旧 `CollisionSence.h`（空壳，零引用）未删，等砚台决定
+- 第一版只返回 bool，无法线/穿透深度（反弹/推开后续加）
+- 采样策略（均匀上限8）后续可优化；凹多边形耳切已验证
+
+---
+
 ## 2026-08-06 — LogViewer 多关键词筛选完成 + 输入/缩放/拖拽系列修复（收尾）
 
 **今日 LogViewer 全部完成并通过砚台验收。**（拆行与 WM_CHAR 见前两条日志。）

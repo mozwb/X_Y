@@ -147,12 +147,9 @@ target_link_libraries(Render PUBLIC Log Middle XCore glad XMath)
 xy_module(Model)
 target_link_libraries(Model PUBLIC Memory FilesSystem)
 
-# ── Physics：微型物理（header-only），依赖自研 XMath 后端 ──
-add_library(Physics INTERFACE)
-target_link_libraries(Physics INTERFACE XMath)
-target_include_directories(Physics INTERFACE
-    "${CMAKE_SOURCE_DIR}/Modules/Physics"
-    "${CMAKE_SOURCE_DIR}/Modules")
+# ── Physics：物理 + 碰撞（Pimpl 门面 + 可换后端），依赖自研 XMath ──
+xy_module(Physics)
+target_link_libraries(Physics PUBLIC XMath)
 
 # ══════════════════════════════════════════════════════
 # 分发：把头文件安装到 dist/include（构建后执行，替代旧 MoveFiles.py）
