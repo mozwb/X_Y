@@ -209,6 +209,39 @@ namespace X_Y
             }
         }
 
+        void FillCircle(int cx, int cy, float rOuter, float rInner, uint32_t color) override
+        {
+            // 逻辑 → 物理（半径是浮点，直接用 S 对单个值缩放会失真，改对半径做换算）
+            int px = S(cx), py = S(cy);
+            float outer = rOuter * m_Scale;
+            float inner = (rInner > 0.0f) ? rInner * m_Scale : 0.0f;
+            if (outer <= 0.0f)
+                return;
+            // 圆心对齐到物理像素中心，保证圆环宽在奇数/偶数半径下都自然
+            float ox = px + 0.5f, oy = py + 0.5f;
+
+            // 包围盒（物理像素）
+            int rPix = (int)(outer + 1.0f);
+            int minX = px - rPix, maxX = px + rPix;
+            int minY = py - rPix, maxY = py + rPix;
+
+            uint32_t c = ToARGBPremult(color);
+            float outer2 = outer * outer;
+            float inner2 = inner * inner;
+
+            for (int y = minY; y <= maxY; ++y)
+            {
+                for (int x = minX; x <= maxX; ++x)
+                {
+                    float dx = (float)x + 0.5f - ox;
+                    float dy = (float)y + 0.5f - oy;
+                    float d2 = dx * dx + dy * dy;
+                    if (d2 <= outer2 && (inner <= 0.0f || d2 >= inner2))
+                        BlitPixel(x, y, c);
+                }
+            }
+        }
+
         void SetClip(int x, int y, int w, int h) override
         {
             m_ClipX = S(x);

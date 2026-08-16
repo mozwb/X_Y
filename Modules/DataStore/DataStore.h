@@ -67,6 +67,14 @@ namespace X_Y
         void SetDataDir(const std::string &dir);
         const XPath &GetDataDir() const { return m_DataDir; }
 
+        // ── 静音开关 ──
+        // Enabled=true(默认)：正常工作。Enabled=false：所有操作空转（不读写 buffer/文件/索引），
+        // 接口保持可用但啥也不干——用于让所有依赖方(如 Log 的 DataStoreDevice / LogViewer)集体失效。
+        // ⚠️ 静音时 GetOrCreate/Get 返回 nullptr，调用方必须判空（现有 DataStoreDevice/LogViewer 均已判空）。
+        void SetEnabled(bool on);
+        bool IsEnabled() const { return m_Enabled; }
+
+
         // ── 统计 ──
         DataStoreStats GetStats() const;
         std::string ToString() const;
@@ -87,6 +95,7 @@ namespace X_Y
         XPath m_DataDir{"DataStore/"};
 
         mutable std::shared_mutex m_Mutex;
+        bool m_Enabled = true; // 静音开关（false=全部空转）
     };
 
 } // namespace X_Y

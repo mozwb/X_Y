@@ -62,6 +62,9 @@ namespace X_Y::Physics
         bool HasGravity() const { return m_impl->HasGravity(); }
         void SetUnit(float u) { m_impl->SetUnit(u); }
         float GetUnit() const { return m_impl->GetUnit(); }
+        // 朝向（弧度，逆时针为正；本地几何绕 pos 旋转）
+        void SetRotation(float rad) { m_impl->SetRotation(rad); }
+        float GetRotation() const { return m_impl->GetRotation(); }
 
         // ── 物理演化（半隐式欧拉）──
         void Integrate(float dt) { m_impl->Integrate(dt); }

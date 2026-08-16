@@ -51,6 +51,11 @@ namespace X_Y {
             m_Impl->FillTriangle(x1, y1, x2, y2, x3, y3, color);
         }
 
+        // 填充圆形/圆环（逻辑坐标）。rInner<=0 → 实心圆；0<rInner → 空心圆环。
+        void FillCircle(int cx, int cy, float rOuter, float rInner, uint32_t color) {
+            m_Impl->FillCircle(cx, cy, rOuter, rInner, color);
+        }
+
         // ── 文字（薄转发壳，文字逻辑归 Font）──
         // font = "用哪款字体画这段字"（每次显式指定，无 SetFont 状态）。
         void DrawText(const Font& font, int x, int y,

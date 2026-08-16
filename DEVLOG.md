@@ -1,3 +1,40 @@
+## 2026-08-16 — DataStore 新增静音开关 SetEnabled（让依赖它的一切集体失效）
+
+> 需求(MouseFlight 收尾)：想关日志但不想动所有调用方。给 DataStore 加总开关，接口保留但静音空转。
+
+### 改动
+- `Modules/DataStore/DataStore.h`：+`SetEnabled(bool)` / `IsEnabled()`，private `bool m_Enabled=true`(默认开=现状不变)。
+- `Modules/DataStore/src/DataStore.cpp`：所有核心方法开头加 `if(!m_Enabled) return(空/0/nullptr)`。
+  - GetOrCreate/Get → nullptr（⚠️ 调用方需判空；现有 DataStoreDevice/LogViewer 均已判空）。
+  - Save/SaveAll → false；Flush/FlushAll/Remove/Rename/LoadDir → 空；Contains→false；ListKeys→空。
+  - SaveIndex 静音时不写；SetEnabled(false) 顺带清空 m_Entries。
+- LoadFile：加静音判断时注意保持无锁读文件→加锁写条目的原语义(不要把所有 I/O 包进锁)。
+
+### 用法
+- 想静音：程序早期 `X_Y::DataStore::Instance().SetEnabled(false);` → 所有日志/落盘/索引全停。
+- 默认 true，不影响其它项目。
+
+### ⚠️ 待办
+- dist 的 DataStore.h 已同步，但 **libDataStore.a 需重建 X_Y** 才生效（当前还是 8/12 旧库）。
+- IsEnabled() 读 m_Enabled 未加锁(纯 bool)；若需严格线程安全可后续加锁。
+
+---
+
+## 2026-08-16 — Canvas 新增 FillCircle（实心圆/空心圆环）
+
+> MouseFlight 爆炸特效前置能力。为 Widget 层 Canvas 加「圆/rInner=0」+「空心圆环/rInner>0」绘制，软件光栅逐像素判距，风格对齐 FillRoundRect/FillTriangle。
+
+### 改动（3 文件）
+- `Modules/Widget/CanvasImpl.h`：接口层加纯虚 `FillCircle(int cx,int cy,float rOuter,float rInner,uint32_t color)`。`rInner<=0` 实心圆，`0<rInner` 空心圆环（环宽=rOuter-rInner）。
+- `Modules/Widget/Canvas.h`：薄转发壳 `FillCircle(...)`。
+- `Modules/Widget/src/Win32/CanvasImplWin32.cpp`：软件光栅。圆心对齐物理像素中心(+0.5f)，逐像素判 `rInner²≤d²≤rOuter²`，用 BlitPixel(裁剪/越界/alpha合成自带)。半径是浮点，`*m_Scale` 换算物理而非 S()。
+
+### 备注
+- dist/include 由构建流程 configure/build/install 同步，不手改。
+- 待砚台 configure/build/install 后，MouseFlight 侧即可用 `canvas.FillCircle(cx,cy,r,0,color)` 画实心圆 / `FillCircle(cx,cy,rOuter,rInner,color)` 画圆环做爆炸特效。
+
+---
+
 ## 2026-08-14 — X_Y::Physics 物理引擎落地（可换后端 + 耳切剖分分层碰撞）
 
 > 砚台主导设计，琉璃实现。全新模块：**三层架构 + 工厂**（对齐 Widget 层）。
@@ -43,6 +80,24 @@ X_Y::Physics::Test(a, b, [](Body& x, Body& y){ /*碰撞处理*/ });
 ### 边界处理（砚台认可，未实现）
 - 方法一：四周放大箱子当障碍物（引擎一视同仁刚体，走碰撞回调）
 - 方法二：积分后夹紧 pos 不超边界（最省，小型演示推荐）
+
+### 追加：Body 旋转（08-14 晚，砚台要求“绘制=碰撞形状”统一）
+- BodyImpl 加 `SetRotation(float rad)/GetRotation()`（弧度，逆时针正，本地几何绕 pos 旋转）
+- 加 `LocalToWorld(local)` 虚接口：本地点旋转+平移 → 世界点。**绘制/碰撞统一用它**保证朝向一致
+  - GetWorldPoints / SampleWorldKeyPoints / 碰撞后端(三角形世界坐标) 全改走 LocalToWorld
+  - ⚠️ 关键：碰撞用的三角形也必须过旋转（不能只 pos+local），否则 body 转动后碰撞形状和绘制形状不一致
+- 意义：飞机 AddPoint 定义朝上三角 + SetRotation(航向)，Draw 直接画 GetWorldPoints → 所见即所碰；为将来“顶点绑图片”(OpenGL 式)铺路
+- 自测 6/6 全过（含旋转 90° 正方形仍覆盖中心、旋转三角形重叠、GetWorldPoints 旋转准确）
+
+### 追加：圆/多边形统一检测（08-14 晚，砚台指出圆无点集合的问题）
+- **不额外写圆形类型**：points 空 = 圆。
+- L2 重构为**统一“采样点互测 + 内部测试分发”**：
+  - `PointHitsBody(p, body)`：body 是圆(空)→距离<=半径；多边形→测落在剖分三角形内。
+  - 对称：A 关键点测 B 内部，B 关键点测 A 内部。圆圆/圆多/多多全走同一模式。
+- 圆作为主体取采样点时=仅中心点（SampleWorldKeyPoints 已处理 points 空）
+- L3 穿透只对多边形三角形做（圆无“面”，圆圆已由中心距覆盖）
+- ⚠️ 已知限制（采样模型固有）：**圆贴着多边形边/相切时可能漏检**（圆心在外、多边形顶点采样未进圆 → 两边都不命中）。待定是否加“圆心到多边形边距<=半径”的贴边补检。
+- 自测 7/7 过（圆圆/圆在方内/圆在方外/三角包含/多边形角戳圆/多边形高速穿透）
 
 ### 验证
 - 语法自检全过；自测 8/8 全过（圆圆/圆在正方形/圆在外/三角包含/凹L形不碰/凹L形臂碰/高速穿透）

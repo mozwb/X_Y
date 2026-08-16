@@ -18,6 +18,13 @@ inline float Cross(const Vec& o, const Vec& a, const Vec& b)
     return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
 }
 
+// 绕原点旋转（弧度，逆时针为正）
+inline Vec Rotate(const Vec& v, float rad)
+{
+    float c = std::cos(rad), s = std::sin(rad);
+    return Vec(v.x * c - v.y * s, v.x * s + v.y * c);
+}
+
 // 多边形有向面积（正=逆时针, 负=顺时针）
 float SignedArea(const std::vector<Vec>& pts)
 {
@@ -167,11 +174,17 @@ std::vector<Vec> BodyImpl2D::GetWorldPoints() const
 {
     std::vector<Vec> out;
     out.reserve(m_points.size());
-    for (const auto& p : m_points) out.push_back(m_pos + p);
+    for (const auto& p : m_points) out.push_back(LocalToWorld(p));
     return out;
 }
 
-// L2 关键点采样：中心点 + 顶点均匀取（最多 maxSamples 个），世界坐标
+// 本地点 → 世界点：旋转（m_rotation）+ 平移（m_pos）。绘制/碰撞统一。
+Vec BodyImpl2D::LocalToWorld(const Vec& local) const
+{
+    return m_pos + Rotate(local, m_rotation);
+}
+
+// L2 关键点采样：中心点 + 顶点均匀取（最多 maxSamples 个），世界坐标（含旋转）
 std::vector<Vec> BodyImpl2D::SampleWorldKeyPoints(int maxSamples) const
 {
     std::vector<Vec> out;
@@ -187,7 +200,7 @@ std::vector<Vec> BodyImpl2D::SampleWorldKeyPoints(int maxSamples) const
     if (m_points.size() > static_cast<size_t>(maxSamples - 1))
         step = (m_points.size() + maxSamples - 2) / (maxSamples - 1);
     for (size_t i = 0; i < m_points.size(); i += step) {
-        out.push_back(m_pos + m_points[i]);
+        out.push_back(LocalToWorld(m_points[i]));
         if (out.size() >= static_cast<size_t>(maxSamples) + 1) break;
     }
     return out;
@@ -206,6 +219,8 @@ void  BodyImpl2D::SetGravity(bool on) { m_gravity = on; }
 bool  BodyImpl2D::HasGravity() const { return m_gravity; }
 void  BodyImpl2D::SetUnit(float u) { if (u > 0.0f) m_unit = u; }
 float BodyImpl2D::GetUnit() const { return m_unit; }
+void  BodyImpl2D::SetRotation(float rad) { m_rotation = rad; }
+float BodyImpl2D::GetRotation() const { return m_rotation; }
 
 // ── 物理演化（半隐式欧拉；记录 prevPos 供穿透）──
 void BodyImpl2D::Integrate(float dt)

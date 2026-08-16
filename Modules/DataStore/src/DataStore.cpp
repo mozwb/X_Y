@@ -44,6 +44,8 @@ namespace X_Y
 
     void DataStore::SaveIndex()
     {
+        if (!IsEnabled())
+            return; // 静音：不写索引
         EnsureDataDir();
 
         std::ofstream ofs(IndexPath().Path().string(), std::ios::binary);
@@ -89,6 +91,17 @@ namespace X_Y
         m_DataDir = dir;
     }
 
+    void DataStore::SetEnabled(bool on)
+    {
+        std::unique_lock lock(m_Mutex);
+        m_Enabled = on;
+        if (!on)
+        {
+            // 静音：清空内存条目，避免残留
+            m_Entries.clear();
+        }
+    }
+
     // ═════════════════════════════════════════════════════════════════════════════
     //  核心操作
     // ═════════════════════════════════════════════════════════════════════════════
@@ -96,6 +109,8 @@ namespace X_Y
     Buffer *DataStore::GetOrCreate(const std::string &key, uint64_t reserveSize)
     {
         std::unique_lock lock(m_Mutex);
+        if (!m_Enabled)
+            return nullptr; // 静音：不创建，调用方需判空
 
         auto it = m_Entries.find(key);
         if (it != m_Entries.end())
@@ -124,6 +139,8 @@ namespace X_Y
     Buffer *DataStore::Get(const std::string &key)
     {
         std::shared_lock lock(m_Mutex);
+        if (!m_Enabled)
+            return nullptr; // 静音：不返回条目，调用方需判空
 
         auto it = m_Entries.find(key);
         if (it == m_Entries.end())
@@ -155,6 +172,8 @@ namespace X_Y
     bool DataStore::Remove(const std::string &key)
     {
         std::unique_lock lock(m_Mutex);
+        if (!m_Enabled)
+            return false; // 静音
 
         XPath path = KeyToPath(key);
         if (path.Exists())
@@ -170,6 +189,8 @@ namespace X_Y
     void DataStore::Rename(const std::string &oldKey, const std::string &newKey)
     {
         std::unique_lock lock(m_Mutex);
+        if (!m_Enabled)
+            return; // 静音
 
         auto it = m_Entries.find(oldKey);
         if (it == m_Entries.end())
@@ -189,12 +210,16 @@ namespace X_Y
     bool DataStore::Contains(const std::string &key) const
     {
         std::shared_lock lock(m_Mutex);
+        if (!m_Enabled)
+            return false; // 静音
         return m_Entries.find(key) != m_Entries.end();
     }
 
     std::vector<std::string> DataStore::ListKeys() const
     {
         std::shared_lock lock(m_Mutex);
+        if (!m_Enabled)
+            return {}; // 静音
 
         std::vector<std::string> keys;
         keys.reserve(m_Entries.size());
@@ -210,6 +235,8 @@ namespace X_Y
     bool DataStore::Save(const std::string &key)
     {
         std::shared_lock lock(m_Mutex);
+        if (!m_Enabled)
+            return false; // 静音：不落盘
 
         auto it = m_Entries.find(key);
         if (it == m_Entries.end() || !it->second)
@@ -236,6 +263,8 @@ namespace X_Y
     bool DataStore::SaveAll()
     {
         std::shared_lock lock(m_Mutex);
+        if (!m_Enabled)
+            return false; // 静音：不落盘
 
         if (m_Entries.empty())
             return true;
@@ -264,6 +293,8 @@ namespace X_Y
     void DataStore::Flush(const std::string &key)
     {
         std::shared_lock lock(m_Mutex);
+        if (!m_Enabled)
+            return; // 静音：不落盘
 
         auto it = m_Entries.find(key);
         if (it == m_Entries.end() || !it->second)
@@ -282,6 +313,8 @@ namespace X_Y
     void DataStore::FlushAll()
     {
         std::shared_lock lock(m_Mutex);
+        if (!m_Enabled)
+            return; // 静音：不落盘
 
         if (m_Entries.empty())
             return;
@@ -304,6 +337,9 @@ namespace X_Y
 
     bool DataStore::LoadFile(const std::string &filepath)
     {
+        if (!IsEnabled())
+            return false; // 静音
+
         Buffer buf = FilesSystem::ReadFileBinary(filepath);
         if (!buf)
             return false;
@@ -312,6 +348,8 @@ namespace X_Y
         std::string key = path.getName();
 
         std::unique_lock lock(m_Mutex);
+        if (!m_Enabled)
+            return false; // 静音（锁内复核）
         m_Entries[key] = std::move(buf);
         SaveIndex();
 
@@ -320,6 +358,8 @@ namespace X_Y
 
     void DataStore::LoadDirectory(const XPath &dir)
     {
+        if (!IsEnabled())
+            return; // 静音
         if (!dir.Exists() || !dir.IsDirectory())
             return;
 

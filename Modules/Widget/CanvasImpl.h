@@ -51,6 +51,11 @@ namespace X_Y {
         virtual void FillTriangle(int x1, int y1, int x2, int y2,
             int x3, int y3, uint32_t color) = 0;
 
+        // 填充圆形/圆环（逻辑坐标）。cx,cy=圆心，rOuter=外半径（逻辑像素，内部×scale到物理），
+        // rInner=内半径。rInner<=0 → 实心圆；0<rInner<rOuter → 空心圆环（环宽=rOuter-rInner）。
+        // 逐像素判 rInner² ≤ dx²+dy² ≤ rOuter²。
+        virtual void FillCircle(int cx, int cy, float rOuter, float rInner, uint32_t color) = 0;
+
         virtual void SetClip(int x, int y, int w, int h) = 0;
         virtual void ResetClip() = 0;
 

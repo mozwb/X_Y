@@ -45,11 +45,6 @@ inline float Cross(const Vec& o, const Vec& a, const Vec& b)
     return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
 }
 
-inline Vec WorldTriPoint(const Vec& local, const Vec& pos)
-{
-    return pos + local;
-}
-
 // 点是否在三角形(a,b,c)内（含边）
 bool PointInTri(const Vec& p, const Vec& a, const Vec& b, const Vec& c)
 {
@@ -61,14 +56,14 @@ bool PointInTri(const Vec& p, const Vec& a, const Vec& b, const Vec& c)
     return !(neg && pos);
 }
 
-// 点是否落在某三角形的集合内（任一眼中）
-bool PointInAnyTri(const Vec& p, const Vec& pos,
+// 点是否落在某三角形的集合内（任一眼中；三角形经 body 旋转+平移）
+bool PointInAnyTri(const Vec& p, const BodyImpl& body,
                    const std::vector<Tri2D>& tris)
 {
     for (const auto& t : tris) {
-        Vec wa = WorldTriPoint(t.v[0], pos);
-        Vec wb = WorldTriPoint(t.v[1], pos);
-        Vec wc = WorldTriPoint(t.v[2], pos);
+        Vec wa = body.LocalToWorld(t.v[0]);
+        Vec wb = body.LocalToWorld(t.v[1]);
+        Vec wc = body.LocalToWorld(t.v[2]);
         if (PointInTri(p, wa, wb, wc)) return true;
     }
     return false;
@@ -99,15 +94,15 @@ bool SegmentsIntersect(const Vec& s1, const Vec& s2,
     return false;
 }
 
-// 线段 (p0→p1) 是否穿过三角形集合内任一边（命中三角形边界/内部）
-bool SegmentHitsAnyTri(const Vec& p0, const Vec& p1, const Vec& pos,
+// 线段 (p0→p1) 是否穿过三角形集合内任一边（命中三角形边界/内部；三角形经 body 旋转+平移）
+bool SegmentHitsAnyTri(const Vec& p0, const Vec& p1, const BodyImpl& body,
                        const std::vector<Tri2D>& tris)
 {
     for (const auto& t : tris)
     {
-        Vec a = WorldTriPoint(t.v[0], pos);
-        Vec b = WorldTriPoint(t.v[1], pos);
-        Vec c = WorldTriPoint(t.v[2], pos);
+        Vec a = body.LocalToWorld(t.v[0]);
+        Vec b = body.LocalToWorld(t.v[1]);
+        Vec c = body.LocalToWorld(t.v[2]);
         // 扫掠终点落在三角形内 → 直接命中（或穿透）
         if (PointInTri(p1, a, b, c)) return true;
         // 扫掠线段与三角形任一边相交
@@ -116,6 +111,17 @@ bool SegmentHitsAnyTri(const Vec& p0, const Vec& p1, const Vec& pos,
         if (SegmentsIntersect(p0, p1, c, a)) return true;
     }
     return false;
+}
+
+// 点 p 是否命中 body 的“内部”：
+//   body 是圆(points 空) → 距离 <= 半径（O(1)）
+//   body 是多边形         → 落在剖分三角形内
+// 统一 L2 的内部测试分发，圆/多边形一视同仁。
+bool PointHitsBody(const Vec& p, const BodyImpl& body)
+{
+    if (body.IsCircle())
+        return MATH::Distance(p, body.GetPos()) <= body.GetBoundingRadius() + 1e-6f;
+    return PointInAnyTri(p, body, body.GetTriangles());
 }
 
 } // namespace
@@ -134,28 +140,24 @@ bool CollisionBackend2D::Intersect(const BodyImpl& a, const BodyImpl& b) const
     if (a.IsCircle() && b.IsCircle())
         return MATH::Distance(a.GetPos(), b.GetPos()) <= ra + rb + 1e-6f;
 
-    // ── L2 关键点 点包含测试（中心 + 均匀采样顶点）──
+    // ── L2 关键点互测（中心 + 均匀采样顶点 → 对方“内部”，圆/多边形统一分发）──
     constexpr int kMaxKeyPoints = 8;
     auto keysA = a.SampleWorldKeyPoints(kMaxKeyPoints);
     auto keysB = b.SampleWorldKeyPoints(kMaxKeyPoints);
 
-    // A 的关键点 在 B 的三角形内
-    if (!b.IsCircle())
-        for (const auto& k : keysA)
-            if (PointInAnyTri(k, b.GetPos(), b.GetTriangles()))
-                return true;
-    // B 的关键点 在 A 的三角形内
-    if (!a.IsCircle())
-        for (const auto& k : keysB)
-            if (PointInAnyTri(k, a.GetPos(), a.GetTriangles()))
-                return true;
+    // A 的关键点 命中 B 的内部；B 的关键点 命中 A 的内部（对称）
+    for (const auto& k : keysA)
+        if (PointHitsBody(k, b)) return true;
+    for (const auto& k : keysB)
+        if (PointHitsBody(k, a)) return true;
 
-    // ── L3 高速穿透（L2 未命中才跑）：中心点扫掠线段 vs 对方三角形 ──
+    // ── L3 高速穿透（L2 未命中才跑）：主体扫掠线段 vs 对方内部 ──
+    // 只有对方是多边形才有三角形可穿（圆 vs 圆已由中心距覆盖；圆无穿透面）
     if (!b.IsCircle())
-        if (SegmentHitsAnyTri(a.GetPrevPos(), a.GetPos(), b.GetPos(), b.GetTriangles()))
+        if (SegmentHitsAnyTri(a.GetPrevPos(), a.GetPos(), b, b.GetTriangles()))
             return true;
     if (!a.IsCircle())
-        if (SegmentHitsAnyTri(b.GetPrevPos(), b.GetPos(), a.GetPos(), a.GetTriangles()))
+        if (SegmentHitsAnyTri(b.GetPrevPos(), b.GetPos(), a, a.GetTriangles()))
             return true;
 
     return false;

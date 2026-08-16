@@ -56,10 +56,15 @@ public:
     virtual bool HasGravity() const = 0;
     virtual void SetUnit(float u) = 0;
     virtual float GetUnit() const = 0;
+    // 朝向（弧度，逆时针为正，本地几何绕 pos 旋转）。绘制/碰撞统一用它。
+    virtual void SetRotation(float rad) = 0;
+    virtual float GetRotation() const = 0;
 
     // 三角剖分缓存（本地坐标，碰撞检测用）；上一帧位置（穿透检测）
     virtual const std::vector<Tri2D>& GetTriangles() const = 0;
     virtual Vec GetPrevPos() const = 0;
+    // 本地点 → 世界点（旋转 + 平移）。绘制/碰撞统一用它，保证朝向一致。
+    virtual Vec LocalToWorld(const Vec& local) const = 0;
     // L2 关键点采样（中心 + 顶点均匀采样，最多 maxSamples 个，世界坐标）
     virtual std::vector<Vec> SampleWorldKeyPoints(int maxSamples) const = 0;
 

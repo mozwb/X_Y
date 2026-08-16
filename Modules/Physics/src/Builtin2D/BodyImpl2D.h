@@ -41,6 +41,8 @@ public:
     void SetMass(float m) override; float GetMass() const override;
     void SetGravity(bool on) override; bool HasGravity() const override;
     void SetUnit(float u) override; float GetUnit() const override;
+    // 朝向（弧度，逆时针为正）
+    void SetRotation(float rad) override; float GetRotation() const override;
 
     // ── 物理演化 ──
     void Integrate(float dt) override;
@@ -50,6 +52,7 @@ public:
     // ── 判定后端用 ──
     const std::vector<Tri2D>& GetTriangles() const override { return m_triangles; }
     Vec GetPrevPos() const override { return m_prevPos; }
+    Vec LocalToWorld(const Vec& local) const override;
     std::vector<Vec> SampleWorldKeyPoints(int maxSamples) const override;
 
 private:
@@ -64,6 +67,7 @@ private:
     bool  m_gravity = true;
 
     float m_radius = 0.0f;
+    float m_rotation = 0.0f;               // 朝向（弧度）
     std::vector<Vec>     m_points;
     std::vector<Tri2D>   m_triangles;    // 耳切结果（本地坐标）
 };
