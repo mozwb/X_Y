@@ -27,7 +27,7 @@ namespace X_Y
         {
             if constexpr (HasToString<T>::value || HasStaticToString<T>::value)
             {
-                std::cout << "log内部<<"<< std::endl;
+                std::cout << "log内部<<" << std::endl;
                 return os << To_Str<T>(obj);
             }
             else
@@ -35,8 +35,6 @@ namespace X_Y
                 return os << "NO_TO_STRING";
             }
         }
-
-
 
         template <typename T, typename... Args>
         inline static void replaceModel(std::string &content, T &&model, Args &&...args)

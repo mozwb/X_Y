@@ -1,16 +1,22 @@
 ﻿#pragma once
 #include "Widget/Canvas.h"
-#include "Input/Input.h"
-#include<functional>
-namespace X_Y {
+#include "XCore/Input/Input.h"
+#include <functional>
+namespace X_Y
+{
 
-    class Component {
+    class Component
+    {
     public:
         Component() = default;
         virtual ~Component() = default;
 
-        void SetRect(int x, int y, int w, int h) {
-            m_X = x; m_Y = y; m_W = w; m_H = h;
+        void SetRect(int x, int y, int w, int h)
+        {
+            m_X = x;
+            m_Y = y;
+            m_W = w;
+            m_H = h;
         }
         int GetX() const { return m_X; }
         int GetY() const { return m_Y; }
@@ -20,7 +26,11 @@ namespace X_Y {
         void SetVisible(bool v) { m_Visible = v; }
         bool IsVisible() const { return m_Visible; }
 
-        void SetMouseLocal(int x, int y) { m_MouseX = x; m_MouseY = y; }
+        void SetMouseLocal(int x, int y)
+        {
+            m_MouseX = x;
+            m_MouseY = y;
+        }
         int GetMouseLocalX() const { return m_MouseX; }
         int GetMouseLocalY() const { return m_MouseY; }
 
@@ -41,8 +51,10 @@ namespace X_Y {
         //   scrollOffset: 相对内容顶部的滚动偏移（像素）
         //   viewHeight  : 可视区高度（像素）
         // 默认空实现；像 ListBox 这类可按行裁剪的内容可 override 以只画可视区
-        virtual void SetViewport(int scrollOffset, int viewHeight) {
-            (void)scrollOffset; (void)viewHeight;
+        virtual void SetViewport(int scrollOffset, int viewHeight)
+        {
+            (void)scrollOffset;
+            (void)viewHeight;
         }
 
         // 鼠标交互（localX/localY 为相对本组件的局部坐标）
@@ -53,10 +65,14 @@ namespace X_Y {
 
         // 请求所属窗口重绘（由 Container 在 AddComponent 时注入实现）
 
-        void RequestRepaint() { if (m_RepaintCallback) m_RepaintCallback(); }
+        void RequestRepaint()
+        {
+            if (m_RepaintCallback)
+                m_RepaintCallback();
+        }
         void SetRepaintCallback(std::function<void()> cb) { m_RepaintCallback = std::move(cb); }
 
-        virtual void OnPaint(Canvas& canvas) = 0;
+        virtual void OnPaint(Canvas &canvas) = 0;
 
     private:
         int m_X = 0, m_Y = 0, m_W = 100, m_H = 30;

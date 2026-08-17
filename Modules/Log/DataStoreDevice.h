@@ -1,7 +1,7 @@
 ﻿#pragma once
-#include "LogConfigure.h"
+#include "XCore/XLog/LogConfigure.h"
 #include "DataStore/DataStore.h"
-#include "FilesSystem/FilesSystem.h"
+#include "XCore/FilesSystem/FilesSystem.h"
 
 namespace X_Y
 {

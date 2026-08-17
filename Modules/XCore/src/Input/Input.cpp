@@ -1,5 +1,5 @@
-#include "Input.h"
-#include "KeyMapper.h"
+#include "Input/Input.h"
+#include "Input/KeyMapper.h"
 
 #ifdef XY_PLATFORM_WINDOWS
 // OEMRESOURCE 让 winuser.h 暴露 OCR_* 系统光标 id（SetSystemCursor 用）

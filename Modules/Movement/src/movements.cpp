@@ -1,6 +1,6 @@
-﻿#include"movements.h"
+﻿#include "movements.h"
 
-//namespace X_Y {
+// namespace X_Y {
 //		//void MovementDispatcher::Connect(
 //		//	MovementSender sender,
 //		//	MovementType type,
@@ -71,5 +71,5 @@
 //			}
 //			event->Handled = true;
 //			return event->Handled;
-//		}	
-//}
+//		}
+// }

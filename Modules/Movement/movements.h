@@ -96,7 +96,7 @@ namespace X_Y
 			MovementHandler handler)
 		{
 			XY_CORE_ASSERT(std::is_enum_v<EnumT>, "必须是枚举类型");
-			XDEBUG("入队加一；{}", type)
+			XDEBUG("入队加一:{}", type)
 			MovementBinding bind{};
 			bind.sender = sender;
 			bind.type = static_cast<EventType>(type);
@@ -203,15 +203,15 @@ namespace X_Y
 		{
 			uint32_t typeId = GetTypeId<EMT>();
 			uint32_t typeVal = static_cast<uint32_t>(type);
-			//if (DispatchEvent(typeId, typeVal, event))
+			// if (DispatchEvent(typeId, typeVal, event))
 			//{
 			//	return true;
-			//}
-			//else
+			// }
+			// else
 			//{
 			//	return false;
-			//}
-			 return DispatchEvent(typeId, typeVal, event);
+			// }
+			return DispatchEvent(typeId, typeVal, event);
 		}
 
 	private:
@@ -320,14 +320,14 @@ namespace X_Y
 			{
 				return flag;
 			}
-			//if (flag)
+			// if (flag)
 			//{
 			//	XDEBUG("{}事件处理成功{}", reinterpret_cast<uintptr_t>(this->sender),this->GetName())
-			//}
-			//else
+			// }
+			// else
 			//{
 			//	XDEBUG("{}事件处理失败{}", reinterpret_cast<uintptr_t>(this->sender),this->GetName())
-			//}
+			// }
 			return flag;
 		}
 		bool IsInCategory(MovementCategory category)

@@ -1,6 +1,6 @@
 ﻿#pragma once
 #ifdef XY_DEBUG
-#include "LogConfigure.h"
+#include "XCore/XLog/LogConfigure.h"
 #include "DataStoreDevice.h"
 namespace X_Y
 {

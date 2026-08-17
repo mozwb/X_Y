@@ -80,12 +80,9 @@ set_target_properties(glad PROPERTIES
 # ══════════════════════════════════════════════════════
 # 模块（按迁移进度逐步加入）
 # ── Core 底层 ──
-xy_module(Memory)
-xy_module(Timer)
 xy_module(XCore)
 xy_module(Middle)
-xy_module(FilesSystem)
-xy_module(Input)
+
 
 # XMath：header-only（空壳 Policy + glm），INTERFACE 库，只提供 include 路径
 # 注意 vendor/glm 被拍平(glm.hpp 直接在 vendor/glm/ 下)，include 根是 vendor/

@@ -1,6 +1,6 @@
 ﻿#pragma once
-#include "Memory/Buffer.h"
-#include "FilesSystem/FilesSystem.h"
+#include "XCore/Memory/Buffer.h"
+#include "XCore/FilesSystem/FilesSystem.h"
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -73,7 +73,6 @@ namespace X_Y
         // ⚠️ 静音时 GetOrCreate/Get 返回 nullptr，调用方必须判空（现有 DataStoreDevice/LogViewer 均已判空）。
         void SetEnabled(bool on);
         bool IsEnabled() const { return m_Enabled; }
-
 
         // ── 统计 ──
         DataStoreStats GetStats() const;

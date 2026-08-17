@@ -1,13 +1,15 @@
 ﻿#pragma once
-#include"Movement/Movements.h"
-#include"Input/Input.h"
-namespace X_Y {
+#include "Movement/Movements.h"
+#include "XCore/Input/Input.h"
+namespace X_Y
+{
 	using MouseCode = Input_t::MouseCode;
 	class MouseMoved : public Movement
 	{
 	public:
-		MouseMoved(MovementSender s,const float x, const float y)
-			: m_MouseX(x), m_MouseY(y),Movement(s) {
+		MouseMoved(MovementSender s, const float x, const float y)
+			: m_MouseX(x), m_MouseY(y), Movement(s)
+		{
 		}
 		float GetX() const { return m_MouseX; }
 		float GetY() const { return m_MouseY; }
@@ -25,8 +27,9 @@ namespace X_Y {
 	class MouseScrolled : public Movement
 	{
 	public:
-		MouseScrolled(MovementSender s,const float xOffset, const float yOffset)
-			: m_XOffset(xOffset), m_YOffset(yOffset),Movement(s) {
+		MouseScrolled(MovementSender s, const float xOffset, const float yOffset)
+			: m_XOffset(xOffset), m_YOffset(yOffset), Movement(s)
+		{
 		}
 		float GetXOffset() const { return m_XOffset; }
 		float GetYOffset() const { return m_YOffset; }
@@ -47,16 +50,18 @@ namespace X_Y {
 		MouseCode GetMouseButton() const { return m_Button; }
 		MOVEMENT_CLASS_CATEGORY(MTMouse | MTInput | MTMouseButton)
 	protected:
-		MouseButton(MovementSender s,const MouseCode button)
-			: m_Button(button),Movement(s) {
+		MouseButton(MovementSender s, const MouseCode button)
+			: m_Button(button), Movement(s)
+		{
 		}
 		MouseCode m_Button;
 	};
 	class MouseButtonPressed : public MouseButton
 	{
 	public:
-		MouseButtonPressed(MovementSender s,const MouseCode button)
-			: MouseButton(s,button) {
+		MouseButtonPressed(MovementSender s, const MouseCode button)
+			: MouseButton(s, button)
+		{
 		}
 		std::string toString() const override
 		{
@@ -69,8 +74,9 @@ namespace X_Y {
 	class MouseButtonReleased : public MouseButton
 	{
 	public:
-		MouseButtonReleased(MovementSender s,const MouseCode button)
-			: MouseButton(s,button) {
+		MouseButtonReleased(MovementSender s, const MouseCode button)
+			: MouseButton(s, button)
+		{
 		}
 		std::string toString() const override
 		{

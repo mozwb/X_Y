@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include "Memory/Buffer.h"
+#include "../Memory/Buffer.h"
 #include <filesystem>
 #include <fstream>
 #include <regex>

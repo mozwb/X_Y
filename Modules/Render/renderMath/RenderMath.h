@@ -1,5 +1,5 @@
 #pragma once
-#include "XMath/XMath.h"
+#include "XCore/XMath/XMath.h"
 #include <utility>
 
 namespace X_Y

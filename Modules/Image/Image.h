@@ -1,9 +1,10 @@
 ﻿#pragma once
 
-#include "Memory/Buffer.h"
-#include "FilesSystem/FilesSystem.h"
+#include "XCore/Memory/Buffer.h"
+#include "XCore/FilesSystem/FilesSystem.h"
 
-namespace X_Y {
+namespace X_Y
+{
 
 	/**
 	 * Image — 引擎图片抽象层
@@ -32,30 +33,30 @@ namespace X_Y {
 	public:
 		/* ── 从原始文件数据构造 ── */
 
-		explicit Image(const Buffer& fileData);
-		explicit Image(const File& filepath);
+		explicit Image(const Buffer &fileData);
+		explicit Image(const File &filepath);
 
 		Image() = default;
-		Image(Image&& other) noexcept;
-		Image& operator=(Image&& other) noexcept;
+		Image(Image &&other) noexcept;
+		Image &operator=(Image &&other) noexcept;
 
 		/* 禁止拷贝（像素数据可能很大，按需显式 Copy()） */
 
-		Image(const Image&) = delete;
-		Image& operator=(const Image&) = delete;
+		Image(const Image &) = delete;
+		Image &operator=(const Image &) = delete;
 
 		~Image() = default;
 
 		/* ── 元信息 ── */
 
-		uint32_t GetWidth()  const { return m_Width; }
+		uint32_t GetWidth() const { return m_Width; }
 		uint32_t GetHeight() const { return m_Height; }
 		uint32_t GetChannels() const { return m_Channels; }
 
 		/* 像素数据 — Buffer 不拥有该内存，仅作只读视图 */
 
 		BufferView GetPixels() const { return BufferView(m_Pixels); }
-		const Buffer& GetPixelBuffer() const { return m_Pixels; }
+		const Buffer &GetPixelBuffer() const { return m_Pixels; }
 
 		/* 是否成功加载 */
 
@@ -68,7 +69,7 @@ namespace X_Y {
 		/* ── 工具 ── */
 
 		uint64_t GetPixelCount() const { return (uint64_t)m_Width * m_Height; }
-		uint64_t GetDataSize()  const { return (uint64_t)m_Width * m_Height * m_Channels; }
+		uint64_t GetDataSize() const { return (uint64_t)m_Width * m_Height * m_Channels; }
 
 		/* 显式拷贝（返回一个新 Image 且拥有独立像素内存） */
 
@@ -77,15 +78,15 @@ namespace X_Y {
 	private:
 		/* 内部：从已读取的 Buffer 解码 */
 
-		void DecodeFromBuffer(const Buffer& fileData);
+		void DecodeFromBuffer(const Buffer &fileData);
 
-		Buffer      m_Pixels;    // 解码后的像素数据（owned）
-		uint32_t    m_Width  = 0;
-		uint32_t    m_Height = 0;
-		uint32_t    m_Channels = 0;
-		bool        m_Loaded = false;
-		ImageError  m_Error  = ImageError::None;
+		Buffer m_Pixels; // 解码后的像素数据（owned）
+		uint32_t m_Width = 0;
+		uint32_t m_Height = 0;
+		uint32_t m_Channels = 0;
+		bool m_Loaded = false;
+		ImageError m_Error = ImageError::None;
 	};
 
-} 
+}
 // namespace X_Y
