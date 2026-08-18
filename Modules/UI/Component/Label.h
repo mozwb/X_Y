@@ -1,21 +1,23 @@
 #pragma once
-#include "Component/Component.h"
+#include "Component.h"
 #include <string>
 
-namespace X_Y {
+namespace X_Y
+{
 
-    class Label : public Component {
+    class Label : public Component
+    {
     public:
         Label() = default;
 
-        void SetText(const char* text) { m_Text = text; }
-        void SetText(const std::string& text) { m_Text = text; }
-        const std::string& GetText() const { return m_Text; }
+        void SetText(const char *text) { m_Text = text; }
+        void SetText(const std::string &text) { m_Text = text; }
+        const std::string &GetText() const { return m_Text; }
 
         void SetColor(uint32_t color) { m_Color = color; }
         uint32_t GetColor() const { return m_Color; }
 
-        void OnPaint(Canvas& canvas) override;
+        void OnPaint(Canvas &canvas) override;
 
         void SetBgColor(uint32_t color) { m_BgColor = color; }
 

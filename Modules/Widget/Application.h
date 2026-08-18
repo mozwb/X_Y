@@ -10,7 +10,7 @@ namespace X_Y
     class Application
     {
     private:
-        static Application *s_instance;
+        inline static Application *s_instance = nullptr; // 确保全局唯一并在main前初始化，main后析构
         MovementDispatcher m_dispatcher;
         MovementQueue m_eventQueue;
         bool Running = true;
@@ -22,7 +22,7 @@ namespace X_Y
     public:
         // 1.构造、析构放protected，允许子类继承构造，禁止外部new
         Application(int argc, char *argv[]);
-        void StartUp();
+
         virtual ~Application(); // 2.虚析构，多态析构必备
         // 消息循环
         virtual void exec();
@@ -61,7 +61,6 @@ namespace X_Y
         Application(const Application &) = delete;
         Application &operator=(const Application &) = delete;
     };
-    inline Application *Application::s_instance = nullptr;
 
     template <typename EnumT>
     void Connect(

@@ -81,26 +81,29 @@ set_target_properties(glad PROPERTIES
 # 模块（按迁移进度逐步加入）
 # ── Core 底层 ──
 xy_module(XCore)
+target_include_directories(XCore PUBLIC
+    "${CMAKE_SOURCE_DIR}/vendor"
+    )
 xy_module(Middle)
 
 
-# XMath：header-only（空壳 Policy + glm），INTERFACE 库，只提供 include 路径
-# 注意 vendor/glm 被拍平(glm.hpp 直接在 vendor/glm/ 下)，include 根是 vendor/
-add_library(XMath INTERFACE)
-target_include_directories(XMath INTERFACE
-    "${CMAKE_SOURCE_DIR}/Modules/XMath"
-    "${CMAKE_SOURCE_DIR}/Modules"
-    "${CMAKE_SOURCE_DIR}/vendor")
+# # XMath：header-only（空壳 Policy + glm），INTERFACE 库，只提供 include 路径
+# # 注意 vendor/glm 被拍平(glm.hpp 直接在 vendor/glm/ 下)，include 根是 vendor/
+# add_library(XMath INTERFACE)
+# target_include_directories(XMath INTERFACE
+#     "${CMAKE_SOURCE_DIR}/Modules/XMath"
+#     "${CMAKE_SOURCE_DIR}/Modules"
+#     "${CMAKE_SOURCE_DIR}/vendor")
 
 # ── Core 上层（有依赖）──
 xy_module(DataStore)
-target_link_libraries(DataStore PUBLIC Memory FilesSystem)
+target_link_libraries(DataStore PUBLIC XCore)
 
 xy_module(Log)
 target_link_libraries(Log PUBLIC DataStore)
 
 xy_module(Image)
-target_link_libraries(Image PUBLIC Log Memory FilesSystem)
+target_link_libraries(Image PUBLIC Log XCore)
 
 # ── vendor：freetype(文字后端，per-pixel alpha 透明文字) ──
 # add_subdirectory 源码编译，静态链接进 X_Y。关掉非必要外部依赖(zlib/png/svg…)。
@@ -111,21 +114,26 @@ set(FT_DISABLE_HARFBUZZ TRUE)
 set(FT_DISABLE_BROTLI TRUE)
 add_subdirectory(vendor/freetype ${CMAKE_BINARY_DIR}/freetype EXCLUDE_FROM_ALL)
 
+# 强制把 FreeType 的库输出到 dist/lib/mingw/
+set_target_properties(freetype PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY "${XY_LIB_DIR}"
+)
+
 # ══════════════════════════════════════════════════════
 # ── APP 层 ──
 # 注：Application 已并入 Widget 模块（Widget/Application.h + src/Application.cpp）
 xy_module(Movement)
-target_link_libraries(Movement PUBLIC Log Input)
+target_link_libraries(Movement PUBLIC Log XCore)
 
 xy_module(GraphicsContext)
 target_link_libraries(GraphicsContext PUBLIC Log glad)
 
 xy_module(Widget)
-target_link_libraries(Widget PUBLIC Log Input GraphicsContext Movement XMath freetype)
+target_link_libraries(Widget PUBLIC Log  GraphicsContext XCore freetype)
 
 # ── UI（含 imgui，依赖 Widget/DataStore/Timer + opengl32）──
 xy_module(UI)
-target_link_libraries(UI PUBLIC Widget DataStore Timer)
+target_link_libraries(UI PUBLIC Widget DataStore XCore)
 if(WIN32)
     target_link_libraries(UI PUBLIC opengl32)
 endif()
@@ -139,14 +147,14 @@ target_include_directories(UI PUBLIC
 # ══════════════════════════════════════════════════════
 # ── Render 层 ──
 xy_module(Render)
-target_link_libraries(Render PUBLIC Log Middle XCore glad XMath)
+target_link_libraries(Render PUBLIC Log Middle XCore glad)
 
 xy_module(Model)
-target_link_libraries(Model PUBLIC Memory FilesSystem)
+target_link_libraries(Model PUBLIC XCore)
 
 # ── Physics：物理 + 碰撞（Pimpl 门面 + 可换后端），依赖自研 XMath ──
 xy_module(Physics)
-target_link_libraries(Physics PUBLIC XMath)
+target_link_libraries(Physics PUBLIC XCore)
 
 # ══════════════════════════════════════════════════════
 # 分发：把头文件安装到 dist/include（构建后执行，替代旧 MoveFiles.py）

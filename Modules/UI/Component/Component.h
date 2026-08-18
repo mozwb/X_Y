@@ -72,6 +72,7 @@ namespace X_Y
         }
         void SetRepaintCallback(std::function<void()> cb) { m_RepaintCallback = std::move(cb); }
 
+        // 组件绘制自己，拿窗口的canvas
         virtual void OnPaint(Canvas &canvas) = 0;
 
     private:

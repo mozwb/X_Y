@@ -44,12 +44,7 @@ namespace X_Y
         void Stop();
 
     protected:
-        void OnPaint(Canvas &canvas) override;
-        void OnPaint(Canvas *canvas) override
-        {
-            if (canvas)
-                OnPaint(*canvas);
-        }
+        void OnPaint(Canvas *canvas) override;
 
     private:
         // 输入框回车 → 把当前输入文本添加为一条筛选规则（tag）

@@ -332,15 +332,15 @@ namespace X_Y
     // 绘制（主线程）
     // ════════════════════════════════════════════════════════════
 
-    void LogViewer::OnPaint(Canvas &canvas)
+    void LogViewer::OnPaint(Canvas *canvas)
     {
         // 先让 TagBar 用真实 Canvas 量高（测字宽 + 自动换行），布局时才能用当下正确的高度，
         // 避免日志区一帧错位（TagBar 高度随 tag 增减/换行实时变化）
         m_TagBar->SetRect(0, 0, get_width(), m_TagBar->GetHeight());
-        m_TagBar->Measure(canvas);
+        m_TagBar->Measure(*canvas);
         LayoutChildren();
 
-        canvas.FillRect(0, 0, get_width(), get_height(), 0xFF1E1E1E);
+        canvas->FillRect(0, 0, get_width(), get_height(), 0xFF1E1E1E);
 
         // 共享锁：保护 m_LogStripe（Ticker 线程可能正增量写）以及绘制
         {

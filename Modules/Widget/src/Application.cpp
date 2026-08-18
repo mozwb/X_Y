@@ -7,18 +7,17 @@ namespace X_Y
 
     Application::Application(int argc, char *argv[])
     {
-        s_instance = this;
-        m_PlatformLoop.reset(PlatformLoopFactory::Create());
+        if (!s_instance)
+        {
+            s_instance = this;
+            m_PlatformLoop.reset(PlatformLoopFactory::Create());
+            m_PlatformLoop->Boot();
+        }
     }
 
     Application::~Application()
     {
         s_instance = nullptr;
-    }
-
-    void Application::StartUp()
-    {
-        m_PlatformLoop->Boot();
     }
 
     void Application::exec()

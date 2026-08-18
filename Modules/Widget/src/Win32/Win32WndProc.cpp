@@ -66,7 +66,9 @@ namespace X_Y::Win32
             int w = rect.right - rect.left;
             int h = rect.bottom - rect.top;
 
-            Canvas canvas(w, h, (void *)hdc);
+            // 关键修正：CanvasImplSoftware 接受的是 HWND，而不是 HDC。
+            // 若把 HDC 传给它，Flush() 里会拿到错误的窗口句柄，导致上屏失败，窗口停留白屏。
+            Canvas canvas(w, h, (void *)hwnd);
             pThis->OnPaint(&canvas);
             // 双缓冲：把内存位图一次性上屏
             canvas.Flush();
