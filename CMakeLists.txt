@@ -130,6 +130,9 @@ target_link_libraries(GraphicsContext PUBLIC Log glad)
 
 xy_module(Widget)
 target_link_libraries(Widget PUBLIC Log  GraphicsContext XCore freetype)
+if(WIN32)
+    target_link_libraries(Widget PUBLIC ole32 shell32)
+endif()
 
 # ── UI（含 imgui，依赖 Widget/DataStore/Timer + opengl32）──
 xy_module(UI)

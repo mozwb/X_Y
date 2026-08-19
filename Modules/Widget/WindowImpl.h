@@ -1,6 +1,8 @@
 ﻿#pragma once
 #include <cstdint>
 #include <functional>
+#include <vector>
+#include "XCore/FilesSystem/FilesSystem.h"
 
 // Canvas 前向声明（PaintDirect 需要）
 namespace X_Y { class Canvas; }
@@ -61,6 +63,13 @@ namespace X_Y {
     
     class WindowImpl {
     public:
+        struct FileDropCallbacks {
+            std::function<void(const std::vector<XPath>&, int, int)> onEnter;
+            std::function<void(const std::vector<XPath>&, int, int)> onOver;
+            std::function<void()> onLeave;
+            std::function<void(const std::vector<XPath>&, int, int)> onDrop;
+        };
+
         virtual ~WindowImpl() = default;
 
         // ── 窗口生命周期 ──────────────────────────
@@ -133,6 +142,9 @@ namespace X_Y {
         //   colorKey/alpha 具体含义由 flags 决定，未用到的传 0。
         
         virtual void SetLayeredAttribute(uint32_t colorKey, uint8_t alpha, uint32_t flags) = 0;
+
+        virtual void EnableFileDrop(bool enabled, FileDropCallbacks callbacks) = 0;
+        virtual bool IsFileDragging() const = 0;
 
         // ── 静态工具（全局操作，无需实例） ────────
 

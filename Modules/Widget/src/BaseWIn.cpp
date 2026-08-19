@@ -26,7 +26,10 @@ namespace X_Y
     {
         if (!m_Impl)
             return false;
-        return m_Impl->Create(title, width, height, style, parentHandle, this);
+        bool created = m_Impl->Create(title, width, height, style, parentHandle, this);
+        if (created && m_FileDropEnabled)
+            EnableFileDrop(true);
+        return created;
     }
 
     bool BaseWin::Show(ShowCmd nshow)
@@ -44,8 +47,38 @@ namespace X_Y
     {
         if (!m_Impl)
             return;
+        m_Impl->EnableFileDrop(false, {});
+        m_IsFileDragging = false;
         m_Impl->Destroy();
         m_Impl.reset(); // 防止重复 Destroy
+    }
+
+    void BaseWin::EnableFileDrop(bool enabled)
+    {
+        m_FileDropEnabled = enabled;
+        if (!m_Impl)
+            return;
+        WindowImpl::FileDropCallbacks callbacks;
+        callbacks.onEnter = [this](const std::vector<XPath> &files, int x, int y)
+        {
+            m_IsFileDragging = true;
+            OnFileDragEnter(files, x, y);
+        };
+        callbacks.onOver = [this](const std::vector<XPath> &files, int x, int y)
+        {
+            OnFileDragOver(files, x, y);
+        };
+        callbacks.onLeave = [this]()
+        {
+            OnFileDragLeave();
+            m_IsFileDragging = false;
+        };
+        callbacks.onDrop = [this](const std::vector<XPath> &files, int x, int y)
+        {
+            OnFileDrop(files, x, y);
+            m_IsFileDragging = false;
+        };
+        m_Impl->EnableFileDrop(enabled, std::move(callbacks));
     }
 
     void BaseWin::SetTitle(const char *title)

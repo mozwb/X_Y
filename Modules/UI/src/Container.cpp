@@ -116,6 +116,49 @@ namespace X_Y
         ClearComponents();
     }
 
+    void Container::OnFileDragEnter(const std::vector<XPath> &files, int x, int y)
+    {
+        m_FileDragTarget = HitTest(x, y);
+        if (m_FileDragTarget && m_FileDragTarget->IsVisible())
+            m_FileDragTarget->OnFileDragEnter(files, x - m_FileDragTarget->GetX(), y - m_FileDragTarget->GetY());
+        RequestRepaint();
+    }
+
+    void Container::OnFileDragOver(const std::vector<XPath> &files, int x, int y)
+    {
+        Component *hit = HitTest(x, y);
+        if (hit != m_FileDragTarget)
+        {
+            if (m_FileDragTarget)
+                m_FileDragTarget->OnFileDragLeave();
+            m_FileDragTarget = hit && hit->IsVisible() ? hit : nullptr;
+            if (m_FileDragTarget)
+                m_FileDragTarget->OnFileDragEnter(files, x - m_FileDragTarget->GetX(), y - m_FileDragTarget->GetY());
+        }
+        else if (m_FileDragTarget)
+        {
+            m_FileDragTarget->OnFileDragOver(files, x - m_FileDragTarget->GetX(), y - m_FileDragTarget->GetY());
+        }
+        RequestRepaint();
+    }
+
+    void Container::OnFileDragLeave()
+    {
+        if (m_FileDragTarget)
+            m_FileDragTarget->OnFileDragLeave();
+        m_FileDragTarget = nullptr;
+        RequestRepaint();
+    }
+
+    void Container::OnFileDrop(const std::vector<XPath> &files, int x, int y)
+    {
+        Component *hit = HitTest(x, y);
+        if (hit && hit->IsVisible())
+            hit->OnFileDrop(files, x - hit->GetX(), y - hit->GetY());
+        m_FileDragTarget = nullptr;
+        RequestRepaint();
+    }
+
     void Container::AddComponent(Component *comp)
     {
         if (comp)

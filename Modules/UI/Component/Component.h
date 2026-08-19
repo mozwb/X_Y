@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "Widget/Canvas.h"
 #include "XCore/Input/Input.h"
+#include "XCore/FilesSystem/FilesSystem.h"
 #include <functional>
 namespace X_Y
 {
@@ -62,6 +63,11 @@ namespace X_Y
         virtual void OnMousePressed(int localX, int localY) {}
         virtual void OnMouseMoved(int localX, int localY) {}
         virtual void OnMouseReleased(int localX, int localY) {}
+
+        virtual void OnFileDragEnter(const std::vector<XPath> &files, int localX, int localY) {}
+        virtual void OnFileDragOver(const std::vector<XPath> &files, int localX, int localY) {}
+        virtual void OnFileDragLeave() {}
+        virtual void OnFileDrop(const std::vector<XPath> &files, int localX, int localY) {}
 
         // 请求所属窗口重绘（由 Container 在 AddComponent 时注入实现）
         void RequestRepaint()
