@@ -2,7 +2,9 @@
 #include "../Memory/Buffer.h"
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <regex>
+
 namespace X_Y
 {
     using File = std::filesystem::path;
@@ -19,8 +21,8 @@ namespace X_Y
         static bool AppendFileBinary(const File &filepath, const Buffer &buffer);
 
 #ifdef XY_PLATFORM_WINDOWS
-        static std::string OpenFileDialog(const char *filter = "All Files (*.*)\0*.*\0");
-        static std::string SaveFileDialog(const char *filter = "All Files (*.*)\0*.*\0");
+        static std::optional<std::wstring> OpenFileDialog(const char *filter = "All Files (*.*)\0*.*\0");
+        static std::optional<std::wstring> SaveFileDialog(const char *filter = "All Files (*.*)\0*.*\0");
 #endif
     };
 

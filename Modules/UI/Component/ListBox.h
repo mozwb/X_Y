@@ -29,7 +29,7 @@ namespace X_Y
     public:
         ListBox() = default;
 
-        void AddItem(const char *text, uint32_t textColor = 0xFF000000);
+        void AddItem(const char *text, uint32_t textColor = 0xFF000000, uint32_t bgColor = 0xFFFFFFFF);
         void Clear();
 
         int GetItemCount() const { return (int)m_Items.size(); }
@@ -43,6 +43,7 @@ namespace X_Y
 
         int GetSelectedIndex() const { return m_SelectedIndex; }
         void SetSelectedIndex(int idx) { m_SelectedIndex = idx; }
+        void SetSelectedColor(uint32_t color) { m_SelectedColor = color; }
 
         int GetLineHeight() const { return m_LineHeight; }
         void SetLineHeight(int h);
@@ -90,6 +91,7 @@ namespace X_Y
         int m_FoldedCount = 0;    // 已惰性折叠的 item 数（增量折行游标）
 
         int m_SelectedIndex = -1;
+        uint32_t m_SelectedColor = 0xFFFEFEFE;
         int m_LineHeight = 20; // 物理行高（文字带 + 行距）
         int m_LineSpacing = 4; // 行距（文字带之间留白，防背景吞 descender）
         int m_ViewOffset = 0;  // 滚动偏移（像素）

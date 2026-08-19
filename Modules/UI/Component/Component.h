@@ -64,7 +64,6 @@ namespace X_Y
         virtual void OnMouseReleased(int localX, int localY) {}
 
         // 请求所属窗口重绘（由 Container 在 AddComponent 时注入实现）
-
         void RequestRepaint()
         {
             if (m_RepaintCallback)

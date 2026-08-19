@@ -12,7 +12,7 @@ namespace X_Y
         Clear();
         for (const auto &entry : entries)
         {
-            AddItem(entry.text.c_str(), entry.color);
+            AddItem(entry.text.c_str(), entry.color, entry.bgColor);
         }
     }
 
@@ -269,7 +269,7 @@ namespace X_Y
         {
             const LogEntry &e = m_AllEntries[i]; // 相对索引，0 = 最旧
             if (MatchesKeyword(e))
-                m_LogStripe->AddItem(e.text.c_str(), e.color);
+                m_LogStripe->AddItem(e.text.c_str(), e.color, e.bgColor);
         }
         m_RenderedSeq = m_AllEntries.TotalPushed();
         RequestRepaint();
@@ -285,7 +285,7 @@ namespace X_Y
         {
             const LogEntry &e = m_AllEntries.At(i); // 按全局序号
             if (MatchesKeyword(e))
-                m_LogStripe->AddItem(e.text.c_str(), e.color);
+                m_LogStripe->AddItem(e.text.c_str(), e.color, e.bgColor);
         }
         m_RenderedSeq = toSeq;
         RequestRepaint();
@@ -367,14 +367,17 @@ namespace X_Y
         m_TagBar->SetRect(0, 0, w, m_TagBar->GetHeight());
 
         // 输入框：TagBar 之下
+        // 这里的w应该预留出来m_ScrollArea滑块的宽度
         int inputY = m_TagBar->GetHeight() + gap;
-        m_KeywordInput->SetRect(0, inputY, w, inputH);
 
         // 日志区：占满剩余
         int panelY = inputY + inputH + gap;
         int panelH = h - panelY;
         if (panelH > 0)
             m_ScrollArea->SetRect(0, panelY, w, panelH);
+
+        w = m_ScrollArea->GetViewWidth();
+        m_KeywordInput->SetRect(0, inputY, w, inputH);
     }
 
 }

@@ -1,13 +1,15 @@
-﻿#include"FilesSystem/FilesSystem.h"
-#include<fstream>
+﻿#include "XCore/FilesSystem/FilesSystem.h"
+#include "XCore/XYTools.h"
+#include <fstream>
 #include <filesystem>
 #ifdef XY_PLATFORM_WINDOWS
-#include<Windows.h>
-#include<commdlg.h>
+#include <Windows.h>
+#include <commdlg.h>
 #endif
-namespace X_Y {
+namespace X_Y
+{
 
-	Buffer FilesSystem::ReadFileBinary(const File& filepath)
+	Buffer FilesSystem::ReadFileBinary(const File &filepath)
 	{
 		std::ifstream stream(filepath, std::ios::binary | std::ios::ate);
 
@@ -16,7 +18,6 @@ namespace X_Y {
 			// Failed to open the file
 			return {};
 		}
-
 
 		std::streampos end = stream.tellg();
 		stream.seekg(0, std::ios::beg);
@@ -35,7 +36,7 @@ namespace X_Y {
 		return buffer;
 	}
 
-	bool FilesSystem::WriteFileBinary(const File& filepath, const Buffer& buffer)
+	bool FilesSystem::WriteFileBinary(const File &filepath, const Buffer &buffer)
 	{
 		std::ofstream stream(filepath, std::ios::binary | std::ios::trunc);
 
@@ -45,12 +46,12 @@ namespace X_Y {
 			return false;
 		}
 
-		stream.write(reinterpret_cast<const char*>(buffer.Data), buffer.Size);
+		stream.write(reinterpret_cast<const char *>(buffer.Data), buffer.Size);
 		stream.close();
 		return true;
 	}
 
-	bool FilesSystem::AppendFileBinary(const File& filepath, const Buffer& buffer)
+	bool FilesSystem::AppendFileBinary(const File &filepath, const Buffer &buffer)
 	{
 		// 追加模式：文件不存在则创建，存在则追加到末尾
 		std::ofstream stream(filepath, std::ios::binary | std::ios::app);
@@ -65,14 +66,14 @@ namespace X_Y {
 				return false;
 		}
 
-		stream.write(reinterpret_cast<const char*>(buffer.Data), buffer.Size);
+		stream.write(reinterpret_cast<const char *>(buffer.Data), buffer.Size);
 		stream.close();
 		return true;
 	}
 
 #ifdef XY_PLATFORM_WINDOWS
 
-	std::string FilesSystem::OpenFileDialog(const char* filter)
+	std::optional<std::wstring> FilesSystem::OpenFileDialog(const char *filter)
 	{
 		OPENFILENAMEA ofn = {};
 		CHAR szFile[260] = {};
@@ -89,13 +90,17 @@ namespace X_Y {
 		if (GetCurrentDirectoryA(256, currentDir))
 			ofn.lpstrInitialDir = currentDir;
 
-		if (GetOpenFileNameA(&ofn))
-			return std::string(ofn.lpstrFile);
+		if (!GetOpenFileNameA(&ofn))
+		{
+			// 用户点取消 / 对话框出错
+			return std::nullopt;
+		}
 
-		return std::string();
+		// szFile 是 GBK char*，转换为wstring
+		return gbk_to_wstring(ofn.lpstrFile);
 	}
 
-	std::string FilesSystem::SaveFileDialog(const char* filter)
+	std::optional<std::wstring> FilesSystem::SaveFileDialog(const char *filter)
 	{
 		OPENFILENAMEA ofn = {};
 		CHAR szFile[260] = {};
@@ -113,10 +118,12 @@ namespace X_Y {
 		if (GetCurrentDirectoryA(256, currentDir))
 			ofn.lpstrInitialDir = currentDir;
 
-		if (GetSaveFileNameA(&ofn))
-			return std::string(ofn.lpstrFile);
+		if (!GetSaveFileNameA(&ofn))
+		{
+			return std::nullopt;
+		}
 
-		return std::string();
+		return gbk_to_wstring(ofn.lpstrFile);
 	}
 
 #endif

@@ -20,7 +20,8 @@ namespace X_Y
     struct LogEntry
     {
         std::string text;
-        uint32_t color = 0xFF000000; // 默认黑色 ARGB
+        uint32_t color = 0xFF000000;   // 默认黑色 ARGB
+        uint32_t bgColor = 0xFF000000; // 默认黑色 ARGB
     };
 
     // ── LogStripe ──
