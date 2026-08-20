@@ -33,25 +33,14 @@ namespace X_Y
 
         void Log(const std::string &message) const override
         {
-            Buffer *buf = DataStore::Instance().GetOrCreate(m_Key, m_Capacity);
-            if (!buf)
-                return;
-
-            uint64_t needed = message.size() + 1;
-            if (buf->Size + needed > buf->Capacity)
-            {
-                DataStore::Instance().Save(m_Key);
-                buf->Allocate(0); // 重置为空 Buffer，下次 Log 写入从头
-            }
-
-            buf->Append(message.data(), message.size());
-            buf->Append("\n", 1);
+            std::string record = message + "\n";
+            DataStore::Instance().Append(m_Key, record.data(), record.size(), m_Capacity);
         }
 
         ~DataStoreDevice()
         {
-            // 程序退出时不 Flush，此时 DataStore 可能已析构
-            DataStore::Instance().Save(m_Key);
+            // 追加当前尚未写出的日志片段，避免覆盖之前已经落盘的内容
+            DataStore::Instance().Flush(m_Key);
         }
 
         void SetKey(const std::string &key) { m_Key = key; }

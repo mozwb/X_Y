@@ -46,6 +46,9 @@ namespace X_Y
         // ── 核心操作 ──
         Buffer *GetOrCreate(const std::string &key, uint64_t reserveSize = 4096);
         Buffer *Get(const std::string &key);
+        bool Append(const std::string &key, const void *data, uint64_t size,
+                    uint64_t reserveSize = 4096);
+        Buffer ReadCopy(const std::string &key) const;
         bool Remove(const std::string &key);
         void Rename(const std::string &oldKey, const std::string &newKey);
         bool Contains(const std::string &key) const;

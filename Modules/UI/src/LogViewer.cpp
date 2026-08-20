@@ -141,28 +141,26 @@ namespace X_Y
         m_Timer = std::make_unique<Ticker>();
         m_Timer->Start(500, [this]()
                        {
-        Buffer* buf = DataStore::Instance().Get(m_Key);
-        if (!buf || !buf->Data || buf->Size == 0) return;
+        Buffer buf = DataStore::Instance().ReadCopy(m_Key);
+        if (!buf || !buf.Data || buf.Size == 0) return;
 
-        uint64_t currentSize = buf->Size;
+        uint64_t currentSize = buf.Size;
 
         std::lock_guard<std::shared_mutex> lock(m_EntriesMutex);
 
         if (currentSize < m_LastSize) {
             m_LastSize = 0;
-            m_AllEntries.Clear();
-            // 数据被重置（换了文件/清空），stripe 也全量重建
-            RebuildAll();
         }
 
         if (currentSize == m_LastSize) return;
 
         auto tailLen = currentSize - m_LastSize;
-        auto* bytes = reinterpret_cast<const char*>(buf->Data) + m_LastSize;
+        auto* bytes = reinterpret_cast<const char*>(buf.Data) + m_LastSize;
         m_LastSize = currentSize;
 
         // 入队前的全局序号，用于增量喂入范围
         uint64_t before = m_AllEntries.TotalPushed();
+        bool queueWasFull = m_AllEntries.Full();
 
         std::string current;
         for (uint64_t i = 0; i < tailLen; i++) {
@@ -181,7 +179,11 @@ namespace X_Y
         }
 
         uint64_t after = m_AllEntries.TotalPushed();
-        IncrementalAppend(before, after); });
+        uint64_t newEntries = after - before;
+        if ((queueWasFull || newEntries >= MAX_ENTRIES) && newEntries > 0)
+            RebuildAll();
+        else
+            IncrementalAppend(before, after); });
     }
 
     void LogViewer::Stop()

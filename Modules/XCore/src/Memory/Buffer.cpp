@@ -2,6 +2,7 @@
 
 #include "Memory/XMemory.h"
 #include <cstdio>
+#include <limits>
 
 namespace X_Y
 {
@@ -69,16 +70,19 @@ namespace X_Y
 
     // ── 内存管理（统一走 Memory） ──
 
-    void Buffer::Reserve(uint64_t newCapacity)
+    bool Buffer::Reserve(uint64_t newCapacity)
     {
         if (newCapacity <= Capacity)
-            return;
+            return true;
+
+        if (newCapacity > std::numeric_limits<uint64_t>::max() - 15)
+            return false;
 
         // 16 字节对齐
         newCapacity = (newCapacity + 15) & ~15ULL;
         uint8_t *newData = static_cast<uint8_t *>(Memory::Instance().Alloc(newCapacity));
         if (!newData)
-            return; // OOM
+            return false;
 
         if (Data)
         {
@@ -87,24 +91,35 @@ namespace X_Y
         }
         Data = newData;
         Capacity = newCapacity;
+        return true;
     }
 
-    void Buffer::Ensure(uint64_t neededSize)
+    bool Buffer::Ensure(uint64_t neededSize)
     {
         if (neededSize > Capacity)
         {
             uint64_t newCap = Capacity == 0 ? 64 : Capacity * 2;
+            if (Capacity > std::numeric_limits<uint64_t>::max() / 2)
+                newCap = neededSize;
             while (newCap < neededSize)
+            {
+                if (newCap > std::numeric_limits<uint64_t>::max() / 2)
+                {
+                    newCap = neededSize;
+                    break;
+                }
                 newCap *= 2;
-            Reserve(newCap);
+            }
+            return Reserve(newCap);
         }
+        return true;
     }
 
     void Buffer::Allocate(uint64_t size)
     {
         Release();
-        Reserve(size);
-        Size = size;
+        if (size == 0 || Reserve(size))
+            Size = size;
     }
 
     void Buffer::Release()
@@ -130,7 +145,10 @@ namespace X_Y
     {
         if (!src || len == 0)
             return;
-        Ensure(Size + len);
+        if (len > std::numeric_limits<uint64_t>::max() - Size)
+            return;
+        if (!Ensure(Size + len))
+            return;
         std::memcpy(Data + Size, src, len);
         Size += len;
     }

@@ -27,6 +27,25 @@ namespace X_Y
     //    每个 chunk 64KB 连续内存，内部全部切成同一尺寸 slab
     //    用完自动申请新 chunk（惰性扩展）
     //
+    //  分配链路：
+    //    Alloc(size)
+    //      -> 按请求大小选择 slab
+    //      -> 加 slab 锁，从 FreeList 取一个 block 地址
+    //      -> 没有空闲 block 时 AddChunk() 申请一个 64KB chunk 并切块
+    //      -> 返回 block 地址
+    //
+    //  释放链路：
+    //    Free(ptr)
+    //      -> 在全局 chunk 索引中找到所属 chunk
+    //      -> 加对应 slab 锁，将地址放回 FreeList
+    //      -> 更新 chunk.FreeBlocks 和 slab.FreeBlocks
+    //      -> 当前 chunk 的所有 block 都空闲时，移除其 FreeList 地址并回收 chunk
+    //
+    //  重要不变量：
+    //    - FreeList 保存实际地址，不保存依赖 Chunks 顺序的索引
+    //    - chunk 只能依据自身 FreeBlocks 判断是否可以回收
+    //    - slab 的 FreeBlocks 只表示该 slab 所有 chunk 的空闲总数，不能用于判断单个 chunk
+    //
     //  锁策略：
     //    每 slab 一把 std::mutex，保护该 slab 的 free list
     //    跨 slab 分配完全并行
@@ -131,6 +150,7 @@ namespace X_Y
             uintptr_t Base = 0;
             uint64_t Size = 0;
             uint32_t SlabIndex = 0;
+            uint32_t FreeBlocks = 0;
 
             uint64_t BlockCount() const
             {
@@ -141,7 +161,7 @@ namespace X_Y
         struct SlabManager
         {
             mutable std::mutex Mutex;
-            std::vector<uint64_t> FreeList;
+            std::vector<uintptr_t> FreeList;
             std::vector<ChunkInfo> Chunks;
             uint32_t TotalBlocks = 0;
             uint32_t FreeBlocks = 0;
@@ -151,7 +171,7 @@ namespace X_Y
         void *AllocFromSlab(uint32_t slabIdx);
         void FreeToSlab(void *ptr, const ChunkInfo &chunk, uint32_t slabIdx);
         void AddChunk(uint32_t slabIdx);
-        const ChunkInfo *FindChunkByAddr(uintptr_t addr) const;
+        bool FindChunkByAddr(uintptr_t addr, ChunkInfo &out) const;
 
         // ── 成员 ──
 

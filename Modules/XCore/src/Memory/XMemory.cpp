@@ -133,6 +133,7 @@ namespace X_Y
         // 这样能让大 chunk 优先被使用、优先被回收，减少 chunk 总量
         for (uint32_t i = exact; i < kSlabCount; i++)
         {
+            std::lock_guard lock(m_Slabs[i].Mutex);
             if (m_Slabs[i].FreeBlocks > 0)
                 return i;
         }
@@ -166,6 +167,7 @@ namespace X_Y
         info.Base = reinterpret_cast<uintptr_t>(mem);
         info.Size = chunkSize;
         info.SlabIndex = slabIdx;
+        info.FreeBlocks = static_cast<uint32_t>(blockCount);
 
         // 注册到全局
         {
@@ -185,17 +187,17 @@ namespace X_Y
         slab.TotalBlocks += static_cast<uint32_t>(blockCount);
         slab.FreeBlocks += static_cast<uint32_t>(blockCount);
 
-        // 所有块加入 free list
+        // 直接记录 block 地址，避免 Chunk 删除后全局索引失效
         for (uint64_t i = 0; i < blockCount; i++)
-            slab.FreeList.push_back(i);
+            slab.FreeList.push_back(info.Base + i * slabSize);
     }
 
-    const Memory::ChunkInfo *Memory::FindChunkByAddr(uintptr_t addr) const
+    bool Memory::FindChunkByAddr(uintptr_t addr, ChunkInfo &out) const
     {
         std::shared_lock lock(m_ChunksMutex);
 
         if (m_AllChunks.empty())
-            return nullptr;
+            return false;
 
         // 二分查找：找到最后一个 Base <= addr 的 chunk
         auto it = std::upper_bound(m_AllChunks.begin(), m_AllChunks.end(), addr,
@@ -205,13 +207,16 @@ namespace X_Y
                                    });
 
         if (it == m_AllChunks.begin())
-            return nullptr;
+            return false;
 
         --it;
         if (addr >= it->Base && addr < it->Base + it->Size)
-            return &(*it);
+        {
+            out = *it;
+            return true;
+        }
 
-        return nullptr;
+        return false;
     }
 
     // ═════════════════════════════════════════════════════════════════════════════
@@ -223,11 +228,12 @@ namespace X_Y
         auto &slab = m_Slabs[slabIdx];
         uint64_t slabSize = kSlabSizes[slabIdx];
 
-        // 正常从 free list 取
+        // 调用者已经持有 slab 锁。FreeList 中保存的是实际 block 地址，
+        // 因此 Chunks 增删不会让待分配的地址索引失效。
         if (slab.FreeBlocks > 0)
             goto alloc_block;
 
-        // ── 没有空闲块：检查预算后加新 chunk ──
+        // 没有空闲 block：先检查预算，再申请一个 chunk，并把它切成固定大小的 block。
         {
             uint64_t newChunkCost = kChunkSize;
             if (m_UsedCapacity.load(std::memory_order_relaxed) + newChunkCost > s_MaxBytes)
@@ -256,19 +262,16 @@ namespace X_Y
     alloc_block:
         // 从 free list 取一块
         {
-            uint64_t blockIdx = slab.FreeList.back();
+            uintptr_t blockAddr = slab.FreeList.back();
             slab.FreeList.pop_back();
             slab.FreeBlocks--;
 
-            // 找到这块所属的 chunk
-            uint64_t accum = 0;
-            for (const auto &chunk : slab.Chunks)
+            for (auto &chunk : slab.Chunks)
             {
-                uint64_t count = chunk.BlockCount();
-                if (blockIdx < accum + count)
+                if (blockAddr >= chunk.Base && blockAddr < chunk.Base + chunk.Size)
                 {
-                    uint64_t localIdx = blockIdx - accum;
-                    void *ptr = reinterpret_cast<void *>(chunk.Base + localIdx * slabSize);
+                    chunk.FreeBlocks--;
+                    void *ptr = reinterpret_cast<void *>(blockAddr);
 
                     m_UsedBytes.fetch_add(slabSize, std::memory_order_relaxed);
                     m_UsedCapacity.fetch_add(slabSize, std::memory_order_relaxed);
@@ -281,7 +284,6 @@ namespace X_Y
                     m_TotalAllocs.fetch_add(1, std::memory_order_relaxed);
                     return ptr;
                 }
-                accum += count;
             }
 
             std::fprintf(stderr, "[Memory] internal error: block index out of range\n");
@@ -295,46 +297,55 @@ namespace X_Y
         auto &slab = m_Slabs[slabIdx];
         uint64_t slabSize = kSlabSizes[slabIdx];
 
+        // 调用者已经持有 slab 锁。先把 block 归还给 slab 和所属 chunk。
         uintptr_t addr = reinterpret_cast<uintptr_t>(ptr);
-        uint64_t blockIdx = (addr - chunk.Base) / slabSize;
-
-        slab.FreeList.push_back(blockIdx);
+        slab.FreeList.push_back(addr);
         slab.FreeBlocks++;
+
+        ChunkInfo *ownedChunk = nullptr;
+        for (auto &candidate : slab.Chunks)
+        {
+            if (candidate.Base == chunk.Base)
+            {
+                candidate.FreeBlocks++;
+                ownedChunk = &candidate;
+                break;
+            }
+        }
 
         m_UsedBytes.fetch_sub(slabSize, std::memory_order_relaxed);
         m_UsedCapacity.fetch_sub(slabSize, std::memory_order_relaxed);
         m_TotalFrees.fetch_add(1, std::memory_order_relaxed);
 
-        // ── 缩容：chunk 全空闲时释放 ──
-        // 当前 chunk 的所有块都已归还 → 释放这个 chunk
-        if (slab.FreeBlocks >= chunk.BlockCount() && slab.Chunks.size() > 1)
+        // 只有当前 chunk 自己完全空闲时才能回收，不能使用 slab.FreeBlocks 判断。
+        if (!ownedChunk || ownedChunk->FreeBlocks != ownedChunk->BlockCount() || slab.Chunks.size() <= 1)
+            return;
+
+        const uintptr_t base = ownedChunk->Base;
+        const uintptr_t end = base + ownedChunk->Size;
+        slab.FreeList.erase(
+            std::remove_if(slab.FreeList.begin(), slab.FreeList.end(),
+                           [base, end](uintptr_t freeAddr)
+                           { return freeAddr >= base && freeAddr < end; }),
+            slab.FreeList.end());
+
         {
-            for (size_t i = 0; i < slab.Chunks.size(); i++)
-            {
-                if (slab.Chunks[i].Base == chunk.Base)
-                {
-                    // 从全局索引移除
-                    {
-                        std::unique_lock lock(m_ChunksMutex);
-                        for (auto it = m_AllChunks.begin(); it != m_AllChunks.end(); ++it)
-                        {
-                            if (it->Base == chunk.Base)
-                            {
-                                m_AllChunks.erase(it);
-                                break;
-                            }
-                        }
-                    }
-
-                    std::free(reinterpret_cast<void *>(chunk.Base));
-
-                    slab.Chunks.erase(slab.Chunks.begin() + i);
-                    slab.TotalBlocks -= static_cast<uint32_t>(chunk.BlockCount());
-                    slab.FreeBlocks -= static_cast<uint32_t>(chunk.BlockCount());
-                    break;
-                }
-            }
+            std::unique_lock lock(m_ChunksMutex);
+            m_AllChunks.erase(
+                std::remove_if(m_AllChunks.begin(), m_AllChunks.end(),
+                               [base](const ChunkInfo &item)
+                               { return item.Base == base; }),
+                m_AllChunks.end());
         }
+
+        std::free(reinterpret_cast<void *>(base));
+        slab.TotalBlocks -= static_cast<uint32_t>(ownedChunk->BlockCount());
+        slab.FreeBlocks -= static_cast<uint32_t>(ownedChunk->BlockCount());
+        slab.Chunks.erase(
+            std::remove_if(slab.Chunks.begin(), slab.Chunks.end(),
+                           [base](const ChunkInfo &item)
+                           { return item.Base == base; }),
+            slab.Chunks.end());
     }
 
     // ═════════════════════════════════════════════════════════════════════════════
@@ -348,6 +359,7 @@ namespace X_Y
 
         if (size <= kMaxSlabSize)
         {
+            // 小对象走 slab：多个固定大小 block 共享一个 64KB chunk。
             uint32_t slabIdx = FindSlabIndex(size);
             auto &slab = m_Slabs[slabIdx];
 
@@ -355,7 +367,7 @@ namespace X_Y
             return AllocFromSlab(slabIdx);
         }
 
-        // ── >64KB：直接 malloc，但统计入账 ──
+        // 大于最大 slab 的对象不切块，直接走 malloc；释放时同样走 std::free。
         uint64_t newCost = size;
         if (m_UsedCapacity.load(std::memory_order_relaxed) + newCost > s_MaxBytes)
         {
@@ -398,22 +410,22 @@ namespace X_Y
         if (!ptr || m_ShuttingDown)
             return;
 
-        // 查归属
+        // 先通过全局 chunk 索引判断 ptr 属于 slab 还是独立 malloc。
         uintptr_t addr = reinterpret_cast<uintptr_t>(ptr);
-        const ChunkInfo *chunk = FindChunkByAddr(addr);
+        ChunkInfo chunk;
 
-        if (chunk)
+        if (FindChunkByAddr(addr, chunk))
         {
-            // slab 内存
-            uint32_t slabIdx = chunk->SlabIndex;
+            // slab 内存：归还 block，必要时回收完全空闲的 chunk。
+            uint32_t slabIdx = chunk.SlabIndex;
             auto &slab = m_Slabs[slabIdx];
 
             std::lock_guard lock(slab.Mutex);
-            FreeToSlab(ptr, *chunk, slabIdx);
+            FreeToSlab(ptr, chunk, slabIdx);
         }
         else
         {
-            // malloc 内存
+            // 非 slab 内存：这是 >64KB 的独立 malloc，直接交给 std::free。
             uint64_t size = 0; // 无法知道 malloc 的大小，只减计数
             // 理想情况应该记录大小，但 std::malloc 不提供
             // 这里用近似值处理

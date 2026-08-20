@@ -14,7 +14,9 @@ namespace X_Y
     DataStore &DataStore::Instance()
     {
         static DataStore inst;
-        inst.LoadIndex(); // 启动时加载索引
+        static std::once_flag loadIndexOnce;
+        std::call_once(loadIndexOnce, [&]()
+                       { inst.LoadIndex(); });
         return inst;
     }
 
@@ -167,6 +169,68 @@ namespace X_Y
         }
 
         return &it->second;
+    }
+
+    bool DataStore::Append(const std::string &key, const void *data, uint64_t size,
+                           uint64_t reserveSize)
+    {
+        if (!data && size > 0)
+            return false;
+
+        std::unique_lock lock(m_Mutex);
+        if (!m_Enabled)
+            return false;
+
+        auto it = m_Entries.find(key);
+        if (it == m_Entries.end())
+        {
+            Buffer buffer(reserveSize);
+            auto result = m_Entries.emplace(key, std::move(buffer));
+            it = result.first;
+            SaveIndex();
+        }
+
+        Buffer &buffer = it->second;
+        if (!buffer.Data)
+        {
+            XPath path = KeyToPath(key);
+            if (path.Exists())
+            {
+                Buffer loaded = FilesSystem::ReadFileBinary(path);
+                if (loaded)
+                    buffer = std::move(loaded);
+            }
+            if (!buffer.Data)
+                buffer.Reserve(reserveSize);
+        }
+
+        if (buffer.Size + size > buffer.Capacity)
+        {
+            EnsureDataDir();
+            XPath path = KeyToPath(key);
+            XPath parent = path.GetParent();
+            if (!parent.Exists())
+                parent.CreateDirectory();
+            if (buffer && !FilesSystem::AppendFileBinary(path, buffer))
+                return false;
+            buffer.Allocate(0);
+            buffer.Reserve(reserveSize);
+        }
+
+        buffer.Append(data, size);
+        return true;
+    }
+
+    Buffer DataStore::ReadCopy(const std::string &key) const
+    {
+        std::shared_lock lock(m_Mutex);
+        if (!m_Enabled)
+            return {};
+
+        auto it = m_Entries.find(key);
+        if (it == m_Entries.end() || !it->second)
+            return {};
+        return it->second.Copy();
     }
 
     bool DataStore::Remove(const std::string &key)
