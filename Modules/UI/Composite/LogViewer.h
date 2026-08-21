@@ -3,7 +3,6 @@
 #include "UI/Component/ListBox.h"
 #include "UI/Component/ScrollArea.h"
 #include "UI/Component/TextInput.h"
-#include "UI/Component/TagBar.h"
 #include "XCore/Memory/LoopQueue.h"
 #include <string>
 #include <vector>
@@ -48,17 +47,23 @@ namespace X_Y
         void OnPaint(Canvas *canvas) override;
 
     private:
+        class TagStrip;
+
         // 输入框回车 → 把当前输入文本添加为一条筛选规则（tag）
         void OnEnterKeyword();
         // 某个 tag 被点击 × 删除
         void OnTagRemoved(const std::string &tag);
+        int MeasureTags(Canvas &canvas);
+        void PaintTags(Canvas &canvas);
+        int HitTestTag(int x, int y) const;
+        bool IsInTagClose(int index, int x, int y) const;
         bool MatchesKeyword(const LogEntry &e) const;             // 命中任一关键词（OR）即通过
         void RebuildAll();                                        // 全量重建（关键词变 / 数据重置时）
         void IncrementalAppend(uint64_t fromSeq, uint64_t toSeq); // 增量喂新条目
         void LayoutChildren();
 
-        std::unique_ptr<TagBar> m_TagBar;
         std::unique_ptr<TextInput> m_KeywordInput;
+        std::unique_ptr<TagStrip> m_TagStrip;
         std::unique_ptr<ScrollArea> m_ScrollArea;
         std::unique_ptr<LogStripe> m_LogStripe;
 
@@ -69,6 +74,15 @@ namespace X_Y
 
         std::string m_Key;
         std::vector<std::string> m_Keywords; // 已确认的筛选关键词（OR 语义）
+        struct TagRect
+        {
+            int x, y, w, h;
+        };
+        std::vector<TagRect> m_TagRects;
+        std::vector<TagRect> m_TagCloseRects;
+        int m_TagHeight = 24;
+        int m_TagGap = 6;
+        int m_TagHoverIndex = -1;
         uint64_t m_LastSize = 0;
         uint64_t m_RenderedSeq = 0; // 已喂入 stripe 的全局序号
 

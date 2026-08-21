@@ -2,6 +2,7 @@
 #include "DataStore/DataStore.h"
 #include "XCore/Timer/Timer.h"
 #include "Widget/BaseWin.h"
+#include "Widget/FontLibrary.h"
 #include <algorithm>
 
 namespace X_Y
@@ -74,6 +75,38 @@ namespace X_Y
         return entry;
     }
 
+    class LogViewer::TagStrip final : public Component
+    {
+    public:
+        explicit TagStrip(LogViewer *owner) : m_Owner(owner) {}
+
+        void OnPaint(Canvas &canvas) override { m_Owner->PaintTags(canvas); }
+
+        void OnMouseMoved(int x, int y) override
+        {
+            const int index = m_Owner->HitTestTag(x, y);
+            if (index != m_Owner->m_TagHoverIndex)
+            {
+                m_Owner->m_TagHoverIndex = index;
+                m_Owner->RequestRepaint();
+            }
+        }
+
+        void OnMousePressed(int x, int y) override
+        {
+            const int index = m_Owner->HitTestTag(x, y);
+            if (index >= 0 && m_Owner->IsInTagClose(index, x, y))
+            {
+                m_Owner->OnTagRemoved(m_Owner->m_Keywords[static_cast<std::size_t>(index)]);
+                m_Owner->m_TagHoverIndex = -1;
+                m_Owner->RequestRepaint();
+            }
+        }
+
+    private:
+        LogViewer *m_Owner;
+    };
+
     // ════════════════════════════════════════════════════════════
     // 构造 / 析构
     // ════════════════════════════════════════════════════════════
@@ -82,13 +115,7 @@ namespace X_Y
     {
         m_Key = SysClock::NowFormat("YY-MM-DD") + ".log";
 
-        m_TagBar = std::make_unique<TagBar>();
-        // 点某个 tag 的 × → 移除该筛选关键词并重筛
-        m_TagBar->OnTagRemove = [this](const std::string &tag)
-        {
-            OnTagRemoved(tag);
-        };
-
+        m_TagStrip = std::make_unique<TagStrip>(this);
         m_KeywordInput = std::make_unique<TextInput>();
         m_KeywordInput->SetPlaceholder("输入关键词，回车添加到筛选");
         // 输入框回车 → 添加为筛选规则
@@ -102,7 +129,7 @@ namespace X_Y
         m_ScrollArea = std::make_unique<ScrollArea>();
         m_ScrollArea->SetContent(m_LogStripe.get());
 
-        AddComponent(m_TagBar.get());
+        AddComponent(m_TagStrip.get());
         AddComponent(m_KeywordInput.get());
         AddComponent(m_ScrollArea.get());
     }
@@ -312,7 +339,6 @@ namespace X_Y
                 return;
 
         m_Keywords.push_back(kw);
-        m_TagBar->AddTag(kw);
         RebuildAll();
 
         m_KeywordInput->SetText("");
@@ -325,9 +351,87 @@ namespace X_Y
         auto it = std::find(m_Keywords.begin(), m_Keywords.end(), tag);
         if (it != m_Keywords.end())
             m_Keywords.erase(it);
-        // tag 也要从 TagBar 上移除，否则视觉上删不掉
-        m_TagBar->RemoveTag(tag);
         RebuildAll();
+    }
+
+    int LogViewer::MeasureTags(Canvas &canvas)
+    {
+        m_TagRects.clear();
+        m_TagCloseRects.clear();
+        if (m_Keywords.empty())
+            return 0;
+
+        const Font &font = FontLibrary::Instance().GetDefault();
+        const int contentWidth = std::max(0, static_cast<int>(get_width()));
+        const int closeSize = 12;
+        const int closePad = 3;
+        const int textPadLeft = 8;
+        const int textPadRight = closeSize + closePad * 3;
+        const int rowHeight = m_TagHeight;
+
+        int x = 0;
+        int y = 0;
+        int rows = 1;
+        for (const std::string &keyword : m_Keywords)
+        {
+            const int textWidth = font.MeasureText(keyword.c_str());
+            const int tagWidth = std::max(rowHeight, textWidth + textPadLeft + textPadRight);
+            if (x > 0 && x + tagWidth > contentWidth)
+            {
+                x = 0;
+                y += rowHeight + m_TagGap;
+                ++rows;
+            }
+
+            m_TagRects.push_back({x, y + 2, tagWidth, rowHeight});
+            m_TagCloseRects.push_back({x + tagWidth - closeSize - closePad,
+                                       y + 2 + closePad, closeSize, closeSize});
+            x += tagWidth + m_TagGap;
+        }
+
+        (void)canvas;
+        return rows * rowHeight + (rows - 1) * m_TagGap + 4;
+    }
+
+    int LogViewer::HitTestTag(int x, int y) const
+    {
+        for (std::size_t i = 0; i < m_TagRects.size(); ++i)
+        {
+            const TagRect &rect = m_TagRects[i];
+            if (x >= rect.x && x < rect.x + rect.w &&
+                y >= rect.y && y < rect.y + rect.h)
+                return static_cast<int>(i);
+        }
+        return -1;
+    }
+
+    bool LogViewer::IsInTagClose(int index, int x, int y) const
+    {
+        if (index < 0 || index >= static_cast<int>(m_TagCloseRects.size()))
+            return false;
+
+        const TagRect &rect = m_TagCloseRects[index];
+        return x >= rect.x && x < rect.x + rect.w &&
+               y >= rect.y && y < rect.y + rect.h;
+    }
+
+    void LogViewer::PaintTags(Canvas &canvas)
+    {
+        const Font &font = FontLibrary::Instance().GetDefault();
+        for (std::size_t i = 0; i < m_Keywords.size(); ++i)
+        {
+            const TagRect &tag = m_TagRects[i];
+            const bool hovered = static_cast<int>(i) == m_TagHoverIndex;
+            canvas.FillRoundRect(tag.x, tag.y, tag.w, tag.h, 6,
+                                 hovered ? 0xFF2F6F9F : 0xFF3C3C46);
+            canvas.DrawText(font, tag.x + 8, tag.y + (tag.h - 14) / 2,
+                            m_Keywords[i].c_str(), 0xFFE8E8E8);
+
+            const TagRect &close = m_TagCloseRects[i];
+            canvas.FillRoundRect(close.x, close.y, close.w, close.h, 3,
+                                 hovered ? 0xFF6A7280 : 0xFF555A63);
+            canvas.DrawText(font, close.x + 2, close.y - 1, "x", 0xFFEEEEEE);
+        }
     }
 
     // ════════════════════════════════════════════════════════════
@@ -336,10 +440,7 @@ namespace X_Y
 
     void LogViewer::OnPaint(Canvas *canvas)
     {
-        // 先让 TagBar 用真实 Canvas 量高（测字宽 + 自动换行），布局时才能用当下正确的高度，
-        // 避免日志区一帧错位（TagBar 高度随 tag 增减/换行实时变化）
-        m_TagBar->SetRect(0, 0, get_width(), m_TagBar->GetHeight());
-        m_TagBar->Measure(*canvas);
+        MeasureTags(*canvas);
         LayoutChildren();
 
         canvas->FillRect(0, 0, get_width(), get_height(), 0xFF1E1E1E);
@@ -362,15 +463,13 @@ namespace X_Y
         if (w <= 0 || h <= 0)
             return;
 
+        // 输入框：筛选标签条之下
+        // 这里的w应该预留出来m_ScrollArea滑块的宽度
+        const int tagHeight = m_TagRects.empty() ? 0 : m_TagRects.back().y + m_TagRects.back().h + 2;
+        m_TagStrip->SetRect(0, 0, w, tagHeight);
         const int inputH = 22;
         const int gap = 2;
-
-        // 顶栏：TagBar（筛选规则条，高度已在 OnPaint 用 canvas 量好）
-        m_TagBar->SetRect(0, 0, w, m_TagBar->GetHeight());
-
-        // 输入框：TagBar 之下
-        // 这里的w应该预留出来m_ScrollArea滑块的宽度
-        int inputY = m_TagBar->GetHeight() + gap;
+        int inputY = tagHeight + gap;
 
         // 日志区：占满剩余
         int panelY = inputY + inputH + gap;
