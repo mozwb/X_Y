@@ -64,6 +64,28 @@ namespace X_Y
         virtual void OnMouseMoved(int localX, int localY) {}
         virtual void OnMouseReleased(int localX, int localY) {}
 
+        // Container 调用这些入口；复合组件可重写后继续向内部子组件转发。
+        virtual void DispatchMousePressed(int localX, int localY)
+        {
+            OnMousePressed(localX, localY);
+        }
+        virtual void DispatchMouseMoved(int localX, int localY)
+        {
+            OnMouseMoved(localX, localY);
+        }
+        virtual void DispatchMouseReleased(int localX, int localY)
+        {
+            OnMouseReleased(localX, localY);
+        }
+        virtual void DispatchKeyDown(Input_t::KeyCode key)
+        {
+            OnKeyDown(key);
+        }
+        virtual void DispatchChar(wchar_t ch)
+        {
+            OnChar(ch);
+        }
+
         virtual void OnFileDragEnter(const std::vector<XPath> &files, int localX, int localY) {}
         virtual void OnFileDragOver(const std::vector<XPath> &files, int localX, int localY) {}
         virtual void OnFileDragLeave() {}

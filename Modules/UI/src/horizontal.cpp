@@ -139,4 +139,60 @@ namespace X_Y
         if (component)
             component->OnMouseReleased(localX - component->GetX(), localY - component->GetY());
     }
+
+    void Horizontal::DispatchKeyDown(Input_t::KeyCode key)
+    {
+        for (Component *component : Components)
+            if (component->IsVisible() && component->IsFocused())
+            {
+                component->DispatchKeyDown(key);
+                return;
+            }
+        OnKeyDown(key);
+    }
+
+    void Horizontal::DispatchChar(wchar_t ch)
+    {
+        for (Component *component : Components)
+            if (component->IsVisible() && component->IsFocused())
+            {
+                component->DispatchChar(ch);
+                return;
+            }
+        OnChar(ch);
+    }
+
+    void Horizontal::DispatchMousePressed(int localX, int localY)
+    {
+        std::size_t index = npos;
+        Component *component = HitTest(localX, localY, index);
+        if (!component)
+        {
+            OnMousePressed(localX, localY);
+            return;
+        }
+
+        Select(index);
+        component->DispatchMousePressed(localX - component->GetX(), localY - component->GetY());
+    }
+
+    void Horizontal::DispatchMouseMoved(int localX, int localY)
+    {
+        std::size_t index = npos;
+        Component *component = HitTest(localX, localY, index);
+        if (component)
+            component->DispatchMouseMoved(localX - component->GetX(), localY - component->GetY());
+        else
+            OnMouseMoved(localX, localY);
+    }
+
+    void Horizontal::DispatchMouseReleased(int localX, int localY)
+    {
+        std::size_t index = npos;
+        Component *component = HitTest(localX, localY, index);
+        if (component)
+            component->DispatchMouseReleased(localX - component->GetX(), localY - component->GetY());
+        else
+            OnMouseReleased(localX, localY);
+    }
 }

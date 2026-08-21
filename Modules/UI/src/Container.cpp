@@ -16,7 +16,7 @@ namespace X_Y
         auto& kp = dynamic_cast<const KeyPressed&>(e);
         for (auto* comp : m_Components) {
             if (comp->IsVisible() && comp->IsFocused()) {
-                comp->OnKeyDown(kp.GetKeyCode());
+                comp->DispatchKeyDown(kp.GetKeyCode());
                 break;
             }
         } });
@@ -26,7 +26,7 @@ namespace X_Y
         auto& kt = dynamic_cast<const KeyTyped&>(e);
         for (auto* comp : m_Components) {
             if (comp->IsVisible() && comp->IsFocused()) {
-                comp->OnChar((wchar_t)kt.GetKeyCode());
+                comp->DispatchChar((wchar_t)kt.GetKeyCode());
                 break;
             }
         } });
@@ -67,7 +67,7 @@ namespace X_Y
             m_DragTarget = hit;
             m_DragStartX = sx;
             m_DragStartY = sy;
-            hit->OnMousePressed(sx - hit->GetX(), sy - hit->GetY());
+            hit->DispatchMousePressed(sx - hit->GetX(), sy - hit->GetY());
             // 开始交互（拖滑块等）：捕获鼠标，避免移出窗口后 move/up 事件丢失
             CaptureMouse();
         }
@@ -87,12 +87,12 @@ namespace X_Y
         ScreenToClient(sx, sy);   // 已返回逻辑坐标
 
         if (m_DragTarget) {
-            m_DragTarget->OnMouseMoved(sx - m_DragTarget->GetX(), sy - m_DragTarget->GetY());
+            m_DragTarget->DispatchMouseMoved(sx - m_DragTarget->GetX(), sy - m_DragTarget->GetY());
         }
         else {
             Component* hit = HitTest(sx, sy);
             if (hit && hit->IsVisible())
-                hit->OnMouseMoved(sx - hit->GetX(), sy - hit->GetY());
+                hit->DispatchMouseMoved(sx - hit->GetX(), sy - hit->GetY());
         } });
 
         // 鼠标抬起 → 结束组件交互
@@ -103,7 +103,7 @@ namespace X_Y
         ScreenToClient(sx, sy);   // 已返回逻辑坐标
 
         if (m_DragTarget) {
-            m_DragTarget->OnMouseReleased(sx - m_DragTarget->GetX(), sy - m_DragTarget->GetY());
+            m_DragTarget->DispatchMouseReleased(sx - m_DragTarget->GetX(), sy - m_DragTarget->GetY());
             m_DragTarget = nullptr;
         }
         // 交互结束，释放鼠标捕获（即使松手发生在窗口外也保证触发）

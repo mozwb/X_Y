@@ -50,6 +50,11 @@ namespace X_Y
         void OnMousePressed(int localX, int localY) override;
         void OnMouseMoved(int localX, int localY) override;
         void OnMouseReleased(int localX, int localY) override;
+        void DispatchKeyDown(Input_t::KeyCode key) override;
+        void DispatchChar(wchar_t ch) override;
+        void DispatchMousePressed(int localX, int localY) override;
+        void DispatchMouseMoved(int localX, int localY) override;
+        void DispatchMouseReleased(int localX, int localY) override;
 
         void OnPaint(Canvas &canvas) override;
 
