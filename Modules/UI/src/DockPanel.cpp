@@ -1,26 +1,15 @@
-﻿#include "dock/DockPanel.h"
-#include "Widget/FontLibrary.h"
+﻿#include "Panel/DockPanel.h"
+#include "UI/Container/Container.h"
 
 namespace X_Y
 {
-
-    // ── 颜色常量（RGB 顺序：0xRRGGBB） ──────────────
-    namespace
-    {
-        constexpr uint32_t Color_BG = 0x282828;            // RGB(40,40,40)
-        constexpr uint32_t Color_TabBar = 0x323237;        // RGB(50,50,55)
-        constexpr uint32_t Color_TabActive = 0x464650;     // RGB(70,70,80)
-        constexpr uint32_t Color_TabText = 0xB4B4B4;       // RGB(180,180,180)
-        constexpr uint32_t Color_TabTextActive = 0xFFFFFF; // RGB(255,255,255)
-        constexpr uint32_t Color_TabSep = 0x3C3C41;        // RGB(60,60,65)
-    }
 
     // ════════════════════════════════════════════════════════════
     // DockPanel
     // ════════════════════════════════════════════════════════════
 
     DockPanel::DockPanel(XWidget *parent)
-        : Container(parent)
+        : XWidget(parent)
     {
         // DockPanel 是嵌入的子窗口
 
@@ -35,6 +24,33 @@ namespace X_Y
     DockPanel::~DockPanel()
     {
         m_Tabs.clear();
+    }
+
+    DockTab *DockPanel::AddContainer(Container *container, const std::string &title)
+    {
+        return AddPanel(container, title);
+    }
+
+    DockTab *DockPanel::InsertContainer(int idx, Container *container, const std::string &title)
+    {
+        return InsertPanel(idx, container, title);
+    }
+
+    Container *DockPanel::ExtractContainer(DockTab *tab)
+    {
+        return dynamic_cast<Container *>(ExtractPanel(tab));
+    }
+
+    void DockPanel::Activate(Container *container)
+    {
+        for (int i = 0; i < (int)m_Tabs.size(); ++i)
+        {
+            if (m_Tabs[i].Panel == container)
+            {
+                ActivateTab(i);
+                return;
+            }
+        }
     }
 
     DockTab *DockPanel::AddPanel(XWidget *panel, const std::string &title)
@@ -118,50 +134,6 @@ namespace X_Y
         if (idx < 0 || idx >= (int)m_Tabs.size())
             return s_Empty;
         return m_Tabs[idx].Title;
-    }
-
-    int DockPanel::HitTestTab(int x, int y) const
-    {
-        if (y < 0 || y > c_TabH)
-            return -1;
-        int cx = c_Pad;
-        for (int i = 0; i < (int)m_Tabs.size(); ++i)
-        {
-            if (x >= cx && x < cx + c_TabW)
-                return i;
-            cx += c_TabW + c_Pad;
-        }
-        return -1;
-    }
-
-    void DockPanel::OnPaint(Canvas *canvas)
-    {
-        int w = get_width();
-        int h = get_height();
-
-        // ── 背景 ──────────────────────────────────────────
-        canvas->FillRect(0, 0, w, h, Color_BG);
-
-        // ── Tab 标签栏 ────────────────────────────────────
-        canvas->FillRect(0, 0, w, c_TabH, Color_TabBar);
-
-        int x = c_Pad;
-        for (int i = 0; i < (int)m_Tabs.size(); ++i)
-        {
-            bool active = (i == m_ActiveTab);
-            if (active)
-                canvas->FillRect(x, 0, c_TabW, c_TabH, Color_TabActive);
-            auto &font = FontLibrary::Instance().GetDefault();
-            canvas->DrawText(font, x + 4, 4, m_Tabs[i].Title.c_str(),
-                             active ? Color_TabTextActive : Color_TabText);
-            x += c_TabW + c_Pad;
-        }
-
-        // ── tab 栏底部分隔线 ──────────────────────────────
-        canvas->FillRect(0, c_TabH, w, 1, Color_TabSep);
-
-        // ── 子 Component ──────────────────────────────────
-        Container::OnPaint(canvas);
     }
 
 } // namespace X_Y

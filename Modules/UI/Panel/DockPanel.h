@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "UI/Container/Container.h"
+#include "Widget/XWidget.h"
 #include "XCore/XYCore.h"
 #include <string>
 #include <vector>
@@ -8,9 +8,11 @@
 namespace X_Y
 {
 
+    class Container;
+
     // ============================================================
-    // DockPanel — 单个停靠面板
-    // 只负责管理 tab 增删切换、摘出浮动
+    // DockPanel — Dock 中的内容切换层。
+    // 不绘制切换器，只负责承载并切换内容窗口。
     // ============================================================
 
     struct DockTab
@@ -19,13 +21,18 @@ namespace X_Y
         XWidget *Panel = nullptr;
     };
 
-    class DockPanel : public Container
+    class DockPanel : public XWidget
     {
     public:
-        DockPanel(XWidget *parent);
+        explicit DockPanel(XWidget *parent = nullptr);
         ~DockPanel() override;
 
-        // ── Tab 管理 ────────────────────────────────────────
+        DockTab *AddContainer(Container *container, const std::string &title = {});
+        DockTab *InsertContainer(int idx, Container *container, const std::string &title = {});
+        Container *ExtractContainer(DockTab *tab);
+        void Activate(Container *container);
+
+        // 兼容旧的 XWidget 内容接口；新代码优先使用 Container 接口。
         DockTab *AddPanel(XWidget *panel, const std::string &title);
         DockTab *InsertPanel(int idx, XWidget *panel, const std::string &title);
         void RemovePanel(DockTab *tab);
@@ -39,17 +46,9 @@ namespace X_Y
         const std::string &GetTabTitle(int idx) const;
         bool IsEmpty() const { return m_Tabs.empty(); }
 
-    protected:
-        void OnPaint(Canvas *canvas) override;
-        int HitTestTab(int x, int y) const;
-
     private:
         int m_ActiveTab = -1;
         std::vector<DockTab> m_Tabs;
-
-        static constexpr int c_TabH = 24;
-        static constexpr int c_TabW = 120;
-        static constexpr int c_Pad = 8;
     };
 
 } // namespace X_Y
