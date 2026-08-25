@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <cstdint>
 
 namespace X_Y {
@@ -35,6 +35,10 @@ namespace X_Y {
 
         // 双缓冲：把内存中已画好的一帧一次性上屏
         virtual void Flush() = 0;
+
+        // 双缓冲局部上屏：只把 [x,y,w,h]（逻辑坐标）这块 BitBlt 上屏。
+        // 用于高频局部刷新（如拖动分割线只翻那条窄带），比整窗 Flush 快。
+        virtual void FlushRect(int x, int y, int w, int h) = 0;
 
         // 整幅清屏填色（用物理尺寸填满，带 alpha）。常驻画布每帧开头调用。
         virtual void Clear(uint32_t color) = 0;

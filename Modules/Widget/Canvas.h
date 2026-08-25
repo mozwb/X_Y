@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <memory>
 #include "CanvasImpl.h"
 #include "Font.h"
@@ -36,6 +36,11 @@ namespace X_Y {
 
         // 双缓冲：把内存中已画好的一帧一次性上屏
         void Flush() { m_Impl->Flush(); }
+
+        // 双缓冲局部上屏：只把 [x,y,w,h]（逻辑坐标）这块 BitBlt 上屏（高频局部刷新用）
+        void FlushRect(int x, int y, int w, int h) {
+            m_Impl->FlushRect(x, y, w, h);
+        }
 
         // 整幅清屏填色（物理尺寸，带 alpha）
         void Clear(uint32_t color) { m_Impl->Clear(color); }

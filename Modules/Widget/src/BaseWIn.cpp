@@ -1,4 +1,4 @@
-﻿#include "BaseWin.h"
+#include "BaseWin.h"
 #include "Canvas.h"
 #include "XCore/Input/Input.h"
 #include <set>
@@ -243,6 +243,12 @@ namespace X_Y
     {
         if (m_Canvas)
             m_Canvas->Flush();
+    }
+
+    void BaseWin::FlushArea(int x, int y, int w, int h)
+    {
+        if (m_Canvas)
+            m_Canvas->FlushRect(x, y, w, h);
     }
 
     void BaseWin::ClearBackBuffer(uint32_t color)

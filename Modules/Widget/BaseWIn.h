@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <string>
 #include <memory>
 #include <vector>
@@ -86,6 +86,11 @@ namespace X_Y
         //   3. Flush()       → 把整张位图一次性 BitBlt 到窗口(主动刷新)
         Canvas &GetCanvas();
         void Flush();
+
+        // 局部上屏：把常驻离屏画布(GetCanvas)上 [x,y,w,h](逻辑)区域 BitBlt 到窗口。
+        // 用于高频局部刷新(拖动分割线只翻那条窄带)，比整窗 Flush 快。
+        // 配合 GetCanvas() 画完后调用；未 GetCanvas 过则 no-op。
+        void FlushArea(int x, int y, int w, int h);
         void ClearBackBuffer(uint32_t color); // 清屏(填背景/抠色),画布尺寸用物理客户区
 
         // 主线程跳过此窗口的 WM_PAINT（用于独立线程自绘）

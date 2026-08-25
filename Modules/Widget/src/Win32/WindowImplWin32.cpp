@@ -297,6 +297,12 @@ namespace X_Y
         {
             if (!m_Hwnd)
                 return;
+
+            const float scale = Dpi::GetScale();
+            x = static_cast<int>(x * scale + 0.5f);
+            y = static_cast<int>(y * scale + 0.5f);
+            w = static_cast<int>(w * scale + 0.5f);
+            h = static_cast<int>(h * scale + 0.5f);
             UINT flags = SWP_SHOWWINDOW | (noZOrder ? SWP_NOZORDER : 0);
             ::SetWindowPos(m_Hwnd, nullptr, x, y, w, h, flags);
         }

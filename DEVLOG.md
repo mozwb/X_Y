@@ -1,3 +1,212 @@
+## 2026-08-18 — Dock 停靠系统重构为四层（DockLayout→Dock→Container→Component）
+
+> 与砚台讨论定案。原来 Dock 系统是四层+一 Panel（DockPanel），砚台主张把 Panel 合并进 Dock，简化为四层：顶层 `DockLayout`（集中式 boundary 管理 Dock）→ `Dock`（一个区域，直接持有多个 Container 做 tab 切换，预留 tab 栏位置暂不画）→ `Container`（有 HWND 内容容器）→ `Component`（轻量绘制单元）。
+>
+> 现状淤泥：工作区有一堆未提交草稿互不一致（Dock.h 草稿有语法错误、DockLayout.h 与 src/DockLayout.cpp 严重脱节、src/Dock.cpp 实为旧 oldDock 二叉树实现却引用 Panel/DockPanel）。本次彻底重写对齐四层，删除旧 DockPanel/oldDock。
+
+### 关键架构决策（砚台定）
+- **四层**：`DockLayout → Dock → Container → Component`，去掉独立 Panel 层，tab 切换逻辑并入 Dock。
+- **集中式 boundary**（DockLayout 维护一组 Boundary，Dock 通过 DockBind 绑 4 条边定位；分割/合并产生/移除边界）；取代 src/Dock.cpp 的「Dock 内自持二叉树 LayoutNode」。
+- **Dock 直接持有 Container 列表做 tab**：`AddContainer/RemoveContainer/ActivateContainer/GetActiveContainer`；只切换显示，不画标签栏（`m_TabBarHeight` 预留，后续补 TabBar）。
+- **Dock 不自己拦截鼠标事件**。砚台指出：Win32 下鼠标点在最顶层覆盖的子窗口（Dock），`sender=` 该窗口，`Dispatcher::DispatchEvent` 严格按 sender 匹配、不向上冒泡，所以 DockLayout 收不到 Dock 区域的按下——Connect 语义无法解决「吃事件」。
+  → 方案 A：在 `Application::ProcessEvents` 派发前加**全局鼠标命中钩子槽**（预埋类型与注册接口，本次不开实现；下次做分割线拖动时 DockLayout 注册回调，用 GetMouseScreenPos+GetWindowAt+ScreenToClient+HitTestBoundary 驱动）。
+- **分割线拖动交互**：本次不做（后续迭代），钩子槽先留好扩展点。
+- **删除** oldDock.h / Panel/DockPanel.h / src/DockPanel.cpp（无任何外部调用方引用它们，仅三个 dock cpp 内部自引用）。
+
+### 改动文件（本次）
+- 改 `Modules/Widget/Application.h` / `src/Application.cpp`：加全局鼠标事件钩子槽（注册/注销 + ProcessEvents 里调用入口，默认空，无实现）。
+- 重写 `Modules/UI/dock/Dock.h` + `src/Dock.cpp`：四层里的 Dock。
+- 重写 `Modules/UI/DockLayout/DockLayout.h` + `src/DockLayout.cpp`：Boundary 集中式 + Dock 列表 + RecalcLayout + boundary 绘制。
+- 删 `Modules/UI/dock/oldDock.h`、`Modules/UI/Panel/DockPanel.h`、`Modules/UI/src/DockPanel.cpp`。
+
+### 待办（后续迭代）
+- [ ] 分割线拖动交互（钩子槽已就绪：DockLayout 注册回调驱动 HitTestBoundary+MoveBoundary）
+- [ ] Dock tab 栏绘制（Dock::m_TabBarHeight 已预留）
+- [ ] Dock Split 切割出新 Dock 交给 DockLayout 管理（boundary 共享/合并逻辑）
+
+### 追加 2026-08-18 — 切割/合并模型细化（砚台纠偏后定案）
+
+第一版只留了 Split 注释被砚台指出不到位。重新对齐 Dock.h 草稿的切割语义定案：
+
+- **边界槽存在 Dock 上**：每个 `Dock` 自带 `DockBoundary{top,bottom,left,right}` 4 个槽（对应草稿 `DockBoundary broader`）。
+- **槽值**：可移动/与邻居共享侧 → 指向一条真实 `Boundary`；贴 DockLayout 外框侧 → `InvalidBoundary`（RecalcLayout 用布局边缘）等价"固定不可移动"。每个槽自己决定是否可移动（不用"只在有邻居那侧有槽"）。
+- **切割归属与同宗**：新 Dock 与旧 Dock 都作为 DockLayout 的子窗口（父窗口角度由 DockLayout 管位置），但**合并受同宗限制**——只有同一棵分割树（沿 `DockFather` 找共同祖先）的 dock 才能 merge，避免合并非兄弟导致图标边界错乱。
+- **Split 语义**：DockLayout 新增一条 Boundary（Vertical/Horizontal 按方向）→ new Dock(挂 layout) + SetDockFather(this) → 新旧两 Dock 对应方向槽共享这条新 Boundary → AddDock + RecalcLayout → 返回新 Dock*。
+- **Merge 语义**：同宗+相邻校验 → 找两 Dock 共享的那条 Boundary（=target 的 newest-cut 边）→ target 的 Container 全数并入本 Dock → target 把共享 Boundary 换成本 Dock 里它没有的另一条边 → RemoveDock + delete → 移除不再被引用的 Boundary。
+- 两方法本次**实现注释已写全（头文件 + cpp TODO 壳），体留 TODO**，后续迭代落实。
+
+### 涉及文件（追加改动）
+- `Modules/UI/dock/Dock.h`：BoundaryId/Boundary/DockBoundary 类型统一收在此；Dock 加 `Direction`、`DockBoundary` 槽、`Set/GetDockFather`、`Split/Merge`（含完整实现注释）、`Splittable`。
+- `Modules/UI/src/Dock.cpp`：Split/Merge 加 TODO 壳。
+- `Modules/UI/DockLayout/DockLayout.h`：去重复类型定义（复用 Dock.h）；`m_Docks` 改 `std::vector<Dock*>`（槽在 Dock 上，删 DockSlot）；加 `RemoveBoundary`、`HorizontalSidePosition`/`VerticalSidePosition`。
+- `Modules/UI/src/DockLayout.cpp`：RecalcLayout 从每个 Dock 的边界槽读位置；实现 RemoveBoundary。
+
+### 追加 2026-08-24 — 调试：拖动测试"启动即转圈 + 无报错退出"
+
+> 砚台反馈第一次运行 test 出现"鼠标一直转圈然后退出"。从输出定位：
+> - `[onInit]` 打印正常（b0=218 b1=436，布局高解析合理）。
+> - 之后出现大量 `窗口resize: 785x562 / 985x662 / 800x600` 刷屏（初始化阶段各顶层窗口 resize），且**卡在 `[main] 开始拖动模拟` 之后、`[drag] press@` 之前**，无报错退出。
+>
+> 排查结论：
+> - **候选死循环**：`RecalcLayout → dock->MoveAndResize →（尺寸变化）→ WM_SIZE → 事件 → 再 RecalcLayout` 的 resize 风暴。已给 `DockLayout::RecalcLayout` 加**收敛保护**：若目标尺寸 == dock 当前 `get_width/get_height` 则跳过 `MoveAndResize`，避免同尺寸反复 move 触发的 WM_SIZE 循环。
+> - **"无报错退出"候选**：DockLayoutWindow 是首个顶层窗口（`connect(app, appClose)`），若初始化/测试中某轮窗口被 close → `isRunning=false` → 主循环不进入 → main 正常 return 0（无报错退出）。待打印确认。
+>
+> 已加的诊断：
+> - `test/DockLayoutWindow.cpp`：把 `assert` 换成可见 `TEST_ASSERT`（打印文件名/行/条件再退出）；TestDragBoundary 每步（搬光标/push/ProcessEvents 前后）加 printf。
+> - `test/main.cpp`：主循环加 `sleep(1ms)`（原 100% busy loop）降转圈感；加阶段打印与每 600 帧计数。
+>
+> **待砚台**：重编 X_Y（RecalcLayout 保护已动）+ 重编 test，跑完把 stdout 完整发我，确认卡点与退出根因。
+
+### 追加 2026-08-24 — 根因确定：resize 回归循环源于 X_Y 未重编（构建时序坑）
+
+第二次跑 test（带分段打印）确认：
+- `[drag] 搬光标... 已 push MouseButtonPressed, 开始 ProcessEvents` → 之后**卡死在 `ProcessEvents()`**（无"完成"打印），伴随 `窗口resize: 785x562/985x662/800x600` 刷屏，然后无损退出。
+- **根因**：我改的 `DockLayout::RecalcLayout`（同尺寸跳过 MoveAndResize 的收敛保护）写在 X_Y `Modules/UI/src/DockLayout.cpp`，**但没重新 build X_Y → dist/lib/mingw/libUI.a 还是旧编译产物**。test 链接的是 dist 旧 libUI.a（test CMakeLists 用 `../X_Y/dist/lib/mingw`），保护没进去 → `RecalcLayout→dock->MoveAndResize→WM_SIZE→新事件→再 RecalcLayout` 的 resize 回归循环在 ProcessEvents 内死转 → 某窗口 close → isRunning=false → main 正常 return（无报错退出）。
+- **构建方式**：MinGW Makefiles，build 目录 `build/mingw`，lib 直接输出到 `dist/lib/mingw`（不经 install）。**重新 build UI 即可让 test 用上新逻辑**：
+  `cmake --build build/mingw --target UI`（或全量 `cmake --build build/mingw`）。install 只装头，lib 不经它。
+- **待办**：砚台重新 build X_Y 后，再 build test，跑通后确认拖动边界移动正常（PASS/FAIL）。
+
+---
+
+### 追加 2026-08-24 — 真根因：ProcessEvents 会 delete 入队指针，test 传栈对象地址崩溃
+
+> 砚台用调试器跑到 `class MouseButtonPressed : public MouseButton` 处出现异常、下一步退出 —— 定位到**真正崩溃点**：
+>
+> **test 里构造鼠标事件用了栈对象再把地址传给 `app->pushEvents(...)`**：
+> ```cpp
+> X_Y::MouseButtonPressed press(this, ...);
+> app->pushEvents(&press);   // 栈地址入队
+> app->ProcessEvents();       // 内部 while 循环 delete 这个指针 → delete 栈内存 → 崩
+> ```
+> `Application::ProcessEvents` **会 `delete baseEvt`（释放 pop 出的事件指针）**。栈对象地址被 delete → 未定义行为 → 异常/崩溃退出（正是"在 MouseButtonPressed 处异常、下一步退出"）。
+>
+> **修复**：test 里鼠标事件必须 `new` 堆对象，由 ProcessEvents 负责释放：
+> ```cpp
+> app->pushEvents(new X_Y::MouseButtonPressed(this, X_Y::Input_t::Mouse::ButtonLeft));
+> app->ProcessEvents();   // delete 这个 new 出来的对象，安全
+> ```
+> 三处（按下/移动/抬起）均已改。
+>
+> **说明**：此前怀疑的"resize 回归循环 + build 时序"是次要/共存的表象；崩溃主因是 delete 栈对象。RecalcLayout 收敛保护（同尺寸跳过 move）仍保留，用于抑制多余 resize。构建用 `build/mingw`（MinGW），lib 出到 `dist/lib/mingw/libUI.a`（不经 install）。
+
+---
+
+### 追加 2026-08-24 — 分割线可见 → Boundary 加 width 缝隙（不同宗宽/同宗窄）
+
+> 砚台手动拖：能拖，但分割线被 dock 子窗口盖住"一闪一闪（layout 画线 vs dock 覆盖冲突）"。
+> 砚台定案：「不写 gap，给 Boundary 加一个 width」——不同宗的 dock 之间缝隙大、同宗的小，使模块清晰。
+
+**实现（Boundary.width 缝隙）**
+- `Boundary` 加 `int width = 4`（逻辑像素）。语义：**缝隙总宽**，line 仍是分割线中心，两侧 dock 各让 `width/2`。
+- `DockLayout::SetBoundaryWidth(id, int)`：设置某条边界缝隙宽，触发 RecalcLayout+Repaint。
+- `DockLayout::RecalcLayout`：被真实 Boundary 约束的 dock 侧往内让 `width/2` 露出缝隙（外框 InvalidBoundary 不偏移），分割线画在缝里可见、不闪。
+- `Dock::HitTestEdge`：命中厚度取 `max(缺省thickness, width/2)`，保证缝隙（尤其大 width）内点击也能拖。
+- **回退**：之前的 kGap 改法已去掉，换成本方案。
+- test 演示：boundary0(width14,不同宗宽缝)/boundary1(width6,同宗窄缝)。
+
+**待办**：重编 X_Y(UI)+test，手动拖看缝宽差异 + 线可见不闪 + 拖动正常。
+
+---
+
+---
+
+### 追加 2026-08-24 — Boundary 增加 start/end 跨度（分段边界）
+
+> 砚台：还要给 boundary 加起点/终点，否则一条边界总是贯穿整个布局，有时需要只画一段。
+
+**实现**
+- `Boundary` 加 `float start=0, end=1`：沿边界自身的跨度（相对比例）。
+  - 水平线 → x 从 start×宽 到 end×宽；垂直线 → y 从 start×高 到 end×高。
+  - 默认 [0,1] 贯穿，行为不变。
+- `DockLayout::SetBoundaryRange(id, start, end)`：设置跨度，clamp 到 0~1，start>=end 时恢复默认贯穿。
+- `DockLayout::OnPaint`：画线只画该边界实际跨度段（`FillRect` 用 `start/end`×尺寸）。
+- `Dock::HitTestEdge`：命中额外要求坐标落在跨度内（分段边界只那段可拖）。
+
+**test 演示**：boundary1(绿) span 设 0.30~0.70，只画中段、只中段可拖。
+**待办**：重编 X_Y(UI)+test 验证。另一待查：**拖动过程中线会消失**（见下条）。
+
+### 追加 2026-08-24 — 拖动不丝滑：Canvas 局部上屏 + 复用离屏画布
+
+> 砚台：颜色正常了，但拖动不够丝滑——"只有停下来(没松手)才瞬移过去"。
+> 根因：拖动只走异步 WM_PAINT，且每次**整窗重建 canvas + 整窗 BitBlt**，拖动中重绘跟不上后面才补 → 停下来瞬移。
+
+**实现（根治，遵"放 Base 层 + 视屏 canvas"）**
+- `CanvasImpl` 加纯虚 `FlushRect(x,y,w,h)`（逻辑坐标局部上屏）；`Canvas` 薄转发；Win32 实现 `::BitBlt` 只翻该矩形（Layered 退化整窗 Flush）。
+- `BaseWin` 加 `FlushArea(x,y,w,h)`：对常驻离屏 `GetCanvas()` 局部 BitBlt 上屏（久调后 no-op）。
+- `DockLayout`：
+  - `BoundaryRectsBounds(...)`：求所有分割线窄带的包围盒。
+  - `RedrawBoundaryLines()`：整窗画到常驻 `GetCanvas()`（复用不 new）→ `FlushArea` 只上屏分割线窄带。
+  - 拖动 isMove 分支：直接改 `line`(min/max clamp) + `RecalcLayout`(排 dock) + `RedrawBoundaryLines()`（不走 MoveBoundary 的整窗异步 RequestRepaint）。
+
+**待砚台**：重编 X_Y(UI+Widget)+test，拖动看是否丝滑跟手。若仍不丝滑（位图还整窗写），再做"真局部"（只画线窄带到离屏、不清整窗）。
+
+### 追加 2026-08-24 — 分割线"点住/拖动消失"根因：draggingColor 透明色
+
+> 砚台：点住线不动线就消失（且拖动时也消失），提示**高亮颜色设置有问题**、"RepaintNow 实现在哪"。
+>
+> **真正的根因**：`DrawLayout` 里拖动态高亮色硬编码 `constexpr draggingColor = 0xFFFFFF`。`canvas.FillRect(...,color)` 把 color 当 **ARGB(32位)** 用，`0xFFFFFF` 的 alpha 字节 = `0x00`（**全透明**）→ 一旦进入拖动态（`m_DraggingBoundary` 非 Invalid）线用透明色画 → **完全不可见**。
+> 非拖动态用 `boundary.color`(`0xFF909090`，alpha=0xFF) → 可见。故"一按住就消失"。
+> 之前的"异步滞后"是次要因素；主因是**透明色**。`boundary.dragcolor`(有 alpha) 定义了却一直没用。
+>
+> **已实现修复（第一版）**
+> - `DrawLayout`：拖中用 `boundary.dragcolor`（替代坏常量 `0xFFFFFF`）；注释提醒 alpha 必须 ≥0xFF000000。
+> - 引入同步重绘 `RepaintNow()`（PaintDirect 一次上屏），`BeginDragBoundary`/`EndDragBoundary`/拖动 isMove 都用它。
+
+> **但砚台实测仍无颜色，并质疑架构**：拖动布局正常（dock 覆盖正常），就是拖动态"连默认绿色都没有"。砚台正确指出 `RepaintNow`/`PaintDirect` 这套**全窗重建 + 整窗 BitBlt** 不该由 Dock 私有拥有，且每次整窗重建会跟 dock 子窗口打架。
+>
+> **回归（最新）**：**删掉 `DockLayout::RepaintNow`（含 PaintDirect 调用 + 头声明 + 三处调用）**，拖动回归**异步 `RequestRepaint → WM_PAINT → OnPaint → DrawLayout`**，拖动态线用 `boundary.dragcolor`（不透明 `0xFF00FF00`）绘制。顺序：`MoveBoundary`→(SetBoundaryLine 改 line+RecalcLayout 排 dock+RequestRepaint)`——先重排 dock 再异步画线。
+> - `DrawLayout` 只被 `OnPaint`(WM_PAINT) 调用（不再有同步路径）。
+> - 关键待验点：**拖动态绿线能否正常显示**（此前"连绿都没有"的最终根因尚待确认是否就是之前 PaintDirect 全窗重建干扰，或仍有它因）。
+
+> **待砚台**：重编 X_Y(UI)+test，点住/拖动看拖动态线色（应为 dragcolor 绿 `0xFF00FF00`）是否显示。
+
+---
+
+### 追加 2026-08-18 — 方案A分割线拖动链路实现 + test 真实拖动模拟
+
+> 砚台：「咱们测试 layout，检测它移动边界有没有问题。同一个朝向的边界很容易重叠，最好由 dock 返回移动的边界告诉 layout，要不上下层那种万一移动的是中间那层 dock 的边界而不是下层。」。
+
+**实现（Modules 层）**
+- `Dock::HitTestEdge(x, y, thickness)`（新增）：给定相对 DockLayout 客户区的逻辑坐标，遍历本 Dock 4 个槽里非 InvalidBoundary 的真实边界，用 `m_Layout->GetBoundaryPosition(id)` 取像素位置，比较 x(左右)/y(上下) 命中即返回该 BoundaryId。**由 dock 上报"是哪条边"，天然消歧**——上下层共享同一边界返回同一 id，各 dock 只报自己的真实边界，不会拖中中层误伤下层。
+- `DockLayout` 构造成 `Application::SetMouseRedirectHandler` 注册 `HandleGlobalMouse`（方案A完整落地），析构清除。单布局场景（构造注册/析构清除）。
+- `DockLayout::HandleGlobalMouse(const XMovement&)`，绑定到 Application 钩子：
+  - 只处理鼠标按下/移动/抬起。
+  - 屏幕坐标→布局逻辑客户区（GetMouseScreenPos+ScreenToClient）。
+  - 按下：遍历 `m_Docks` 每个 `dock->HitTestEdge(x,y)`，命中且该边界 `Movable` → `BeginDragBoundary` + CaptureMouse + 记 last → **返回 true 拦截**（拖分割线优先，内部节点不收本次按下）；未命中 → 返回 false 放行（内部窗口照常处理）。
+  - 移动：拖动中 → 按边界方向取增量 → `MoveBoundary`；非拖动 → false 放行。
+  - 抬起：拖动中 → `EndDragBoundary` + ReleaseCapture → true；否则 false。
+- **关键语义**：分割线拖动只在"鼠标命中边界热区"时拦截，其余鼠标事件全部放行——解决"拖分割线 vs 内部点击"冲突，也让 Dock/Container 不必转发事件。
+
+**test 改动（D:\workbench\test，走 dist，需先 build/install X_Y 更新 dist 再 build test）**
+- `DockLayoutWindow` 改用 namespace 层类型（`X_Y::BoundaryId/InvalidBoundary/BoundaryOrientation`）。
+- 构造三层水平堆叠场景：A(上) bottom=boundary0、B(中) top=b0/bottom=b1、C(下) top=b1，两条水平分割线。
+- `TestDragBoundary(target, deltaClientY)`：`Input_t::Input::SetMousePosition` 搬光标到边界→`pushEvents(MouseButtonPressed)`+ProcessEvents（勾子命中 BeginDrag）→搬光标下移→push MouseMoved+ProcessEvents（MoveBoundary）→push Released+ProcessEvents（EndDrag）→断言 target 移到目标、另一条水平边界不变。
+- `main.cpp` 分别测拖 boundary0(+40) 和 boundary1(-30)，打印 PASS/FAIL。
+
+**编译验证**：交砚台。**构建顺序**：先 configure/build/install X_Y（把新 Dock/DockLayout 进 dist/include 与 libUI.a），再 build test。
+
+---
+
+### 追加 2026-08-18 — 合并改被动（砚台：变空就自动并回，不要主动合并的复杂判定）
+
+历史过程：先按砚台"暴露要合并的边"加了 `MergedBoundary` + `CanMergeWith(target, outEdge)`（主动查询能否合并+输出边）。砚台再纠偏：主动合并要同宗/共享边判定，过复杂；**让合并被动化更简洁**——
+
+- **切割（split）是主动行为**：用户主动切。
+- **合并（merge）是被动行为**：Dock 变空（`Container` 全被移走）时自动触发，空 dock 沿自己的 `MergedBoundary` 并回邻居，删掉自己+那条分割线。不做主动"合并 target"判定。
+- **Dock 变空的两种途径**（砚台）：(1) 用户关闭（直接销毁）；(2) 最后一个 Container 被移走/摘成悬浮（空 dock 自动并回）。
+- **接口调整**：
+  - 删掉 public `CanMergeWith` 和 `InSameSplitTree`（被动合并不需要主动遍历求共享边；空 dock 只并回它的 MergedBoundary 邻居，天然同宗）。
+  - `Merge()` 改 **private**，由 `RemoveContainer` 移除最后一个变空时自动触发（⚠️ 触发后不再触碰 this，Merge 可能 remove/destroy 本 Dock）。
+  - `MergedBoundary` 访问器保留（split 时新旧 dock 都 SetMergedBoundary(新边)，空 dock 并回认它做邻居边）。
+
+### 涉及文件（本追加）
+- `Modules/UI/dock/Dock.h`：删 public `CanMergeWith`；`Merge()` 改 private 并改写为被动合并注释；保留 `SetMergedBoundary/GetMergedBoundary`。
+- `Modules/UI/src/Dock.cpp`：删 `InSameSplitTree`/`CanMergeWith` 实现；`Merge()` 改无参私有 TODO；`RemoveContainer` 移除最后一个变空时触发 `Merge()`（含"勿再触碰 this"告警）。
+
+继承自上一轮：`MergedBoundary` 成员 + 访问器、`InSameSplitTree`（本轮删）原本是为主动合并加的，现随被动化精简。
+
+---
+
 ## 2026-08-16 — DataStore 新增静音开关 SetEnabled（让依赖它的一切集体失效）
 
 > 需求(MouseFlight 收尾)：想关日志但不想动所有调用方。给 DataStore 加总开关，接口保留但静音空转。

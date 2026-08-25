@@ -1,4 +1,4 @@
-﻿#include "CanvasImpl.h"
+#include "CanvasImpl.h"
 #include "Dpi.h"
 #include <windows.h>
 #include <cstring>
@@ -115,6 +115,43 @@ namespace X_Y
                 ::ReleaseDC(m_Hwnd, target);
             else
                 ::ReleaseDC(nullptr, target);
+        }
+
+        void FlushRect(int x, int y, int w, int h) override
+        {
+            if (!m_Pixels || w <= 0 || h <= 0)
+                return;
+            // 逻辑 → 物理
+            int px = S(x), py = S(y);
+            int pw = S(w), ph = S(h);
+            if (px >= m_Width || py >= m_Height)
+                return;
+            // clamp 到画布内
+            if (px < 0) { pw += px; px = 0; }
+            if (py < 0) { ph += py; py = 0; }
+            if (pw > m_Width - px) pw = m_Width - px;
+            if (ph > m_Height - py) ph = m_Height - py;
+            if (pw <= 0 || ph <= 0)
+                return;
+
+            HDC target = m_Hwnd ? ::GetDC(m_Hwnd) : nullptr;
+            if (!target)
+                return;
+
+            bool layered = m_Hwnd &&
+                           (::GetWindowLongPtrW(m_Hwnd, GWL_EXSTYLE) & WS_EX_LAYERED) != 0;
+            if (layered)
+            {
+                // Layered 局部 per-pixel alpha 不方便做，退化为整窗上屏。
+                ::ReleaseDC(m_Hwnd, target);
+                Flush();
+                return;
+            }
+
+            // 普通窗口：只 BitBlt 该局部矩形
+            if (m_DC)
+                ::BitBlt(target, px, py, pw, ph, m_DC, px, py, SRCCOPY);
+            ::ReleaseDC(m_Hwnd, target);
         }
 
         void Clear(uint32_t color) override

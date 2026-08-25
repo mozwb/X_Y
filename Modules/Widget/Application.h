@@ -1,6 +1,7 @@
-﻿#pragma once
+#pragma once
 #include "Log/XYLog.h"
 #include "Movement/Movements.h"
+#include <functional>
 #include <memory>
 namespace X_Y
 {
@@ -9,6 +10,8 @@ namespace X_Y
     // 总线接受所有事件，只负责系统事件，其他再下发执行
     class Application
     {
+        using MouseRedirectHandler = std::function<bool(const XMovement &)>;
+
     private:
         inline static Application *s_instance = nullptr; // 确保全局唯一并在main前初始化，main后析构
         MovementDispatcher m_dispatcher;
@@ -18,6 +21,7 @@ namespace X_Y
         // 如果你需要打包一些逻辑，你可以写层栈，从而减轻事件分发器压力
         LayerStack m_LayerStack;
         std::unique_ptr<class PlatformLoop> m_PlatformLoop;
+        MouseRedirectHandler m_MouseRedirectHandler;
 
     public:
         // 1.构造、析构放protected，允许子类继承构造，禁止外部new
@@ -37,6 +41,25 @@ namespace X_Y
         }
         MovementDispatcher &GetDispatcher() { return m_dispatcher; }
         MovementQueue &GetEventQueue() { return m_eventQueue; }
+
+        // ── 全局鼠标事件钩子（命中重定向，方案A预埋） ──────────────
+        // 单一占用式的鼠标级拦截点，供 DockLayout 等"事件源头重定向"使用。
+        // 背景：Win32 下鼠标点在最顶层覆盖的子窗口上，sender=子窗口；
+        //       Dispatcher 按 sender 精确匹配、不冒泡，父窗口(DockLayout)收不到
+        //       Dock 区域的按下/移动。Connect 无法解决"吃事件"。
+        //       ⇒ 在派发前加一个全局鼠标钩子：进程每出队一个事件先交给它，
+        //         命中(如分割线)则由钩子自己驱动并返回 true 吞掉原事件，
+        //         未命中返回 false，事件照常走 dispatcher。
+        // 语义：钩子接收每个待派发事件；返回 true = 已处理，跳过 dispatcher。
+        void SetMouseRedirectHandler(MouseRedirectHandler handler)
+        {
+            m_MouseRedirectHandler = std::move(handler);
+        }
+        void ClearMouseRedirectHandler()
+        {
+            m_MouseRedirectHandler = nullptr;
+        }
+        bool HasMouseRedirectHandler() const { return (bool)m_MouseRedirectHandler; }
         static Application *instance()
         {
             return s_instance;
