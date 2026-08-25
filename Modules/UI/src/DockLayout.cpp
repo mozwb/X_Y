@@ -378,14 +378,17 @@ namespace X_Y
                 // 直接改 line + 重排 dock（不走 MoveBoundary 的整窗异步 RequestRepaint），
                 // 用常驻画布局部上屏，保证线跟手丝滑。
                 Boundary &bd = m_Boundaries[m_DraggingBoundary];
+                // 改 line 前先记旧位置：上屏区域要并入它，否则屏幕上老线像素
+                // 没人覆盖 → 拖动残影（扩大方向必现，画布整幅重画清不掉屏幕）。
+                const int oldPos = BoundaryPosition(m_DraggingBoundary);
                 const int extent = bd.orientation == BoundaryOrientation::Vertical
                                        ? static_cast<int>(get_width())
                                        : static_cast<int>(get_height());
                 if (extent > 0)
                     bd.line = std::clamp(bd.line + static_cast<float>(delta) / extent,
                                          bd.min, bd.max);
-                RecalcLayout();      // 先重排 dock
-                RedrawBoundaryLines(); // 再局部上屏分割线窄带
+                RecalcLayout();        // 先重排 dock
+                RedrawBoundaryLines(oldPos); // 再局部上屏（当前窄带 ∪ 旧位置窄带）
             }
 
             m_LastDragMouseX = sx;
@@ -507,15 +510,50 @@ namespace X_Y
 
     // 拖动即时局部刷新：整窗画到常驻 GetCanvas（复用不 new），再 FlushArea 只上屏
     // 分割线窄带的包围盒。比每 move 走 WM_PAINT 整窗 new+BitBlt 快，丝滑。
-    void DockLayout::RedrawBoundaryLines()
+    // includeOldPos = 被拖边界旧位置时，把旧位置窄带并入包围盒（画布里旧位置已
+    // 是背景色，拷上屏即清掉屏幕残影；越界由 FlushRect 内部 clamp 兜底）。
+    void DockLayout::RedrawBoundaryLines(int includeOldPos)
     {
         if (!GetNativeHandle())
             return;
         Canvas &c = GetCanvas();
         DrawLayout(c);
         int bx, by, bw, bh;
-        if (BoundaryRectsBounds(bx, by, bw, bh))
-            FlushArea(bx, by, bw, bh);
+        if (!BoundaryRectsBounds(bx, by, bw, bh))
+            return;
+
+        if (includeOldPos >= 0 && IsValidBoundary(m_DraggingBoundary))
+        {
+            // 旧位置窄带：与 BoundaryRectsBounds 对单条边界的算法一致（thickness=2）
+            constexpr int thickness = 2;
+            const auto &bd = m_Boundaries[m_DraggingBoundary];
+            const int width = static_cast<int>(get_width());
+            const int height = static_cast<int>(get_height());
+            int rx, ry, rw, rh;
+            if (bd.orientation == BoundaryOrientation::Vertical)
+            {
+                rx = includeOldPos - thickness / 2;
+                rw = thickness;
+                ry = static_cast<int>(bd.start * height);
+                rh = std::max(1, static_cast<int>(bd.end * height) - ry);
+            }
+            else
+            {
+                rx = static_cast<int>(bd.start * width);
+                rw = std::max(1, static_cast<int>(bd.end * width) - rx);
+                ry = includeOldPos - thickness / 2;
+                rh = thickness;
+            }
+            // 并入包围盒（旧带可能在当前包围盒之外）
+            const int ex = std::max(bx + bw, rx + rw);
+            const int ey = std::max(by + bh, ry + rh);
+            bx = std::min(bx, rx);
+            by = std::min(by, ry);
+            bw = ex - bx;
+            bh = ey - by;
+        }
+
+        FlushArea(bx, by, bw, bh);
     }
 
 }

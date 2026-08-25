@@ -205,6 +205,24 @@
 
 继承自上一轮：`MergedBoundary` 成员 + 访问器、`InSameSplitTree`（本轮删）原本是为主动合并加的，现随被动化精简。
 
+### 追加 2026-08-25 — 修复拖分割线"扩大方向"残影（flush 窄带漏了线的旧位置）
+
+> 砚台实测：两条 boundary，拖动时缩小 dock 方向正常，**扩大方向旧线残留**。
+
+**根因**（不是没清线，是清了画布没清屏幕）：
+- 拖动路径每帧 `DrawLayout`（Clear+重画所有线）清的是**离屏画布**，屏幕只靠 `FlushArea` 拷窄带更新。
+- `BoundaryRectsBounds` 的窄带按**当前**线位置算，**不含被拖线上一帧的位置**——老位置的屏幕像素没人翻，旧线就留在那。
+- 方向不对称的原因：缩小方向露出的区域原是 dock 的深色内容（`0xFF202124`，与布局背景同色），残了也看不出；扩大方向旧线像素落在 dock 刚扩过来、WM_PAINT 还没排上队的区域里（拖动时鼠标消息刷屏，WM_PAINT 被饿着），看得见。
+- 顺带确认：布局无 WS_CLIPCHILDREN，父窗口 GetDC BitBlt 写的是与子窗口共享的屏幕表面，直接覆盖子窗口未画区域是可行的（且 Dock 背景同色，无视觉冲突）。
+
+**修法**（砚台选方案 A，保局部刷新）：`RedrawBoundaryLines` 加参数 `includeOldPos`——move 分支在改 `bd.line` **之前**记下旧位置，上屏区域 = 当前所有线窄带包围盒 ∪ 被拖线旧位置窄带。画布里旧位置已是背景色，一并拷上屏即清掉残影。
+
+### 涉及文件（本追加）
+- `Modules/UI/DockLayout/DockLayout.h`：`RedrawBoundaryLines(int includeOldPos = -1)` 声明 + 注释。
+- `Modules/UI/src/DockLayout.cpp`：move 分支记 `oldPos`；`RedrawBoundaryLines` 把旧位置窄带并入包围盒再 `FlushArea`（越界由 `FlushRect` 内部 clamp 兜底）。
+
+**待砚台**：重编 UI 模块实测拖动，两个方向都应无残影。
+
 ---
 
 ## 2026-08-16 — DataStore 新增静音开关 SetEnabled（让依赖它的一切集体失效）

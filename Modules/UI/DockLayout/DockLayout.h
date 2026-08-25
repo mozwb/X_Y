@@ -82,7 +82,11 @@ namespace X_Y
         void DrawLayout(Canvas &canvas);
         // 拖动即时局部刷新：把整窗画到常驻离屏 GetCanvas()，再 FlushArea 只上屏
         // 所有分割线所在窄带的包围盒（局部上屏，比整窗 Flush 快；画布复用不 new）。
-        void RedrawBoundaryLines();
+        //   includeOldPos：被拖边界移动【前】的位置（>=0 时把它的窄带并入上屏区域）。
+        //   画布是整幅重画的，老位置在画布里已是背景色；但屏幕只有被 FlushArea
+        //   覆盖才更新——不含旧位置的话，屏幕上老线像素没人翻 → 拖动残影
+        //   （扩大方向必现：旧线落在 dock 刚扩过来、WM_PAINT 未跟上的区域）。
+        void RedrawBoundaryLines(int includeOldPos = -1);
         // 计算所有分割线窄带的包围盒（像素，逻辑坐标），无可见边界返回 false
         bool BoundaryRectsBounds(int &x, int &y, int &w, int &h) const;
 
