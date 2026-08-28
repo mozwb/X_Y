@@ -1,59 +1,57 @@
 #pragma once
 #include "Widget/XWidget.h"
 #include "Widget/Canvas.h"
-#include <vector>
 
 namespace X_Y
 {
 
-    class Component;
     class Panel;
+    class DockLayout;
 
-    // Container — 壳（ShellWidget）：一个带 HWND 的窗口容器。
+    // Container — 壳（ShellWidget）：一个带 HWND 的窗口，统一持有 DockLayout。
     //
-    // 它既能当"独立工具窗口"（不设父窗口时），也能当"Dock 里的面板"
-    // （设置父窗口/HWND 后作为子窗口复用于 Dock），这就是"用设置父窗口
-    // 来决定身份"的设计。
+    // 单一模型：Container 永远持有一个 DockLayout（纯逻辑布局）。DockLayout 规划
+    // 若干 Dock（不同宗），Dock 持有多个 Panel。因此：
+    //   - 独立工具窗口  = Container + DockLayout + 一个 Dock + 一个 Panel
+    //   - Dock 宿主窗口 = Container + DockLayout + 多个 Dock + 各 Dock 的多个 Panel
+    // 两者只是 DockLayout 里装了多少内容的差别，Container 永远是同一个壳。
     //
-    // 职责：
-    //   1. 窗口层：继承 XWidget，握 HWND / Canvas / 系统消息（沿用旧实现）。
-    //   2. 内容委托：可选地持有一个纯逻辑 Panel*；当不设 Panel 时，它自己也
-    //      能直接 AddComponent 管理组件（旧行为保留，供 LogViewer/HexViewer
-    //      override OnPaint/AddComponent 使用）。
+    // Container 只干三件事（壳的职责）：
+    //   1. 提供 Canvas（XWidget 自带）→ 转给 DockLayout::OnPaint
+    //   2. 提供尺寸（客户区）→ DockLayout::SetActiveSize
+    //   3. 转发输入（Movement）→ 转布局坐标 → DockLayout::OnMouse*
+    //
+    // Container 自身【不再管理组件】——组件只能在 Panel 里。DockLayout/Dock 也只
+    // 是宿主，不含组件。HexViewer/LogViewer 等旧 composite 后续迁到 Panel 形态。
     class Container : public XWidget
     {
     public:
         explicit Container(XWidget *parent = nullptr);
-        virtual ~Container();
+        ~Container() override;
 
-        // ── 内容层：可选挂一个纯逻辑 Panel（壳把绘制/输入委托给它）──
-        void SetPanel(Panel *panel);
-        Panel *GetPanel() const { return m_Panel; }
+        // ── 统一模型：总是挂一个纯逻辑 DockLayout ──
+        void SetDockLayout(DockLayout *layout);   // 复杂场景：塞整个布局
 
-        void AddComponent(Component *comp);
-        void RemoveComponent(Component *comp);
-        void ClearComponents();
+        // 便捷：一行造一个"单面板工具窗"。内部自动 DockLayout → Dock → Panel。
+        // 返回生成的布局，供后续再 add 更多面板；panel 所有权交托给 Dock。
+        Panel *AddSinglePanel(Panel *panel, const std::string &title = "");
+
+        DockLayout *GetDockLayout() const { return m_Layout; }
+
+        // 让渡：把一个 Panel 交出去（拖进别的 Dock / 摘成独立窗）
+        // 从本壳的 DockLayout 里脱出，返回 panel；调用方随后接管。
+        Panel *DetachPanel(Panel *panel);
 
     protected:
-        // 平台绘制回调
-        // 窗口绘制有两种，如果是这种就是托管给消息循环绘制
-        // 如果采用flush就是主动绘制
-        void OnPaint(Canvas *canvas) override;
-        void OnFileDragEnter(const std::vector<XPath> &files, int x, int y) override;
-        void OnFileDragOver(const std::vector<XPath> &files, int x, int y) override;
-        void OnFileDragLeave() override;
-        void OnFileDrop(const std::vector<XPath> &files, int x, int y) override;
-        Component *HitTest(int x, int y);
-        std::vector<Component *> m_Components;
+        void OnPaint(Canvas *canvas) override;   // 壳把画布交给 DockLayout
 
     private:
-        // 拖拽等需要持续跟踪的交互目标（按下到抬起期间保持）
+        // 尺寸/输入转发（由 WndProc 消息经 XWidget 回调触发）
+        void OnWindowResize();
+        void EnsureLayout();                     // 懒建默认 DockLayout
 
-        Component *m_DragTarget = nullptr;
-        Component *m_FileDragTarget = nullptr;
-        int m_DragStartX = 0, m_DragStartY = 0;
-
-        Panel *m_Panel = nullptr; // 可选内容层（壳委托给它画）
+        DockLayout *m_Layout = nullptr;
+        bool m_OwnLayout = false;                // 是否是我 new 的默认布局
     };
 
-}
+} // namespace X_Y

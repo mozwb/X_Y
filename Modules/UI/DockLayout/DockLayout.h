@@ -1,38 +1,38 @@
 #pragma once
 
 #include "UI/dock/Dock.h"
-#include "Widget/XWidget.h"
+#include "Widget/Canvas.h"
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+#include <functional>
 
 namespace X_Y
 {
     // ============================================================
-    // DockLayout — UI 四层结构的顶层（DockLayout → Dock → Container → Component）
+    // DockLayout — 纯逻辑的布局管理器（规划 Dock 布局，不再 XWidget）
     //
-    // 集中式 boundary 模型：DockLayout 维护全局一组 Boundary（分割线），每个
-    // Dock 通过它身上的 4 个边界槽（Dock::DockBoundary）指向这些 Boundary 来
-    // 定位。拖动某条 Boundary 只改变它自己的 line，RecalcLayout 统一重排所有
-    // 引用它的 Dock。
-    //
-    // Dock 切割（Dock::Split）产生的 Boundary 也集中存在这里；新 Dock 与旧 Dock
-    // 共享那条新 Boundary，都作为 DockLayout 的子窗口由其管理位置（保证同宗
-    // 才能合并的校验在 Dock 层做）。
-    //
-    // 事件约定（方案A）：Dock/DockLayout 都是独立子窗口，Win32 鼠标点在最顶层
-    // 覆盖窗口上、sender=该窗口，Dispatcher 严格按 sender 匹配不冒泡。因此
-    // "拖分割线"这类布局级交互由 Application 的全局鼠标钩子接管：DockLayout
-    // 构造时注册 HandleGlobalMouse，用屏幕坐标→布局坐标→遍历 Dock::HitTestEdge
-    // 判定命中边界并驱动拖动；只有命中边界热区才拦截，否则放行给内部窗口。
+    // 集中式 boundary 注册表 + Dock 的父树。
+    //   - 持有全局一组 Boundary（分割线），Dock 用 4 槽引用来定位。
+    //   - 持有 Dock 列表，RecalcLayout 里让每个 Dock 由自己边界换算矩形。
+    //   - 提供拖分割线的纯逻辑驱动（OnMouse*），由壳(Container)喂坐标。
+    //   - 提供 OnPaint(Canvas&) 画背景 + 分割线 + 各 Dock。
+    // 所有窗口能力（Canvas/尺寸/鼠标）由外层 Container 壳驱动，本类只算。
     // ============================================================
-    class DockLayout : public XWidget
+    class DockLayout
     {
     public:
-        explicit DockLayout(XWidget *parent = nullptr);
-        ~DockLayout() override;
+        DockLayout() = default;
+        virtual ~DockLayout();
 
-        // ── boundary 管理 ──
+        // ── 宿主注入 ──
+        void SetHostRepaint(std::function<void()> cb) { m_HostRepaint = std::move(cb); }
+        void SetActiveSize(int w, int h);   // 壳的布局区域尺寸
+
+        int GetLayoutWidth() const { return m_LayoutW; }
+        int GetLayoutHeight() const { return m_LayoutH; }
+
+        // ── boundary 注册表管理 ──
         BoundaryId AddBoundary(BoundaryOrientation orientation, float line,
                                BoundaryStatus status = BoundaryStatus::Movable);
         bool SetBoundaryColor(BoundaryId id, uint32_t color);
@@ -44,72 +44,50 @@ namespace X_Y
         bool RemoveBoundary(BoundaryId id);
 
         const Boundary *GetBoundary(BoundaryId id) const;
-        int GetBoundaryPosition(BoundaryId id) const;
+        int GetBoundaryPosition(BoundaryId id) const;    // 布局坐标（像素）
 
         // ── dock 管理 ──
         void AddDock(Dock *dock);
         bool DockBind(Dock &dock, BoundaryId top, BoundaryId bottom,
                       BoundaryId left, BoundaryId right);
         void RemoveDock(Dock *dock);
-        // 获取所有Dock列表（供子类使用）
-        const std::vector<Dock*>& GetDockList() const { return m_Docks; }
+        const std::vector<Dock *> &GetDockList() const { return m_Docks; }
 
-        void SetBackgroundColor(uint32_t color);
+        void SetBackgroundColor(uint32_t color) { m_BackgroundColor = color; }
         uint32_t GetBackgroundColor() const { return m_BackgroundColor; }
 
-        // 重排所有 Dock（boundary 变化 / 布局自身 resize / Dock 内容变化时调用）
+        // 重排所有 Dock（边界变化 / 布局 resize / Dock 内容变化时调用）
         void RecalcLayout();
 
-        // ── 事件钩子（方案A：由 Application 全局鼠标钩子驱动分割线拖动）──
-        // DockLayout 构造时把 HandleGlobalMouse 注册为 Application 的全局鼠标重定向
-        // 钩子，析构时清除。钩子用屏幕坐标→布局客户区坐标→遍历本布局的每个
-        // Dock::HitTestEdge 找命中边界（共享边天然同 id，同朝向多条边界不误伤）。
-        //   说明：Application 钩子槽是"单一占用式"。本实现按"一个 DockLayout 管一个
-        //         UI 主窗口"处理（构造注册/析构清除）。若需多布局同时存在，需升级为集合。
-        // 命中判定：把某逻辑坐标(x,y 相对布局客户区)映射到命中的 boundary。
+        // ── 命中 + 拖分割线（壳喂布局坐标调用）──
         BoundaryId HitTestBoundary(int x, int y, int thickness = 4) const;
         bool IsDraggingBoundary() const { return m_DraggingBoundary != InvalidBoundary; }
-        BoundaryId GetDraggingBoundary() const { return m_DraggingBoundary; }
-        void BeginDragBoundary(BoundaryId id);
-        void EndDragBoundary();
+        // 返回 true = 本布局已拦截（拖分割线）；false = 放行（应转发给激活 Panel）
+        bool OnMousePressed(int x, int y);
+        bool OnMouseMoved(int x, int y);
+        void OnMouseReleased(int x, int y);
+
+        // ── 全局激活面板（供壳转发输入 / 命中）──
+        Panel *GetActivePanel() const;
+
+        // ── 绘制 ──
+        virtual void OnPaint(Canvas &canvas);
 
     protected:
-        void OnPaint(Canvas *canvas) override;
-
-    private:
-        // 布局窗口 resize 时重排
-        void OnWindowResize();
-
-        // 画布局背景 + 所有边界分割线（OnPaint(异步 WM_PAINT) 调用）
-        void DrawLayout(Canvas &canvas);
-        // 拖动即时局部刷新：把整窗画到常驻离屏 GetCanvas()，再 FlushArea 只上屏
-        // 所有分割线所在窄带的包围盒（局部上屏，比整窗 Flush 快；画布复用不 new）。
-        //   includeOldPos：被拖边界移动【前】的位置（>=0 时把它的窄带并入上屏区域）。
-        //   画布是整幅重画的，老位置在画布里已是背景色；但屏幕只有被 FlushArea
-        //   覆盖才更新——不含旧位置的话，屏幕上老线像素没人翻 → 拖动残影
-        //   （扩大方向必现：旧线落在 dock 刚扩过来、WM_PAINT 未跟上的区域）。
-        void RedrawBoundaryLines(int includeOldPos = -1);
-        // 计算所有分割线窄带的包围盒（像素，逻辑坐标），无可见边界返回 false
-        bool BoundaryRectsBounds(int &x, int &y, int &w, int &h) const;
-
         bool IsValidBoundary(BoundaryId id) const;
         int BoundaryPosition(BoundaryId id) const;
-        // 查找可用的boundary槽位（优先复用已移除的墓碑，没有则新增）
-        BoundaryId FindAvailableBoundarySlot();
-        // 把某个边界槽解析为布局里的像素坐标（InvalidBoundary=贴外框）
-        int HorizontalSidePosition(BoundaryId id, bool isRight) const;
-        int VerticalSidePosition(BoundaryId id, bool isBottom) const;
+        bool HandleDrag(int x, int y);
 
-        // 全局鼠标钩子处理器（绑定给 Application）。只处理按下/移动/抬起：
-        //   命中边界热区 → 拦截并驱动分割线拖动；未命中 → 返回 false 放行给内部窗口。
-        bool HandleGlobalMouse(const XMovement &event);
-
-        std::vector<Dock *> m_Docks;   // 归属本布局的所有 Dock（位置由边界槽决定）
-        std::vector<Boundary> m_Boundaries; // 全局分割线集合
+        int m_LayoutW = 0, m_LayoutH = 0;
+        std::vector<Boundary> m_Boundaries;
+        std::vector<Dock *> m_Docks;
         uint32_t m_BackgroundColor = 0xFF202124;
+
         BoundaryId m_DraggingBoundary = InvalidBoundary;
-        int m_LastDragMouseX = 0;   // 拖动中上次鼠标（布局逻辑坐标）
-        int m_LastDragMouseY = 0;
+        int m_LastDragX = 0, m_LastDragY = 0;
+
+        std::function<void()> m_HostRepaint;
+        void RequestRepaint() { if (m_HostRepaint) m_HostRepaint(); }
     };
 
-}
+} // namespace X_Y
