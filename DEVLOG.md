@@ -1,5 +1,57 @@
 # DEVLOG
 
+## 2026-08-25 — UI 解耦重构（第二阶段：Dock/DockLayout 纯逻辑化 + Container 统一持 DockLayout）
+
+> 在"Panel/壳"第一步基础上，砚台进一步定死**最终统一模型**：
+> - **单一模型**：Container 永远只持一个 DockLayout（纯逻辑），不再有"持 Panel 或持 DockLayout"双态分支。
+> - **DockLayout → Dock → Panel**：DockLayout 规划若干 Dock（不同宗），Dock 持有多个 Panel（tab）。
+>   - 独立工具窗口 = Container + DockLayout + 单 Dock + 单 Panel
+>   - Dock 宿主窗口 = Container + DockLayout + 多 Dock + 多 Panel
+> - **boundary 归属**（砚台纠偏）：boundary 本体放 DockLayout 集中注册表持有（可被多 Dock 共享），但**每个 Dock 用自己 4 槽（DockBoundary）引用 boundary 来定位**——Dock 由自己的边界定位，不是宿主喂矩形。
+> - **Dock/DockLayout 彻底纯逻辑化**（不再 `: public XWidget`），所有窗口能力由 Container 壳全面驱动：
+>   - 壳给 Canvas → DockLayout::OnPaint(Canvas&)
+>   - 壳给尺寸 → DockLayout::SetActiveSize(w,h)
+>   - 壳转鼠标坐标 → DockLayout::OnMousePressed/Moved/Released（拖分割线优先，未拦截转激活 Panel）
+> - **Container 不再管理组件**（去掉旧 AddComponent/m_Components/HitTest）。组件只在 Panel 里。
+> - 便捷：`Container::AddSinglePanel(Panel*, title)` 自动 DockLayout→Dock→Panel，普通工具窗一行。
+> - LogViewer/HexViewer 还继承 Container 用旧组件接口 → **暂时编译不过，砚台之后改**（本次不迁）。
+
+### 架构（最终定稿）
+```
+Container（壳，: public XWidget）—— 唯一窗口
+   └── DockLayout*（纯逻辑，boundary 注册表 + Dock 父树）
+         └── Dock* 若干（不同宗；各持 DockBoundary 4 槽定位）
+               └── Panel 若干（tab；唯一内容层）
+                     └── Component（无 HWND 绘制单元，不动）
+```
+
+### 改动文件（本次）
+- 重写 `Modules/UI/dock/Dock.h` + `src/Dock.cpp`：纯逻辑。持 Panel* 列表 + DockBoundary 4 槽 + SetActiveRect/RecalcRect(由边界定位) + HitTestEdge/HitTestPanel + OnPaint(tab栏+激活Panel) + DockFather 同宗。
+- 重写 `Modules/UI/DockLayout/DockLayout.h` + `src/DockLayout.cpp`：纯逻辑。boundary 注册表(AddBoundary/GetBoundary/Set*/Move/Remove) + Dock 管理(AddDock/DockBind/RemoveDock) + RecalcLayout(喂尺寸给各Dock) + 拖分割线(OnMouse*纯逻辑驱动) + OnPaint(背景+线+各Dock)。
+- 重写 `Modules/UI/Container/Container.h` + `src/Container.cpp`：统一持 DockLayout*。SetDockLayout/AddSinglePanel/DetachPanel；OnPaint→m_Layout；窗口resize→SetActiveSize；鼠标事件→m_Layout->OnMouse*（未拦截转激活Panel）。
+
+### 待办（后续迭代）
+- [ ] LogViewer/HexViewer 迁移到 Panel 形态（当前因 Container 去组件管理而编译不过）
+- [ ] Dock 的 Split/Merge 同宗切割/合并逻辑补齐（当前聚焦多 Panel tab + 定位，切割相关留优先拓扑）
+- [ ] Container 输入接入补全（滚轮/按键转发给 Panel，当前只接鼠标三态）
+- [ ] UI 私有事件系统（MarkDown4 分析）单独接
+- [ ] test 工程（D:\workbench\test）引用旧 dock 类，需清理
+
+### 追加 2026-08-25 — Dock Split/Merge 按砚台原设计补齐（纯逻辑适配）
+
+> 砚台确认职责划分：**DockLayout 做大致的区域划分，Dock 负责"重新划分自己(分屏/切割) + 管理 Panel"**。
+> Git 恢复旧 Dock.cpp 印证砚台原设计的切割思路后，补回纯逻辑版：
+
+- **Dock::Split(Direction, size)**：一次切割 = 造一条共享分割线（DockLayout 注册表 AddBoundary，朝向按方向）。
+  共享边分配（新东对侧 + 本 DeDock 相对侧各挂新 boundary）；活跃面板切给新 Dock；双 Dock 记 mergedBoundaryId；
+  新 Dock SetDockFather(this)（同宗）；AddDock + RecalcLayout(由边界定位重排)。
+- **Dock::Merge()**：被动合并——本 Dock 已空时，沿 mergedBoundaryId 找共享邻居 → RemoveBoundary(拆缝合线) → RemoveDock(self)。
+  ⚠️ RemoveDock 当前只从布局剔除 + 重排，**不 delete dock**；delete 由持有方负责（避免悬垂，安全优先）。
+- 私有辅助 `RemovePanelInternal`：Split 时把活跃面板切给新 Dock（不触发合并）。
+- `SetSplittable(bool)` / `IsSplittable()`：是否允许切分自己（控"分屏"能力开关）。
+
+### ====== 以上为 UNIFIED 单一模型 DOCK 的当前完整状态 ======
+
 ## 2026-08-25 — UI 解耦重构（第一阶段：确认方向 + Panel + 壳 Container + 删旧 dock）
 
 > 砚台拍板大改 UI：**UI 层彻底与 XWidget 解耦**。重构中途有重要方向澄清（砚台纠偏后定案）：

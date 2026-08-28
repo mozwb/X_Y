@@ -112,6 +112,16 @@ namespace X_Y
         void SetMergedBoundaryId(BoundaryId id) { m_MergedBoundaryId = id; }
         BoundaryId GetMergedBoundaryId() const { return m_MergedBoundaryId; }
 
+        // ── 分屏 / 切割 / 合并（Dock 的"重新划分自己"职责）──
+        bool IsSplittable() const { return m_Splittable; }
+        void SetSplittable(bool v) { m_Splittable = v; }
+
+        // 主动切一块：dir 方向，size 为相对比例(0~1)。
+        // 返回新生成的对侧 Dock*，它接管当前激活面板；原 Dock 保留剩余面板(若有)。
+        Dock *Split(Direction dir, float size);
+        // 被动合并：本 Dock 变空后调用，沿 mergedBoundary 并回对侧邻居并删掉自己。
+        void Merge();
+
         // ── 绘制（宿主给画布）──
         virtual void OnPaint(Canvas &canvas);
 
@@ -121,6 +131,8 @@ namespace X_Y
 
     protected:
         void ShowActivePanel();
+        // 内部：移除面板但不触发合并（Split 时需要把活跃面板切给新 Dock）
+        void RemovePanelInternal(Panel *panel);
 
         int m_X = 0, m_Y = 0, m_W = 100, m_H = 100;
         int m_LayoutW = 0, m_LayoutH = 0;   // 宿主喂的布局总尺寸
@@ -131,6 +143,7 @@ namespace X_Y
         DockLayout *m_Layout = nullptr;
         Dock *m_DockFather = nullptr;           // 同宗（分割树根=nullptr）
         BoundaryId m_MergedBoundaryId = InvalidBoundary;
+        bool m_Splittable = true;               // 是否允许切分自己
 
         DockBoundary m_Boundary;                // 我引用的 4 条边界
 

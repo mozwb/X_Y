@@ -209,4 +209,122 @@ namespace X_Y
             active->OnPaint(canvas);
     }
 
+    // ════════════════════════════════════════════════════════════
+    // 分屏 / 切割 / 合并 —— Dock 的"重新划分自己"职责
+    // 思路（沿用砚台原设计）：一次切割 = 造一条共享分割线，新旧两侧各占一侧。
+    // ════════════════════════════════════════════════════════════
+
+    Dock *Dock::Split(Direction dir, float size)
+    {
+        if (!m_Layout || !m_Splittable)
+            return nullptr;
+        if (size <= 0.0f || size >= 1.0f)
+            return nullptr;
+
+        // 确定新边界朝向与比例
+        BoundaryOrientation orientation =
+            (dir == Direction::Left || dir == Direction::Right)
+                ? BoundaryOrientation::Vertical
+                : BoundaryOrientation::Horizontal;
+
+        // 造一条新分割线（集中注册表管理；由本 Dock 与邻居共享）
+        BoundaryId newBoundary = m_Layout->AddBoundary(orientation, size);
+        if (newBoundary == InvalidBoundary)
+            return nullptr;
+
+        // 新 Dock：接管当前激活面板，其余面板留下
+        Dock *newDock = new Dock();
+        newDock->SetDockLayout(m_Layout);
+        newDock->SetSplittable(m_Splittable);
+        newDock->SetHostRepaint(m_HostRepaint);
+
+        // 让活跃面板跟随新 Dock（分屏时把当前内容切到新一侧）
+        Panel *active = GetActivePanel();
+        if (active)
+        {
+            RemovePanelInternal(active);
+            newDock->AddPanel(active, /*title留空*/ "");
+        }
+
+        // 共享边分配：新 Dock 那侧 + 本 Dock 相对侧
+        switch (dir)
+        {
+        case Direction::Left:
+            newDock->GetBoundarySlots().right = newBoundary;
+            m_Boundary.left = newBoundary;
+            break;
+        case Direction::Right:
+            newDock->GetBoundarySlots().left = newBoundary;
+            m_Boundary.right = newBoundary;
+            break;
+        case Direction::Top:
+            newDock->GetBoundarySlots().bottom = newBoundary;
+            m_Boundary.top = newBoundary;
+            break;
+        case Direction::Bottom:
+            newDock->GetBoundarySlots().top = newBoundary;
+            m_Boundary.bottom = newBoundary;
+            break;
+        }
+
+        // 新旧均记下"我是从这条边切出来的"（供被动合并找邻居）
+        newDock->SetMergedBoundaryId(newBoundary);
+        SetMergedBoundaryId(newBoundary);
+        // 同宗：新 Dock 记我是它父亲
+        newDock->SetDockFather(this);
+
+        // 入布局并重排
+        m_Layout->AddDock(newDock);
+        m_Layout->RecalcLayout();
+        RequestRepaint();
+        return newDock;
+    }
+
+    void Dock::Merge()
+    {
+        // 被动合并：本 Dock 已空，沿 mergedBoundary 并回对侧邻居并删掉自己。
+        // 由外层（DockLayout 移除临时 dock 前）调用。
+        if (!m_Layout || m_MergedBoundaryId == InvalidBoundary)
+            return;
+
+        // 找一个共享 mergedBoundary 的邻居
+        for (Dock *dock : m_Layout->GetDockList())
+        {
+            if (!dock || dock == this)
+                continue;
+            const auto &slots = dock->GetBoundarySlots();
+            if (slots.top == m_MergedBoundaryId ||
+                slots.bottom == m_MergedBoundaryId ||
+                slots.left == m_MergedBoundaryId ||
+                slots.right == m_MergedBoundaryId)
+            {
+                // 拆掉缝合线（邻居侧槽恢复为贴外框/留给布局重排）
+                m_Layout->RemoveBoundary(m_MergedBoundaryId);
+                // 从布局移除并让布局重排；随后由布局释放本 Dock
+                m_Layout->RemoveDock(this);
+                RequestRepaint();
+                return;
+            }
+        }
+
+        // 没找到邻居，仍直接拆线移除自己
+        m_Layout->RemoveBoundary(m_MergedBoundaryId);
+        m_Layout->RemoveDock(this);
+    }
+
+    // 内部：不移面板版本（Split 用，用于把活跃面板移到新 Dock）
+    void Dock::RemovePanelInternal(Panel *panel)
+    {
+        auto it = std::find(m_Panels.begin(), m_Panels.end(), panel);
+        if (it == m_Panels.end())
+            return;
+        const int idx = (int)(it - m_Panels.begin());
+        m_Panels.erase(it);
+        m_Titles.erase(m_Titles.begin() + idx);
+        if (m_ActiveIndex >= (int)m_Panels.size())
+            m_ActiveIndex = (int)m_Panels.size() - 1;
+        if (m_Panels.empty())
+            m_ActiveIndex = -1;
+    }
+
 } // namespace X_Y
