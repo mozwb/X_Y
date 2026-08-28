@@ -1,5 +1,35 @@
 # DEVLOG
 
+## 2026-08-25 — UI 事件：泛型 HitTest 路由 + 事件对象化全链路（砚台决策）
+
+> 砚台定：**不做独立 UIEvent 框架，做统一的 HitTest 路由**。鼠标是"单指针→单目标"，命中路由是物理事实；
+> Connect 广播解决"全体通知"，两者正交。方案：一套"壳→DockLayout→Dock→Panel→Component"的事件对象下传。
+
+### 设计定稿（Panel_Arch.md §4）
+- 输入路由：鼠标→HitTest 深度路由；键盘→Focus 路由；resize/通知→Connect 广播。
+- 事件对象带 `Handled`（一 bool）实现冒泡，无需额外虚函数。
+- Component 彻底统一成单 `OnInput(UIInputEvent&)`，删散方法。
+- 每层薄命中方法（共用 Rect/UIEvent/UIHitTest），非"一个模板自动递归"（C++ 无法跨类型自动递归）。
+
+### 新增 UiCore
+- `Modules/UI/UiCore/Rect.h`：数字矩形，Contains/Offset。
+- `Modules/UI/UiCore/UIEvent.h`：UIInputEvent(带 Handled) + UIMouseEvent(MouseAction/button/scrollDelta) + UIKeyEvent(key/ch/isChar)。
+- `Modules/UI/UiCore/UIHitTest.h`：RouteToHit 薄路由辅助（命中 z 序 + 冒泡）。
+
+### 改动文件（事件对象化全链路）
+- `Component.h`：删 OnKeyDown/OnChar/OnScroll/OnMouse*/Dispatch* 散方法，统一 `virtual void OnInput(UIInputEvent&)`。
+- `Panel.h/.cpp`：删 Dispatch* 传参，改 `OnInput`（内部 HitTest 组件 + HandleDepressed 冒泡）；加 FocusedComponent + SetFocusedComponent/FocusNext。
+- `Dock.h/.cpp`：加 `RouteInput(UIInputEvent&)`（tab 栏切 tab / 命中 Panel 下传 / 键盘给激活面板）；ShowActivePanel 在 SetActiveRect 后同步 panel 布局矩形。
+- `DockLayout.h/.cpp`：`OnMousePressed/Moved/Released` 合并为 `RouteInput`（拖分割线语义化为 Press/Move/Release 状态机；非拖拽/键盘下传命中 Dock）。
+- `Container.cpp`：全局 Movement → 构造 UIEvent → m_Layout->RouteInput；补齐 MouseScrolled(滚轮)/KeyPressed/KeyTyped 键盘（走焦点）。壳只做翻译层。
+- 组件适配单 OnInput：TextInput(合并 OnKeyDown+OnChar)、Button(合并 hover+click)、ScrollArea(合并滚轮/滑块/内容转发,新增 Scroll())、horizontal/vertical(合并命中子组件转发)。
+- ListBox / Overlay：无输入 override，仅 OnPaint，不必改。
+
+### 说明
+- LogViewer/HexViewer 及其 TagStrip（override 旧散方法）仍编译不过——砚台之后迁到 Panel 形态时改。
+- test（D:\workbench\test）引用旧 dock/旧 Container API，需清理（不在本 commit）。
+- 键盘 Focus 目前只到 Panel 的 FocusedComponent；全局 tab 顺序 FocusNext 仅提供雏形。
+
 ## 2026-08-25 — UI 解耦重构（第二阶段：Dock/DockLayout 纯逻辑化 + Container 统一持 DockLayout）
 
 > 在"Panel/壳"第一步基础上，砚台进一步定死**最终统一模型**：

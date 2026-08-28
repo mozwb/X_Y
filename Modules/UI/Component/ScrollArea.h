@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Component.h"
 #include "Widget/Dpi.h"
 
@@ -39,22 +39,14 @@ namespace X_Y
         // 滚轮输入：yDelta>0 向上滚(看更早)，<0 向下滚
         // yDelta 是物理滚轮单位，需转逻辑(÷scale)再乘逻辑步长，
         // 否则 150% 屏下次滚动量偏大。
-        void OnScroll(float yDelta) override
+        void Scroll(float yDelta)
         {
             float s = Dpi::GetScale();
             ScrollBy((int)(yDelta / s * GetScrollStep()));
         }
 
-        // 滑块交互：拖动 + 点击轨道翻页
-
-        void OnMousePressed(int localX, int localY) override;
-        void OnMouseMoved(int localX, int localY) override;
-        void OnMouseReleased(int localX, int localY) override;
-        void DispatchKeyDown(Input_t::KeyCode key) override;
-        void DispatchChar(wchar_t ch) override;
-        void DispatchMousePressed(int localX, int localY) override;
-        void DispatchMouseMoved(int localX, int localY) override;
-        void DispatchMouseReleased(int localX, int localY) override;
+        // 输入（统一入口）：滚轮 / 滑块拖动 / 内容滚动转发
+        void OnInput(UIInputEvent &e) override;
 
         void OnPaint(Canvas &canvas) override;
 

@@ -24,7 +24,6 @@ namespace X_Y
     {
         if (comp)
         {
-            // 注入重绘回调：组件 RequestRepaint() → 通知宿主刷屏
             comp->SetRepaintCallback([this]()
                                     { RequestRepaint(); });
             m_Components.push_back(comp);
@@ -36,11 +35,21 @@ namespace X_Y
         auto it = std::find(m_Components.begin(), m_Components.end(), comp);
         if (it != m_Components.end())
             m_Components.erase(it);
+        if (m_FocusedComponent == comp)
+            m_FocusedComponent = nullptr;
+        if (m_DragTarget == comp)
+        {
+            m_DragTarget = nullptr;
+            m_DragTargetVisible = false;
+        }
     }
 
     void Panel::ClearComponents()
     {
         m_Components.clear();
+        m_FocusedComponent = nullptr;
+        m_DragTarget = nullptr;
+        m_DragTargetVisible = false;
     }
 
     Component *Panel::HitTest(int x, int y)
@@ -48,6 +57,8 @@ namespace X_Y
         for (auto it = m_Components.rbegin(); it != m_Components.rend(); ++it)
         {
             Component *comp = *it;
+            if (!comp->IsVisible())
+                continue;
             int cx = comp->GetX();
             int cy = comp->GetY();
             int cw = comp->GetWidth();
@@ -58,92 +69,66 @@ namespace X_Y
         return nullptr;
     }
 
-    // ── 输入转发：坐标相对本 Panel，由宿主算好传入 ──
-    void Panel::DispatchMousePressed(int localX, int localY)
+    void Panel::SetFocusedComponent(Component *comp)
     {
-        // 旧焦点取消
-        for (auto *comp : m_Components)
+        if (m_FocusedComponent)
+            m_FocusedComponent->SetFocused(false);
+        m_FocusedComponent = comp;
+        if (m_FocusedComponent)
+            m_FocusedComponent->SetFocused(true);
+    }
+
+    // ── 输入命中路由：把事件对象下传给命中的组件（z 序），支持 Handled 冒泡 ──
+    void Panel::OnInput(UIInputEvent &e)
+    {
+        // 鼠标类事件：命中组件，下传
+        if (auto *me = dynamic_cast<UIMouseEvent *>(&e))
         {
-            if (comp->IsFocused())
+            // 持续交互（拖滑块/press 后 move/up）：优先交给 m_DragTarget
+            Component *target = (m_DragTarget && m_DragTargetVisible) ? m_DragTarget : nullptr;
+            if (!target)
+                target = HitTest(e.x, e.y);
+
+            if (target)
             {
-                comp->SetFocused(false);
-                break;
+                if (me->action == MouseAction::Press)
+                {
+                    // 按下：设焦点 + 记拖拽目标
+                    SetFocusedComponent(target);
+                    m_DragTarget = target;
+                    m_DragTargetVisible = true;
+                }
+                else if (me->action == MouseAction::Release)
+                {
+                    m_DragTarget = nullptr;
+                    m_DragTargetVisible = false;
+                }
+
+                // 下传：把坐标转成组件局部坐标
+                const int cx = target->GetX();
+                const int cy = target->GetY();
+                e.x -= cx;
+                e.y -= cy;
+                target->OnInput(e);
+                e.x += cx;
+                e.y += cy;
             }
-        }
-
-        Component *hit = HitTest(localX, localY);
-        if (hit)
-        {
-            hit->SetFocused(true);
-            m_DragTarget = hit;
-            m_DragTargetVisible = true;
-            hit->DispatchMousePressed(localX - hit->GetX(), localY - hit->GetY());
-        }
-        else
-        {
-            m_DragTarget = nullptr;
-            m_DragTargetVisible = false;
-        }
-
-        // 焦点变化会改变组件外观（如 TextInput 光标），请求宿主重绘
-        RequestRepaint();
-    }
-
-    void Panel::DispatchMouseMoved(int localX, int localY)
-    {
-        if (m_DragTarget && m_DragTargetVisible)
-        {
-            m_DragTarget->DispatchMouseMoved(localX - m_DragTarget->GetX(),
-                                            localY - m_DragTarget->GetY());
-        }
-        else
-        {
-            Component *hit = HitTest(localX, localY);
-            if (hit && hit->IsVisible())
-                hit->DispatchMouseMoved(localX - hit->GetX(), localY - hit->GetY());
-        }
-    }
-
-    void Panel::DispatchMouseReleased(int localX, int localY)
-    {
-        if (m_DragTarget && m_DragTargetVisible)
-        {
-            m_DragTarget->DispatchMouseReleased(localX - m_DragTarget->GetX(),
-                                               localY - m_DragTarget->GetY());
-            m_DragTarget = nullptr;
-            m_DragTargetVisible = false;
-        }
-    }
-
-    void Panel::DispatchKeyDown(Input_t::KeyCode key)
-    {
-        for (auto *comp : m_Components)
-        {
-            if (comp->IsVisible() && comp->IsFocused())
+            else if (me->action == MouseAction::Press)
             {
-                comp->DispatchKeyDown(key);
-                break;
+                SetFocusedComponent(nullptr); // 点空白 → 清焦点
             }
+            return;
         }
-    }
 
-    void Panel::DispatchChar(wchar_t ch)
-    {
-        for (auto *comp : m_Components)
+        // 键盘焦点：喂给被聚焦的组件
+        if (auto *ke = dynamic_cast<UIKeyEvent *>(&e))
         {
-            if (comp->IsVisible() && comp->IsFocused())
+            if (m_FocusedComponent)
             {
-                comp->DispatchChar(ch);
-                break;
+                m_FocusedComponent->OnInput(e);
             }
+            return;
         }
-    }
-
-    void Panel::DispatchMouseScrolled(int localX, int localY, float yDelta)
-    {
-        Component *hit = HitTest(localX, localY);
-        if (hit && hit->IsVisible())
-            hit->OnScroll(yDelta);
     }
 
     void Panel::OnPaint(Canvas &canvas)
@@ -157,6 +142,30 @@ namespace X_Y
                     comp->GetWidth(), comp->GetHeight());
                 comp->OnPaint(canvas);
                 canvas.ResetClip();
+            }
+        }
+    }
+
+    void Panel::FocusNext()
+    {
+        // 简易 tab 顺序：按添加顺序找下一个可见组件
+        if (m_Components.empty())
+            return;
+        int start = 0;
+        if (m_FocusedComponent)
+        {
+            auto it = std::find(m_Components.begin(), m_Components.end(), m_FocusedComponent);
+            if (it != m_Components.end())
+                start = (int)(it - m_Components.begin()) + 1;
+        }
+        const int n = (int)m_Components.size();
+        for (int k = 0; k < n; ++k)
+        {
+            Component *c = m_Components[(start + k) % n];
+            if (c->IsVisible())
+            {
+                SetFocusedComponent(c);
+                return;
             }
         }
     }

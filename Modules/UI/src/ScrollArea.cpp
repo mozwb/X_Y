@@ -1,4 +1,4 @@
-﻿#include "Component/ScrollArea.h"
+#include "Component/ScrollArea.h"
 
 namespace X_Y
 {
@@ -97,152 +97,119 @@ namespace X_Y
         DrawScrollbar(canvas);
     }
 
-    // ── 滑块交互 ──────────────────────────────────────────────
-
-    void ScrollArea::OnMousePressed(int localX, int localY)
+    // ── 输入（统一入口）：滚轮 / 滑块拖动 / 内容滚动转发 ──
+    void ScrollArea::OnInput(UIInputEvent &e)
     {
-        if (!NeedsScrollbar())
+        // 键盘：下传给内容（若内容聚焦）
+        if (auto *ke = dynamic_cast<UIKeyEvent *>(&e))
         {
-            m_DraggingThumb = false;
+            if (m_Content && m_Content->IsVisible() && m_Content->IsFocused())
+                m_Content->OnInput(e);
             return;
         }
 
-        // 只响应滑块条那一条竖带
-        int barX0 = GetWidth() - kScrollbarWidth;
-        if (localX < barX0)
-        {
-            m_DraggingThumb = false;
+        auto *me = dynamic_cast<UIMouseEvent *>(&e);
+        if (!me)
             return;
-        }
 
-        int thumbY, thumbH;
-        GetThumbRect(thumbY, thumbH);
+        const int localX = e.x;
+        const int localY = e.y;
 
-        if (localY >= thumbY && localY < thumbY + thumbH)
+        // 滚轮：内容滚动
+        if (me->action == MouseAction::Scroll)
         {
-            // 命中滑块 → 开始拖动
-            m_DraggingThumb = true;
-            m_DragOffsetY = localY - thumbY;
-        }
-        else
-        {
-            // 点击轨道：翻页
-            m_DraggingThumb = false;
-            int viewH = GetHeight();
-            int pageStep = viewH - GetScrollStep();
-            if (pageStep < GetScrollStep())
-                pageStep = GetScrollStep();
-
-            if (localY < thumbY)
+            if (m_Content && m_Content->IsVisible() && localX < GetWidth() - kScrollbarWidth)
             {
-                // 点击滑块上方 → 向上翻页（看更早内容）
-                SetScrollOffset(m_ScrollOffset - pageStep);
+                // 给内容自己先处理（如列表按行滚）；未处理再自己卷
+                m_Content->OnInput(e);
+                if (!e.Handled)
+                    Scroll((float)me->scrollDelta);
             }
             else
             {
-                // 点击滑块下方 → 向下翻页（看更晚内容）
-                SetScrollOffset(m_ScrollOffset + pageStep);
+                Scroll((float)me->scrollDelta);
             }
+            return;
         }
-    }
 
-    void ScrollArea::OnMouseMoved(int localX, int localY)
-    {
-        if (!m_DraggingThumb)
-            return;
-
-        int viewH = GetHeight();
-        int contentH = m_Content ? m_Content->GetHeight() : 0;
-        if (contentH <= viewH)
-            return;
-
-        int thumbH;
+        if (me->action == MouseAction::Press)
         {
-            int ty;
-            GetThumbRect(ty, thumbH);
-        }
-        int thumbRange = viewH - thumbH;
-
-        // 新滑块顶 y = 鼠标局部 y - 按下偏移
-        int newThumbY = localY - m_DragOffsetY;
-        if (newThumbY < 0)
-            newThumbY = 0;
-        if (newThumbY > thumbRange)
-            newThumbY = thumbRange;
-
-        int scrollRange = contentH - viewH;
-        SetScrollOffset((int)((float)newThumbY / thumbRange * scrollRange));
-    }
-
-    void ScrollArea::OnMouseReleased(int localX, int localY)
-    {
-        m_DraggingThumb = false;
-    }
-
-    void ScrollArea::DispatchKeyDown(Input_t::KeyCode key)
-    {
-        if (m_Content && m_Content->IsVisible() && m_Content->IsFocused())
-        {
-            m_Content->DispatchKeyDown(key);
+            // 命中滑块条竖带 → 滑块/翻页；否则下传内容
+            if (NeedsScrollbar() && localX >= GetWidth() - kScrollbarWidth)
+            {
+                int thumbY, thumbH;
+                GetThumbRect(thumbY, thumbH);
+                if (localY >= thumbY && localY < thumbY + thumbH)
+                {
+                    m_DraggingThumb = true;
+                    m_DragOffsetY = localY - thumbY;
+                }
+                else
+                {
+                    int viewH = GetHeight();
+                    int pageStep = viewH - GetScrollStep();
+                    if (pageStep < GetScrollStep())
+                        pageStep = GetScrollStep();
+                    if (localY < thumbY)
+                        SetScrollOffset(m_ScrollOffset - pageStep);
+                    else
+                        SetScrollOffset(m_ScrollOffset + pageStep);
+                }
+                return;
+            }
+            // 未命中滑块 → 下传内容
+            if (m_Content && m_Content->IsVisible())
+            {
+                m_Content->SetFocused(true);
+                e.y = localY + m_ScrollOffset;
+                m_Content->OnInput(e);
+                e.y = localY; // 还原
+            }
             return;
         }
-        OnKeyDown(key);
-    }
 
-    void ScrollArea::DispatchChar(wchar_t ch)
-    {
-        if (m_Content && m_Content->IsVisible() && m_Content->IsFocused())
+        if (me->action == MouseAction::Move)
         {
-            m_Content->DispatchChar(ch);
+            if (m_DraggingThumb)
+            {
+                int viewH = GetHeight();
+                int contentH = m_Content ? m_Content->GetHeight() : 0;
+                if (contentH <= viewH)
+                    return;
+                int thumbH;
+                { int ty; GetThumbRect(ty, thumbH); }
+                int thumbRange = viewH - thumbH;
+                int newThumbY = localY - m_DragOffsetY;
+                if (newThumbY < 0) newThumbY = 0;
+                if (newThumbY > thumbRange) newThumbY = thumbRange;
+                int scrollRange = contentH - viewH;
+                SetScrollOffset((int)((float)newThumbY / thumbRange * scrollRange));
+                return;
+            }
+            if (m_Content && m_Content->IsVisible())
+            {
+                e.y = localY + m_ScrollOffset;
+                m_Content->OnInput(e);
+                e.y = localY;
+            }
             return;
         }
-        OnChar(ch);
-    }
 
-    void ScrollArea::DispatchMousePressed(int localX, int localY)
-    {
-        if (NeedsScrollbar() && localX >= GetWidth() - kScrollbarWidth)
+        if (me->action == MouseAction::Release)
         {
-            OnMousePressed(localX, localY);
+            if (m_DraggingThumb)
+            {
+                m_DraggingThumb = false;
+                return;
+            }
+            if (m_Content && m_Content->IsVisible())
+            {
+                e.y = localY + m_ScrollOffset;
+                m_Content->OnInput(e);
+                e.y = localY;
+            }
             return;
         }
-        if (m_Content && m_Content->IsVisible())
-        {
-            m_Content->SetFocused(true);
-            m_Content->DispatchMousePressed(localX, localY + m_ScrollOffset);
-            return;
-        }
-        OnMousePressed(localX, localY);
-    }
-
-    void ScrollArea::DispatchMouseMoved(int localX, int localY)
-    {
-        if (m_DraggingThumb)
-        {
-            OnMouseMoved(localX, localY);
-            return;
-        }
-        if (m_Content && m_Content->IsVisible())
-        {
-            m_Content->DispatchMouseMoved(localX, localY + m_ScrollOffset);
-            return;
-        }
-        OnMouseMoved(localX, localY);
-    }
-
-    void ScrollArea::DispatchMouseReleased(int localX, int localY)
-    {
-        if (m_DraggingThumb)
-        {
-            OnMouseReleased(localX, localY);
-            return;
-        }
-        if (m_Content && m_Content->IsVisible())
-        {
-            m_Content->DispatchMouseReleased(localX, localY + m_ScrollOffset);
-            return;
-        }
-        OnMouseReleased(localX, localY);
     }
 
 }

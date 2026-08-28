@@ -234,63 +234,105 @@ namespace X_Y
         return InvalidBoundary;
     }
 
-    bool DockLayout::OnMousePressed(int x, int y)
+    void DockLayout::RouteInput(UIInputEvent &e)
     {
-        // 优先拖分割线：由 Dock 上报命中的边界（共享边同 id，消歧）
+        auto *me = dynamic_cast<UIMouseEvent *>(&e);
+
+        // 鼠标事件：优先拖分割线（语义化为 Press/Move/Release 状态机）
+        if (me)
+        {
+            if (me->action == MouseAction::Press)
+            {
+                // 按下：命中分割线 → 进入拖拽（拦截，不下传）
+                for (Dock *dock : m_Docks)
+                {
+                    if (!dock)
+                        continue;
+                    const BoundaryId edge = dock->HitTestEdge(e.x, e.y);
+                    if (edge != InvalidBoundary &&
+                        m_Boundaries[edge].status == BoundaryStatus::Movable)
+                    {
+                        m_DraggingBoundary = edge;
+                        m_LastDragX = e.x;
+                        m_LastDragY = e.y;
+                        RequestRepaint();
+                        return;
+                    }
+                }
+                m_DraggingBoundary = InvalidBoundary;
+            }
+            else if (me->action == MouseAction::Move)
+            {
+                // 拖拽中：拖动分割线
+                if (m_DraggingBoundary != InvalidBoundary)
+                {
+                    if (m_DraggingBoundary >= m_Boundaries.size() ||
+                        m_Boundaries[m_DraggingBoundary].removed)
+                    {
+                        m_DraggingBoundary = InvalidBoundary;
+                    }
+                    else
+                    {
+                        const bool vertical = m_Boundaries[m_DraggingBoundary].orientation ==
+                                              BoundaryOrientation::Vertical;
+                        const int delta = vertical ? (e.x - m_LastDragX)
+                                                   : (e.y - m_LastDragY);
+                        if (delta != 0)
+                        {
+                            Boundary &bd = m_Boundaries[m_DraggingBoundary];
+                            const int extent = bd.orientation == BoundaryOrientation::Vertical
+                                                   ? m_LayoutW : m_LayoutH;
+                            if (extent > 0)
+                                bd.line = std::clamp(bd.line + static_cast<float>(delta) / extent,
+                                                     bd.min, bd.max);
+                            RecalcLayout();
+                        }
+                        m_LastDragX = e.x;
+                        m_LastDragY = e.y;
+                    }
+                    return; // 拖拽中拦截，不下传
+                }
+            }
+            else if (me->action == MouseAction::Release)
+            {
+                if (m_DraggingBoundary != InvalidBoundary)
+                {
+                    m_DraggingBoundary = InvalidBoundary;
+                    RequestRepaint();
+                    return;
+                }
+            }
+        }
+
+        // 键盘事件：无坐标意义，下传给"有激活面板"的 dock（其 Panel 内部走焦点）
+        if (dynamic_cast<UIKeyEvent *>(&e))
+        {
+            for (Dock *dock : m_Docks)
+            {
+                if (!dock || !dock->GetActivePanel())
+                    continue;
+                dock->RouteInput(e);
+                return;
+            }
+            return;
+        }
+
+        // 非拖拽（或键盘）：下传给命中的 Dock（平移坐标）
         for (Dock *dock : m_Docks)
         {
             if (!dock)
                 continue;
-            const BoundaryId edge = dock->HitTestEdge(x, y);
-            if (edge != InvalidBoundary &&
-                m_Boundaries[edge].status == BoundaryStatus::Movable)
+            const int dx = dock->GetX(), dy = dock->GetY();
+            const int dw = dock->GetWidth(), dh = dock->GetHeight();
+            if (e.x >= dx && e.x < dx + dw && e.y >= dy && e.y < dy + dh)
             {
-                m_DraggingBoundary = edge;
-                m_LastDragX = x;
-                m_LastDragY = y;
-                RequestRepaint();
-                return true; // 拦截：拖分割线优先
+                e.x -= dx;
+                e.y -= dy;
+                dock->RouteInput(e);
+                e.x += dx; // 还原坐标，供上层保持视角
+                e.y += dy;
+                return;
             }
-        }
-        return false; // 放行：应转发给激活 Panel
-    }
-
-    bool DockLayout::OnMouseMoved(int x, int y)
-    {
-        if (m_DraggingBoundary == InvalidBoundary)
-            return false;
-        if (m_DraggingBoundary >= m_Boundaries.size() ||
-            m_Boundaries[m_DraggingBoundary].removed)
-        {
-            m_DraggingBoundary = InvalidBoundary;
-            return false;
-        }
-        const bool vertical = m_Boundaries[m_DraggingBoundary].orientation ==
-                              BoundaryOrientation::Vertical;
-        const int delta = vertical ? (x - m_LastDragX) : (y - m_LastDragY);
-        if (delta != 0)
-        {
-            Boundary &bd = m_Boundaries[m_DraggingBoundary];
-            const int extent = bd.orientation == BoundaryOrientation::Vertical
-                                   ? m_LayoutW : m_LayoutH;
-            if (extent > 0)
-                bd.line = std::clamp(bd.line + static_cast<float>(delta) / extent,
-                                     bd.min, bd.max);
-            RecalcLayout();
-        }
-        m_LastDragX = x;
-        m_LastDragY = y;
-        return true;
-    }
-
-    void DockLayout::OnMouseReleased(int x, int y)
-    {
-        (void)x;
-        (void)y;
-        if (m_DraggingBoundary != InvalidBoundary)
-        {
-            m_DraggingBoundary = InvalidBoundary;
-            RequestRepaint();
         }
     }
 

@@ -1,6 +1,7 @@
 #pragma once
 #include "Widget/XWidget.h"
 #include "Widget/Canvas.h"
+#include <string>
 
 namespace X_Y
 {

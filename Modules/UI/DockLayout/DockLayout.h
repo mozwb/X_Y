@@ -1,6 +1,7 @@
 #pragma once
 
 #include "UI/dock/Dock.h"
+#include "UiCore/UIEvent.h"
 #include "Widget/Canvas.h"
 #include <cstddef>
 #include <cstdint>
@@ -59,13 +60,14 @@ namespace X_Y
         // 重排所有 Dock（边界变化 / 布局 resize / Dock 内容变化时调用）
         void RecalcLayout();
 
-        // ── 命中 + 拖分割线（壳喂布局坐标调用）──
+        // ── 命中 + 拖分割线 ──
         BoundaryId HitTestBoundary(int x, int y, int thickness = 4) const;
         bool IsDraggingBoundary() const { return m_DraggingBoundary != InvalidBoundary; }
-        // 返回 true = 本布局已拦截（拖分割线）；false = 放行（应转发给激活 Panel）
-        bool OnMousePressed(int x, int y);
-        bool OnMouseMoved(int x, int y);
-        void OnMouseReleased(int x, int y);
+
+        // ── 输入（事件对象全链路）：e.x/e.y 为相对本布局的局部坐标。
+        //    先判拖分割线（鼠标 Press 命中边界→进入拖拽态，Move→拖，Release→结束）。
+        //    非拖拽态：命中命中的 Dock → 下传给其激活面板。
+        void RouteInput(UIInputEvent &e);
 
         // ── 全局激活面板（供壳转发输入 / 命中）──
         Panel *GetActivePanel() const;
@@ -76,7 +78,6 @@ namespace X_Y
     protected:
         bool IsValidBoundary(BoundaryId id) const;
         int BoundaryPosition(BoundaryId id) const;
-        bool HandleDrag(int x, int y);
 
         int m_LayoutW = 0, m_LayoutH = 0;
         std::vector<Boundary> m_Boundaries;

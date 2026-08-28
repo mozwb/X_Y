@@ -113,86 +113,37 @@ namespace X_Y
         }
     }
 
-    void Horizontal::OnMousePressed(int localX, int localY)
+    void Horizontal::OnInput(UIInputEvent &e)
     {
-        std::size_t index = npos;
-        Component *component = HitTest(localX, localY, index);
-        if (!component)
-            return;
-
-        Select(index);
-        component->OnMousePressed(localX - component->GetX(), localY - component->GetY());
-    }
-
-    void Horizontal::OnMouseMoved(int localX, int localY)
-    {
-        std::size_t index = npos;
-        Component *component = HitTest(localX, localY, index);
-        if (component)
-            component->OnMouseMoved(localX - component->GetX(), localY - component->GetY());
-    }
-
-    void Horizontal::OnMouseReleased(int localX, int localY)
-    {
-        std::size_t index = npos;
-        Component *component = HitTest(localX, localY, index);
-        if (component)
-            component->OnMouseReleased(localX - component->GetX(), localY - component->GetY());
-    }
-
-    void Horizontal::DispatchKeyDown(Input_t::KeyCode key)
-    {
-        for (Component *component : Components)
-            if (component->IsVisible() && component->IsFocused())
-            {
-                component->DispatchKeyDown(key);
-                return;
-            }
-        OnKeyDown(key);
-    }
-
-    void Horizontal::DispatchChar(wchar_t ch)
-    {
-        for (Component *component : Components)
-            if (component->IsVisible() && component->IsFocused())
-            {
-                component->DispatchChar(ch);
-                return;
-            }
-        OnChar(ch);
-    }
-
-    void Horizontal::DispatchMousePressed(int localX, int localY)
-    {
-        std::size_t index = npos;
-        Component *component = HitTest(localX, localY, index);
-        if (!component)
+        // 键盘：转发给聚焦的子组件
+        if (auto *ke = dynamic_cast<UIKeyEvent *>(&e))
         {
-            OnMousePressed(localX, localY);
+            for (Component *component : Components)
+                if (component->IsVisible() && component->IsFocused())
+                {
+                    component->OnInput(e);
+                    return;
+                }
             return;
         }
 
-        Select(index);
-        component->DispatchMousePressed(localX - component->GetX(), localY - component->GetY());
-    }
+        auto *me = dynamic_cast<UIMouseEvent *>(&e);
+        if (!me)
+            return;
 
-    void Horizontal::DispatchMouseMoved(int localX, int localY)
-    {
         std::size_t index = npos;
-        Component *component = HitTest(localX, localY, index);
-        if (component)
-            component->DispatchMouseMoved(localX - component->GetX(), localY - component->GetY());
-        else
-            OnMouseMoved(localX, localY);
-    }
+        Component *component = HitTest(e.x, e.y, index);
+        if (!component)
+            return;
 
-    void Horizontal::DispatchMouseReleased(int localX, int localY)
-    {
-        std::size_t index = npos;
-        Component *component = HitTest(localX, localY, index);
-        if (component)
-            component->DispatchMouseReleased(localX - component->GetX(), localY - component->GetY());
-        else
-            OnMouseReleased(localX, localY);
+        if (me->action == MouseAction::Press)
+            Select(index);
+
+        const int cx = component->GetX(), cy = component->GetY();
+        e.x -= cx;
+        e.y -= cy;
+        component->OnInput(e);
+        e.x += cx;
+        e.y += cy;
     }
 }

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Component.h"
 #include <string>
 #include <functional>
@@ -23,8 +23,7 @@ namespace X_Y
         bool IsReadOnly() const { return m_ReadOnly; }
 
         void OnPaint(Canvas &canvas) override;
-        void OnKeyDown(Input_t::KeyCode key) override;
-        void OnChar(wchar_t ch) override;
+        void OnInput(UIInputEvent &e) override;
 
         // 文本变化回调
         std::function<void(const std::string &)> OnTextChange;

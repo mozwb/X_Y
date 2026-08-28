@@ -1,17 +1,20 @@
-﻿#pragma once
+#pragma once
 #include "Widget/Canvas.h"
-#include "XCore/Input/Input.h"
+#include "UiCore/UIEvent.h"
 #include "XCore/FilesSystem/FilesSystem.h"
 #include <functional>
 namespace X_Y
 {
 
+    // 统一的 UI 叶子元素（无 HWND，画到父级给的那张 Canvas）。
+    // 事件只经一个入口 OnInput(UIInputEvent&)，不逐类堆散方法。
     class Component
     {
     public:
         Component() = default;
         virtual ~Component() = default;
 
+        // ── 布局 ──
         void SetRect(int x, int y, int w, int h)
         {
             m_X = x;
@@ -27,71 +30,29 @@ namespace X_Y
         void SetVisible(bool v) { m_Visible = v; }
         bool IsVisible() const { return m_Visible; }
 
-        void SetMouseLocal(int x, int y)
-        {
-            m_MouseX = x;
-            m_MouseY = y;
-        }
-        int GetMouseLocalX() const { return m_MouseX; }
-        int GetMouseLocalY() const { return m_MouseY; }
-
         void SetFocused(bool f) { m_Focused = f; }
         bool IsFocused() const { return m_Focused; }
 
-        virtual void OnKeyDown(Input_t::KeyCode key) {}
-        virtual void OnChar(wchar_t ch) {}
+        // ── 输入（唯一入口）──
+        // e.x/e.y 为相对本组件局部坐标；处理完设 e.Handled=true 即"吞掉"（停止冒泡）。
+        // 基类默认空：不处理则不要动 Handled，让事件继续冒泡。
+        virtual void OnInput(UIInputEvent &e) { (void)e; }
 
-        // 通用滚动输入：yDelta > 0 向上滚，< 0 向下滚（单位=1格）
-        virtual void OnScroll(float yDelta) {}
-
-        // 内容告诉视口：滚动一步的像素粒度（如列表=行高，普通内容=1）
-
+        // ── 滚动相关（内容自治度量，供 ScrollArea 布局）──
         virtual int GetScrollStep() const { return 1; }
-
-        // 内容被滚动裁剪：通知可视区域
-        //   scrollOffset: 相对内容顶部的滚动偏移（像素）
-        //   viewHeight  : 可视区高度（像素）
-        // 默认空实现；像 ListBox 这类可按行裁剪的内容可 override 以只画可视区
         virtual void SetViewport(int scrollOffset, int viewHeight)
         {
             (void)scrollOffset;
             (void)viewHeight;
         }
 
-        // 鼠标交互（localX/localY 为相对本组件的局部坐标）
-
-        virtual void OnMousePressed(int localX, int localY) {}
-        virtual void OnMouseMoved(int localX, int localY) {}
-        virtual void OnMouseReleased(int localX, int localY) {}
-
-        // Container 调用这些入口；复合组件可重写后继续向内部子组件转发。
-        virtual void DispatchMousePressed(int localX, int localY)
-        {
-            OnMousePressed(localX, localY);
-        }
-        virtual void DispatchMouseMoved(int localX, int localY)
-        {
-            OnMouseMoved(localX, localY);
-        }
-        virtual void DispatchMouseReleased(int localX, int localY)
-        {
-            OnMouseReleased(localX, localY);
-        }
-        virtual void DispatchKeyDown(Input_t::KeyCode key)
-        {
-            OnKeyDown(key);
-        }
-        virtual void DispatchChar(wchar_t ch)
-        {
-            OnChar(ch);
-        }
-
-        virtual void OnFileDragEnter(const std::vector<XPath> &files, int localX, int localY) {}
-        virtual void OnFileDragOver(const std::vector<XPath> &files, int localX, int localY) {}
+        // ── 文件拖拽（独立通道：窗口级，不进输入路由）──
+        virtual void OnFileDragEnter(const std::vector<XPath> &files, int localX, int localY) { (void)files; (void)localX; (void)localY; }
+        virtual void OnFileDragOver(const std::vector<XPath> &files, int localX, int localY) { (void)files; (void)localX; (void)localY; }
         virtual void OnFileDragLeave() {}
-        virtual void OnFileDrop(const std::vector<XPath> &files, int localX, int localY) {}
+        virtual void OnFileDrop(const std::vector<XPath> &files, int localX, int localY) { (void)files; (void)localX; (void)localY; }
 
-        // 请求所属窗口重绘（由 Container 在 AddComponent 时注入实现）
+        // 请求所属窗口重绘（由 Panel 在 AddComponent 时注入实现）
         void RequestRepaint()
         {
             if (m_RepaintCallback)
@@ -99,12 +60,11 @@ namespace X_Y
         }
         void SetRepaintCallback(std::function<void()> cb) { m_RepaintCallback = std::move(cb); }
 
-        // 组件绘制自己，拿窗口的canvas
+        // 组件绘制自己（画到父级给的 canvas）
         virtual void OnPaint(Canvas &canvas) = 0;
 
     private:
         int m_X = 0, m_Y = 0, m_W = 100, m_H = 30;
-        int m_MouseX = 0, m_MouseY = 0;
         bool m_Visible = true;
         bool m_Focused = false;
         std::function<void()> m_RepaintCallback;

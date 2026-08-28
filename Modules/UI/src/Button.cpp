@@ -33,31 +33,40 @@ namespace X_Y
             canvas.DrawText(font, x + w - 22, textY, "x", m_TextColor);
     }
 
-    void Button::OnMouseMoved(int localX, int localY)
+    void Button::OnInput(UIInputEvent &e)
     {
-        bool hover = localX >= 0 && localX < GetWidth() &&
-                     localY >= 0 && localY < GetHeight();
-        if (hover != m_MouseHover)
-        {
-            m_MouseHover = hover;
-            RequestRepaint();
-        }
-    }
-
-    void Button::OnMousePressed(int localX, int localY)
-    {
-        if (localX < 0 || localX >= GetWidth() || localY < 0 || localY >= GetHeight())
+        auto *me = dynamic_cast<UIMouseEvent *>(&e);
+        if (!me)
             return;
+        const int localX = e.x, localY = e.y;
 
-        if (m_Closeable && localX >= GetWidth() - 28)
+        if (me->action == MouseAction::Move)
         {
-            if (m_OnClose)
-                m_OnClose();
-            RequestRepaint();
+            bool hover = localX >= 0 && localX < GetWidth() &&
+                         localY >= 0 && localY < GetHeight();
+            if (hover != m_MouseHover)
+            {
+                m_MouseHover = hover;
+                RequestRepaint();
+            }
+            return;
         }
-        else if (m_OnClick)
+
+        if (me->action == MouseAction::Press)
         {
-            m_OnClick();
+            if (localX < 0 || localX >= GetWidth() || localY < 0 || localY >= GetHeight())
+                return;
+            if (m_Closeable && localX >= GetWidth() - 28)
+            {
+                if (m_OnClose)
+                    m_OnClose();
+                RequestRepaint();
+            }
+            else if (m_OnClick)
+            {
+                m_OnClick();
+            }
+            return;
         }
     }
 

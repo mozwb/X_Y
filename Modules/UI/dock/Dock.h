@@ -129,6 +129,9 @@ namespace X_Y
         BoundaryId HitTestEdge(int x, int y, int thickness = 4) const;
         Panel *HitTestPanel(int x, int y) const;
 
+        // ── 输入（事件对象下传）：命中 tab 栏→切 tab；否则下传给激活 Panel ──
+        void RouteInput(UIInputEvent &e);
+
     protected:
         void ShowActivePanel();
         // 内部：移除面板但不触发合并（Split 时需要把活跃面板切给新 Dock）

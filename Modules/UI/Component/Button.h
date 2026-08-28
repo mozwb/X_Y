@@ -23,8 +23,7 @@ namespace X_Y
         void SetOnClose(std::function<void()> callback) { m_OnClose = std::move(callback); }
 
         void OnPaint(Canvas &canvas) override;
-        void OnMouseMoved(int localX, int localY) override;
-        void OnMousePressed(int localX, int localY) override;
+        void OnInput(UIInputEvent &e) override;
 
     private:
         std::string m_Text;

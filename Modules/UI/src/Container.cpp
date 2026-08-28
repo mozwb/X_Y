@@ -1,11 +1,20 @@
 #include "Container/Container.h"
 #include "DockLayout/DockLayout.h"
 #include "UI/dock/Dock.h"
+#include "UiCore/UIEvent.h"
 #include "Movement/MouseMovement.h"
+#include "Movement/KeyMovement.h"
 #include "Widget/Application.h"
 
 namespace X_Y
 {
+
+    // 取相对本窗口客户区的逻辑坐标（命中路由统一用它）
+    void GetClientPos(Container &self, int &x, int &y)
+    {
+        self.GetMouseScreenPos(x, y);
+        self.ScreenToClient(x, y);
+    }
 
     Container::Container(XWidget *parent)
         : XWidget(parent)
@@ -15,57 +24,83 @@ namespace X_Y
                 [this](const XMovement &)
                 { OnWindowResize(); });
 
-        // 鼠标按下：优先让 DockLayout 拖分割线；未拦截则转发给激活 Panel
+        // 鼠标按下 → UIEvent(Press) → 布局路由（可能拖分割线/喂激活面板）
         Connect(this, MovementType::MouseButtonPressed, this,
                 [this](const XMovement &e)
                 {
             int lx = 0, ly = 0;
-            GetMouseScreenPos(lx, ly);
-            ScreenToClient(lx, ly);
+            GetClientPos(*this, lx, ly);
+            const auto &mb = dynamic_cast<const MouseButtonPressed &>(e);
+            UIMouseEvent uie;
+            uie.action = MouseAction::Press;
+            uie.button = static_cast<Input_t::MouseCode>(mb.GetMouseButton());
+            uie.x = lx; uie.y = ly;
             if (m_Layout)
             {
-                if (!m_Layout->OnMousePressed(lx, ly))
-                {
-                    // 放行：转发给激活面板（内容交互）
-                    Panel *p = m_Layout->GetActivePanel();
-                    if (p)
-                        p->DispatchMousePressed(lx - p->GetX(), ly - p->GetY());
-                }
+                m_Layout->RouteInput(uie);
                 CaptureMouse();
             } });
 
-        // 鼠标移动
+        // 鼠标移动 → UIEvent(Move)
         Connect(this, MovementType::MouseMoved, this,
                 [this](const XMovement &)
                 {
             int lx = 0, ly = 0;
-            GetMouseScreenPos(lx, ly);
-            ScreenToClient(lx, ly);
+            GetClientPos(*this, lx, ly);
+            UIMouseEvent uie;
+            uie.action = MouseAction::Move;
+            uie.x = lx; uie.y = ly;
             if (m_Layout)
-            {
-                if (!m_Layout->OnMouseMoved(lx, ly))
-                {
-                    Panel *p = m_Layout->GetActivePanel();
-                    if (p)
-                        p->DispatchMouseMoved(lx - p->GetX(), ly - p->GetY());
-                }
-            } });
+                m_Layout->RouteInput(uie); });
 
-        // 鼠标抬起
+        // 鼠标抬起 → UIEvent(Release)
         Connect(this, MovementType::MouseButtonReleased, this,
                 [this](const XMovement &)
                 {
             int lx = 0, ly = 0;
-            GetMouseScreenPos(lx, ly);
-            ScreenToClient(lx, ly);
+            GetClientPos(*this, lx, ly);
+            UIMouseEvent uie;
+            uie.action = MouseAction::Release;
+            uie.x = lx; uie.y = ly;
             if (m_Layout)
-            {
-                m_Layout->OnMouseReleased(lx, ly);
-                Panel *p = m_Layout->GetActivePanel();
-                if (p)
-                    p->DispatchMouseReleased(lx - p->GetX(), ly - p->GetY());
-            }
+                m_Layout->RouteInput(uie);
             ReleaseMouseCapture(); });
+
+        // 滚轮 → UIEvent(Scroll)
+        Connect(this, MovementType::MouseScrolled, this,
+                [this](const XMovement &e)
+                {
+            int lx = 0, ly = 0;
+            GetClientPos(*this, lx, ly);
+            const auto &ms = dynamic_cast<const MouseScrolled &>(e);
+            UIMouseEvent uie;
+            uie.action = MouseAction::Scroll;
+            uie.scrollDelta = (int)ms.GetYOffset();
+            uie.x = lx; uie.y = ly;
+            if (m_Layout)
+                m_Layout->RouteInput(uie); });
+
+        // 按键 → UIKeyEvent(not char)
+        Connect(this, MovementType::KeyPressed, this,
+                [this](const XMovement &e)
+                {
+            const auto &kp = dynamic_cast<const KeyPressed &>(e);
+            UIKeyEvent uie;
+            uie.key = kp.GetKeyCode();
+            uie.isChar = false;
+            if (m_Layout)
+                m_Layout->RouteInput(uie); });
+
+        // 字符 → UIKeyEvent(char)
+        Connect(this, MovementType::KeyTyped, this,
+                [this](const XMovement &e)
+                {
+            const auto &kt = dynamic_cast<const KeyTyped &>(e);
+            UIKeyEvent uie;
+            uie.ch = (wchar_t)kt.GetKeyCode();
+            uie.isChar = true;
+            if (m_Layout)
+                m_Layout->RouteInput(uie); });
     }
 
     Container::~Container()

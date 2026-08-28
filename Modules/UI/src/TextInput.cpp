@@ -1,4 +1,4 @@
-﻿#include "Component/TextInput.h"
+#include "Component/TextInput.h"
 #include "XCore/Input/MapCode.h"
 #include "Widget/FontLibrary.h"
 
@@ -78,15 +78,35 @@ namespace X_Y
         }
     }
 
-    void TextInput::OnKeyDown(Input_t::KeyCode key)
+    void TextInput::OnInput(UIInputEvent &e)
     {
-        using namespace Input_t;
+        auto *ke = dynamic_cast<UIKeyEvent *>(&e);
+        if (!ke)
+            return; // 文本输入只关心键盘
+
         if (m_ReadOnly)
             return;
 
+        // 字符输入
+        if (ke->isChar)
+        {
+            const wchar_t ch = ke->ch;
+            if (ch >= 32 && ch != 127)
+            {
+                std::string utf8 = Utf8FromWide(ch);
+                m_Text.insert(m_CursorPos, utf8);
+                m_CursorPos += (int)utf8.size();
+                RequestRepaint();
+                NotifyTextChange();
+            }
+            return;
+        }
+
+        using namespace Input_t;
+        Input_t::KeyCode key = ke->key;
         bool changed = false;
 
-        // 光标按 UTF-8 字符边界步进（不能裸 m_CursorPos++，会切入多字节字符中间）
+        // 光标按 UTF-8 字符边界步进
         auto prevCharStart = [](const std::string &s, int pos)
         {
             if (pos <= 0)
@@ -101,7 +121,7 @@ namespace X_Y
             if (pos >= (int)s.size())
                 return (int)s.size();
             int p = pos;
-            p++; // 越过首字节
+            p++;
             while (p < (int)s.size() && ((unsigned char)s[p] & 0xC0) == 0x80)
                 p++;
             return p;
@@ -119,7 +139,6 @@ namespace X_Y
             m_CursorPos = 0;
             break;
         case Key::Enter:
-            // 回车：通知外部（如“添加到筛选规则”），不清空文本，由外部决定
             if (OnEnter)
                 OnEnter();
             break;
@@ -156,25 +175,7 @@ namespace X_Y
         }
         else
         {
-            // 光标移动也需重绘（光标位置变了）
             RequestRepaint();
-        }
-    }
-
-    void TextInput::OnChar(wchar_t ch)
-    {
-        if (m_ReadOnly)
-            return;
-
-        // 只接收可见字符（含中文等非 ASCII）；控制字符已由 OnKeyDown/系统处理
-        if (ch >= 32 && ch != 127)
-        {
-            std::string utf8 = Utf8FromWide(ch);
-            // 按字节偏移插入（m_Text 是 UTF-8）
-            m_Text.insert(m_CursorPos, utf8);
-            m_CursorPos += (int)utf8.size();
-            RequestRepaint();
-            NotifyTextChange();
         }
     }
 

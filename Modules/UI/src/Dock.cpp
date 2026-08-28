@@ -17,6 +17,7 @@ namespace X_Y
         m_LayoutW = w;
         m_LayoutH = h;
         RecalcRect();
+        ShowActivePanel();   // 重排后同步激活 Panel 的布局矩形
     }
 
     void Dock::RecalcRect()
@@ -86,17 +87,66 @@ namespace X_Y
 
     Panel *Dock::HitTestPanel(int x, int y) const
     {
-        if (m_ActiveIndex < 0 || m_ActiveIndex >= (int)m_Panels.size())
+        // x/y 为 dock 内坐标(原点 dock 左上)；tab 栏区域不算面板内容
+        if (y < kTabBarHeight)
             return nullptr;
-        Panel *p = m_Panels[m_ActiveIndex];
+        Panel *p = GetActivePanel();
+        if (!p)
+            return nullptr;
+        // panel 在 dock 内的位置 = 自身布局矩形减去 dock 左上
+        const int px0 = p->GetX() - m_X;
+        const int py0 = p->GetY() - m_Y;
+        const int pw = p->GetWidth(), ph = p->GetHeight();
+        if (x >= px0 && x < px0 + pw && y >= py0 && y < py0 + ph)
+            return p;
+        return nullptr;
+    }
+
+    // ── 输入：命中 tab 栏切 tab；否则下传给激活 Panel ──
+    void Dock::RouteInput(UIInputEvent &e)
+    {
+        // e.x/e.y 为 dock 内坐标（0,0 = dock 左上，由 DockLayout 平移好）
+        if (auto *me = dynamic_cast<UIMouseEvent *>(&e))
+        {
+            if (me->action == MouseAction::Press && e.y >= 0 && e.y < kTabBarHeight)
+            {
+                const int tabW = 120;
+                int x0 = 0;
+                const int n = (int)m_Panels.size();
+                for (int i = 0; i < n; ++i)
+                {
+                    if (e.x >= x0 && e.x < x0 + tabW)
+                    {
+                        if (i != m_ActiveIndex)
+                            ActivatePanel(i);
+                        e.Handled = true;
+                        return;
+                    }
+                    x0 += tabW;
+                }
+            }
+        }
+
+        // 键盘事件：无坐标意义，直接下传给激活 Panel（Panel 内部走焦点）
+        if (dynamic_cast<UIKeyEvent *>(&e))
+        {
+            Panel *p = GetActivePanel();
+            if (p)
+                p->OnInput(e);
+            return;
+        }
+
+        Panel *p = HitTestPanel(e.x, e.y);
         if (p)
         {
-            const int px = p->GetX(), py = p->GetY();
-            const int pw = p->GetWidth(), ph = p->GetHeight();
-            if (x >= px && x < px + pw && y >= py && y < py + ph)
-                return p;
+            const int px0 = p->GetX() - m_X;   // panel 相对 dock 的偏移
+            const int py0 = p->GetY() - m_Y;
+            e.x -= px0;
+            e.y -= py0;
+            p->OnInput(e);
+            e.x += px0;
+            e.y += py0;
         }
-        return nullptr;
     }
 
     // ── 面板管理 ──
