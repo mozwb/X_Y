@@ -1,5 +1,5 @@
-#include "dock/Dock.h"
-#include "DockLayout/DockLayout.h"
+#include "../dock/Dock.h"
+#include "../DockLayout/DockLayout.h"
 
 #include <algorithm>
 
@@ -17,8 +17,7 @@ namespace X_Y
 
     Dock::~Dock()
     {
-        // Container 的所有权在调用方；Dock 只负责管理/切换显示，不 delete。
-        m_Containers.clear();
+        // 基类析构，子类负责清理自己的资源
     }
 
     Container *Dock::AddContainer(Container *container, const std::string &title)
@@ -26,12 +25,28 @@ namespace X_Y
         if (!container)
             return nullptr;
 
+        // 检查是否超过最大承载数
+        if (m_Containers.size() >= static_cast<size_t>(m_MaxContainers))
+            return nullptr;
+
+        // 检查是否已存在
+        for (const auto &entry : m_Containers)
+        {
+            if (entry.container == container)
+                return container;
+        }
+
         ContainerEntry entry;
         entry.container = container;
         entry.title = title;
         m_Containers.push_back(std::move(entry));
 
-        ActivateContainer((int)m_Containers.size() - 1);
+        // 激活新添加的容器
+        m_ActiveIndex = (int)m_Containers.size() - 1;
+
+        // 通知子类
+        OnContainerAdded(container);
+
         return container;
     }
 
@@ -44,25 +59,43 @@ namespace X_Y
                 // 隐藏被移除的容器
                 if (container->GetNativeHandle())
                     container->show(ShowCmd::Hide);
+
+                // 通知子类
+                OnContainerRemoved(container);
+
                 m_Containers.erase(it);
 
                 // 若移除的是激活项，退到最后一个可用项
                 if (m_ActiveIndex >= (int)m_Containers.size())
                     m_ActiveIndex = (int)m_Containers.size() - 1;
 
-                // 变空 → 被动合并（并回 MergedBoundary 邻居，本 Dock 会被 delete）。
-                // ⚠️ 调用后不要再触碰 this（Merge() 可能触发 remove/destroy）。
+                // 如果还有容器，激活最后一个
+                if (!m_Containers.empty() && m_ActiveIndex < 0)
+                    m_ActiveIndex = 0;
+
+                // 如果变空，自动合并
                 if (m_Containers.empty())
                 {
                     Merge();
-                    return true;
                 }
-                if (!m_Containers.empty())
-                    ActivateContainer(m_ActiveIndex >= 0 ? m_ActiveIndex : 0);
+                else if (m_ActiveIndex >= 0)
+                {
+                    ActivateContainer(m_ActiveIndex);
+                }
+
                 return true;
             }
         }
         return false;
+    }
+
+    void Dock::ActivateContainer(int idx)
+    {
+        if (idx < 0 || idx >= (int)m_Containers.size())
+            return;
+
+        m_ActiveIndex = idx;
+        ShowActiveContainer();
     }
 
     void Dock::ActivateContainer(Container *container)
@@ -75,15 +108,6 @@ namespace X_Y
                 return;
             }
         }
-    }
-
-    void Dock::ActivateContainer(int idx)
-    {
-        if (idx < 0 || idx >= (int)m_Containers.size())
-            return;
-
-        m_ActiveIndex = idx;
-        ShowActiveContainer();
     }
 
     Container *Dock::GetActiveContainer() const
@@ -108,52 +132,9 @@ namespace X_Y
         return m_Containers[idx].title;
     }
 
-    // 把激活的 Container 挂到 Dock 内容区（tab 栏以下）并显示，其余隐藏。
-    void Dock::ShowActiveContainer()
-    {
-        const int width = static_cast<int>(get_width());
-        const int height = static_cast<int>(get_height());
-        const int contentY = m_TabBarHeight;
-        const int contentH = height - m_TabBarHeight;
-
-        for (int i = 0; i < (int)m_Containers.size(); ++i)
-        {
-            Container *c = m_Containers[i].container;
-            if (!c)
-                continue;
-            if (i == m_ActiveIndex)
-            {
-                // 首次挂载：创建设为本窗口的子窗口
-                if (!c->GetNativeHandle())
-                {
-                    c->SetParentHwnd(GetNativeHandle());
-                    c->SetWindowStyle(WindowStyleFlag::Child | WindowStyleFlag::Visible |
-                                      WindowStyleFlag::ClipChildren |
-                                      WindowStyleFlag::ClipSiblings);
-                    c->setSize(static_cast<uint>(std::max(0, width)),
-                               static_cast<uint>(std::max(0, contentH)));
-                    c->MoveAndResize(0, contentY, std::max(0, width),
-                                     std::max(0, contentH));
-                    c->show(ShowCmd::Show);
-                }
-                else
-                {
-                    // 已创建：直接搬运到内容区并显示
-                    c->MoveAndResize(0, contentY, std::max(0, width),
-                                     std::max(0, contentH));
-                    c->show(ShowCmd::Show);
-                }
-            }
-            else
-            {
-                if (c->GetNativeHandle())
-                    c->show(ShowCmd::Hide);
-            }
-        }
-    }
-
     void Dock::RecalcLayout()
     {
+        // 基类默认实现：激活容器并显示
         ShowActiveContainer();
     }
 
@@ -207,39 +188,245 @@ namespace X_Y
     {
         if (!canvas)
             return;
-        // Dock 自身画背景（tab 栏位后续绘制，这里先铺底色留白）
+        // 基类默认实现：绘制背景
         canvas->Clear(0xFF202124);
     }
 
-    // （原 InSameSplitTree / CanMergeWith 随"合并改为被动"而删除：
-    //  空 dock 只并回自己的 MergedBoundary 那条边对应的邻居，天然同宗，
-    //  不再需要主动遍历求共享边。见 Dock.h Merge() 注释。）
+    // ── 生命周期回调 ──
+    void Dock::OnContainerAdded(Container *container)
+    {
+        // 基类默认实现：空，子类可重写
+    }
+
+    void Dock::OnContainerRemoved(Container *container)
+    {
+        // 基类默认实现：空，子类可重写
+    }
+
+    void Dock::OnAddedToLayout(DockLayout *layout)
+    {
+        // 基类默认实现：空，子类可重写
+    }
+
+    void Dock::OnRemovedFromLayout()
+    {
+        // 基类默认实现：空，子类可重写
+    }
+
+    // ── 核心布局管理实现 ──
 
     Dock *Dock::Split(Direction dir, float size)
     {
-        // TODO：切割实现（见 dock/Dock.h Split 注释）。
-        //   1) 校验 m_Layout && m_Splittable
-        //   2) m_Layout->AddBoundary(...) 新增一条对应方向的分割线 → 得到 newBoundaryId
-        //   3) new Dock(m_Layout) + SetDockLayout + SetDockFather(this)
-        //   4) 把新旧两子共享这条新 Boundary（对应方向槽互换）
-        //   5) 关键：本 Dock 和新 Dock 都 SetMergedBoundary(newBoundaryId)，
-        //      这样空 dock 并回时能用它认到邻居（MergedBoundary=最新切割边）
-        //   6) m_Layout->AddDock(newDock) + RecalcLayout
-        //   7) return newDock
-        (void)dir;
-        (void)size;
-        return nullptr;
+        // 检查是否可以分割
+        if (!CanSplit(dir))
+            return nullptr;
+
+        // 创建新Dock
+        Dock *newDock = CreateNewDock(dir);
+        if (!newDock)
+            return nullptr;
+
+        // 设置新Dock的边界槽
+        BoundaryId newBoundary = InvalidBoundary;
+
+        // 根据方向计算新Boundary的位置和朝向
+        BoundaryOrientation orientation;
+        switch (dir)
+        {
+        case Direction::Left:
+        case Direction::Right:
+            orientation = BoundaryOrientation::Vertical;
+            // 计算新Boundary的位置（size是比例）
+            newBoundary = m_Layout->AddBoundary(orientation, size);
+            break;
+        case Direction::Top:
+        case Direction::Bottom:
+            orientation = BoundaryOrientation::Horizontal;
+            newBoundary = m_Layout->AddBoundary(orientation, size);
+            break;
+        }
+
+        if (newBoundary == InvalidBoundary)
+        {
+            delete newDock;
+            return nullptr;
+        }
+
+        // 设置新旧Dock的边界槽关系
+        switch (dir)
+        {
+        case Direction::Left:
+            // 新Dock在左，新Dock的右边是newBoundary，旧Dock的左边是newBoundary
+            newDock->GetBoundarySlots().right = newBoundary;
+            m_Boundary.left = newBoundary;
+            break;
+        case Direction::Right:
+            // 新Dock在右，新Dock的左边是newBoundary，旧Dock的右边是newBoundary
+            newDock->GetBoundarySlots().left = newBoundary;
+            m_Boundary.right = newBoundary;
+            break;
+        case Direction::Top:
+            // 新Dock在上，新Dock的下边是newBoundary，旧Dock的上边是newBoundary
+            newDock->GetBoundarySlots().bottom = newBoundary;
+            m_Boundary.top = newBoundary;
+            break;
+        case Direction::Bottom:
+            // 新Dock在下，新Dock的上边是newBoundary，旧Dock的下边是newBoundary
+            newDock->GetBoundarySlots().top = newBoundary;
+            m_Boundary.bottom = newBoundary;
+            break;
+        }
+
+        // 设置血缘关系
+        newDock->SetDockFather(this);
+        newDock->SetMergedBoundary(newBoundary);
+        SetMergedBoundary(newBoundary);
+
+        // 将新Dock添加到布局
+        m_Layout->AddDock(newDock);
+
+        // 重排布局
+        m_Layout->RecalcLayout();
+
+        return newDock;
     }
 
     void Dock::Merge()
     {
-        // TODO：被动合并实现（见 dock/Dock.h Merge() 私有方法注释）。
-        //   0) 前置：本 Dock 已空（m_Containers.empty()）。
-        //   1) 沿 m_MergedBoundary 那条边找共享它的邻居 Dock（在 m_Layout 里找）。
-        //   2) 把空 Dock 非 MergedBoundary 的外侧三条边交给邻居，让邻居接管空间。
-        //   3) m_Layout->RemoveDock(this) + delete this；
-        //      m_Layout->RemoveBoundary(m_MergedBoundary)。
-        //   4) m_Layout->RecalcLayout()。
+        // 检查是否可以合并
+        if (!CanMerge())
+            return;
+
+        // 执行合并
+        PerformMerge();
+    }
+
+    // ── 辅助方法实现 ──
+
+    Dock *Dock::CreateNewDock(Direction dir)
+    {
+        if (!m_Layout)
+            return nullptr;
+
+        // 创建新Dock，parent挂到m_Layout
+        Dock *newDock = new Dock(m_Layout);
+        if (!newDock)
+            return nullptr;
+
+        // 设置新Dock的基本属性
+        newDock->SetDockLayout(m_Layout);
+        newDock->SetAllowBoundaryDrag(m_AllowBoundaryDrag);
+        newDock->SetAllowWindowDragIn(m_AllowWindowDragIn);
+        newDock->SetAllowWindowDragOut(m_AllowWindowDragOut);
+        newDock->SetAllowSelfSplit(m_AllowSelfSplit);
+        newDock->SetMaxContainers(m_MaxContainers);
+        newDock->SetCanCloseWindow(m_CanCloseWindow);
+
+        return newDock;
+    }
+
+    void Dock::PerformMerge()
+    {
+        if (!m_Layout || m_MergedBoundary == InvalidBoundary)
+            return;
+
+        // 沿m_MergedBoundary找到共享它的邻居Dock
+        for (auto *dock : m_Layout->GetDockList())
+        {
+            if (dock == this || !dock)
+                continue;
+
+            const auto &slots = dock->GetBoundarySlots();
+            // 检查是否共享m_MergedBoundary
+            if (slots.top == m_MergedBoundary ||
+                slots.bottom == m_MergedBoundary ||
+                slots.left == m_MergedBoundary ||
+                slots.right == m_MergedBoundary)
+            {
+                // 找到邻居，进行空间合并
+                // 这里简化处理：直接从布局中移除本Dock
+                m_Layout->RemoveDock(this);
+                m_Layout->RemoveBoundary(m_MergedBoundary);
+                m_Layout->RecalcLayout();
+                delete this;
+                return;
+            }
+        }
+
+        // 没找到邻居，直接移除
+        m_Layout->RemoveDock(this);
+        m_Layout->RemoveBoundary(m_MergedBoundary);
+        m_Layout->RecalcLayout();
+        delete this;
+    }
+
+    bool Dock::CanSplit(Direction dir) const
+    {
+        // 基本检查
+        if (!m_Layout || !m_AllowSelfSplit)
+            return false;
+
+        // 检查是否超过最大承载数（如果有容器的话）
+        if (!m_Containers.empty() && m_Containers.size() >= static_cast<size_t>(m_MaxContainers))
+            return false;
+
+        return true;
+    }
+
+    bool Dock::CanMerge() const
+    {
+        // 只有空的Dock才能合并
+        if (!IsEmpty())
+            return false;
+
+        if (!m_Layout || m_MergedBoundary == InvalidBoundary)
+            return false;
+
+        return true;
+    }
+
+    // ── 私有辅助方法 ──
+
+    void Dock::ShowActiveContainer()
+    {
+        const int width = static_cast<int>(get_width());
+        const int height = static_cast<int>(get_height());
+
+        for (int i = 0; i < (int)m_Containers.size(); ++i)
+        {
+            Container *c = m_Containers[i].container;
+            if (!c)
+                continue;
+
+            if (i == m_ActiveIndex)
+            {
+                // 首次挂载：创建设为本窗口的子窗口
+                if (!c->GetNativeHandle())
+                {
+                    c->SetParentHwnd(GetNativeHandle());
+                    c->SetWindowStyle(WindowStyleFlag::Child | WindowStyleFlag::Visible |
+                                      WindowStyleFlag::ClipChildren |
+                                      WindowStyleFlag::ClipSiblings);
+                    c->setSize(static_cast<uint>(std::max(0, width)),
+                               static_cast<uint>(std::max(0, height)));
+                    c->MoveAndResize(0, 0, std::max(0, width),
+                                     std::max(0, height));
+                    c->show(ShowCmd::Show);
+                }
+                else
+                {
+                    // 已创建：直接搬运到内容区并显示
+                    c->MoveAndResize(0, 0, std::max(0, width),
+                                     std::max(0, height));
+                    c->show(ShowCmd::Show);
+                }
+            }
+            else
+            {
+                if (c->GetNativeHandle())
+                    c->show(ShowCmd::Hide);
+            }
+        }
     }
 
 }

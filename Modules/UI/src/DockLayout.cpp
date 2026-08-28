@@ -1,4 +1,4 @@
-#include "DockLayout/DockLayout.h"
+#include "../DockLayout/DockLayout.h"
 #include "Movement/MouseMovement.h"
 #include "Widget/Application.h"
 
@@ -50,13 +50,23 @@ namespace X_Y
         boundary.orientation = orientation;
         boundary.status = status;
         boundary.line = ClampT(line);
+
+        // 优先复用已移除的槽位（墓碑稳定id方案）
+        BoundaryId id = FindAvailableBoundarySlot();
+        if (id != InvalidBoundary)
+        {
+            m_Boundaries[id] = boundary;
+            return id;
+        }
+
+        // 没有可用槽位，新增
         m_Boundaries.push_back(boundary);
         return m_Boundaries.size() - 1;
     }
 
     bool DockLayout::IsValidBoundary(BoundaryId id) const
     {
-        return id < m_Boundaries.size();
+        return id < m_Boundaries.size() && !m_Boundaries[id].removed;
     }
 
     // 左右方向：槽→垂直 boundary 的像素 x，或贴外框（0 = 左缘 / 宽 = 右缘）
@@ -176,9 +186,8 @@ namespace X_Y
                 slots.right = InvalidBoundary;
         }
 
-        // 移除，后续 id 全部 +... 这里因标号引用可能失效，调用方需自行重绑。
-        // 当前实现按"移最后一条也允许"的简化处理（一般 merge 才会删）。
-        m_Boundaries.erase(m_Boundaries.begin() + static_cast<std::ptrdiff_t>(id));
+        // 墓碑稳定id方案：标记为removed而非删除，保持id稳定
+        m_Boundaries[id].removed = true;
         RecalcLayout();
         RequestRepaint();
         return true;
@@ -306,7 +315,7 @@ namespace X_Y
         for (BoundaryId id = 0; id < m_Boundaries.size(); ++id)
         {
             const auto &boundary = m_Boundaries[id];
-            if (boundary.status != BoundaryStatus::Movable)
+            if (boundary.removed || boundary.status != BoundaryStatus::Movable)
                 continue;
             const int position = BoundaryPosition(id);
             const bool hit = boundary.orientation == BoundaryOrientation::Vertical
@@ -331,8 +340,12 @@ namespace X_Y
     {
         if (m_DraggingBoundary != InvalidBoundary)
         {
-            m_DraggingBoundary = InvalidBoundary;
-            RequestRepaint(); // 异步重绘；恢复普通 color
+            // 检查正在拖动的boundary是否已被移除（理论上不应该发生，但防御性检查）
+            if (m_DraggingBoundary < m_Boundaries.size() && !m_Boundaries[m_DraggingBoundary].removed)
+            {
+                m_DraggingBoundary = InvalidBoundary;
+                RequestRepaint(); // 异步重绘；恢复普通 color
+            }
         }
     }
 
@@ -367,7 +380,9 @@ namespace X_Y
         if (isMove)
         {
             // 拖动中：按边界方向取增量并移动
-            if (m_DraggingBoundary == InvalidBoundary)
+            if (m_DraggingBoundary == InvalidBoundary ||
+                m_DraggingBoundary >= m_Boundaries.size() ||
+                m_Boundaries[m_DraggingBoundary].removed)
                 return false;
             const bool vertical = m_Boundaries[m_DraggingBoundary].orientation ==
                                   BoundaryOrientation::Vertical;
@@ -387,7 +402,7 @@ namespace X_Y
                 if (extent > 0)
                     bd.line = std::clamp(bd.line + static_cast<float>(delta) / extent,
                                          bd.min, bd.max);
-                RecalcLayout();        // 先重排 dock
+                RecalcLayout();              // 先重排 dock
                 RedrawBoundaryLines(oldPos); // 再局部上屏（当前窄带 ∪ 旧位置窄带）
             }
 
@@ -440,6 +455,9 @@ namespace X_Y
         for (BoundaryId id = 0; id < m_Boundaries.size(); ++id)
         {
             const auto &boundary = m_Boundaries[id];
+            if (boundary.removed)
+                continue;
+
             const int position = BoundaryPosition(id);
             // 拖中使用 dragcolor，否则 color。⚠️ 都要带不透明 alpha(0xFF 高位)，
             // 否则 FillRect 会把它当 ARGB 全透明 → 线消失（历史根因：draggingColor=0xFFFFFF 透明）。
@@ -478,6 +496,9 @@ namespace X_Y
         for (BoundaryId id = 0; id < m_Boundaries.size(); ++id)
         {
             const auto &b = m_Boundaries[id];
+            if (b.removed)
+                continue;
+
             const int pos = BoundaryPosition(id);
             if (b.orientation == BoundaryOrientation::Vertical)
             {
@@ -485,8 +506,10 @@ namespace X_Y
                 const int e = static_cast<int>(b.end * height);
                 const int rx = pos - thickness / 2, rw = thickness;
                 const int ry = s, rh = std::max(1, e - s);
-                minX = std::min(minX, rx); maxX = std::max(maxX, rx + rw);
-                minY = std::min(minY, ry); maxY = std::max(maxY, ry + rh);
+                minX = std::min(minX, rx);
+                maxX = std::max(maxX, rx + rw);
+                minY = std::min(minY, ry);
+                maxY = std::max(maxY, ry + rh);
             }
             else
             {
@@ -494,8 +517,10 @@ namespace X_Y
                 const int e = static_cast<int>(b.end * width);
                 const int rx = s, rw = std::max(1, e - s);
                 const int ry = pos - thickness / 2, rh = thickness;
-                minX = std::min(minX, rx); maxX = std::max(maxX, rx + rw);
-                minY = std::min(minY, ry); maxY = std::max(maxY, ry + rh);
+                minX = std::min(minX, rx);
+                maxX = std::max(maxX, rx + rw);
+                minY = std::min(minY, ry);
+                maxY = std::max(maxY, ry + rh);
             }
             any = true;
         }
@@ -522,7 +547,8 @@ namespace X_Y
         if (!BoundaryRectsBounds(bx, by, bw, bh))
             return;
 
-        if (includeOldPos >= 0 && IsValidBoundary(m_DraggingBoundary))
+        if (includeOldPos >= 0 && m_DraggingBoundary != InvalidBoundary &&
+            m_DraggingBoundary < m_Boundaries.size() && !m_Boundaries[m_DraggingBoundary].removed)
         {
             // 旧位置窄带：与 BoundaryRectsBounds 对单条边界的算法一致（thickness=2）
             constexpr int thickness = 2;
@@ -554,6 +580,20 @@ namespace X_Y
         }
 
         FlushArea(bx, by, bw, bh);
+    }
+
+    // 查找可用的boundary槽位（优先复用已移除的墓碑，没有则新增）
+    BoundaryId DockLayout::FindAvailableBoundarySlot()
+    {
+        // 优先查找已移除的槽位
+        for (BoundaryId id = 0; id < m_Boundaries.size(); ++id)
+        {
+            if (m_Boundaries[id].removed)
+                return id;
+        }
+
+        // 没有可复用的墓碑槽位，返回InvalidBoundary表示需要新增
+        return InvalidBoundary;
     }
 
 }

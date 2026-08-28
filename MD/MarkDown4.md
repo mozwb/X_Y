@@ -5,7 +5,9 @@
 - [目录](#目录)
 - [总述](#总述)
 - [Container](#container)
-- [dock](#dock)
+- [dock系统](#dock系统)
+  - [docklayout](#docklayout)
+  - [dock](#dock)
 - [composite](#composite)
 - [Component](#component)
 - [总结](#总结)
@@ -61,10 +63,17 @@
 ```
 所以事件链就多了一层，到了container在分发全局事件之后，理论来讲就是组件内部的事件系统（但是由于目前还没用上，所以就还是普通的传参调用），这样子避免内部组件树的事件污染全局事件系统，也方便事件管理
 
-# dock
+# dock系统
 
 - 本质就是想实现悬浮面板，让多个composite(实质是container)可以在一个dock里自由布局组合
-  
+
+## docklayout
+- 负责划分dock区域，规划dock布局
+
+## dock 
+
+- 负责两个职能，基类dock提供基础的dock管理方法，比如将一个dock进行切割或者合并同宗的dock
+- 子类负责根据实际情况设计UI和具体功能
 # composite 
 
 - 其实就是实现一个小功能的窗口程序，本质继承与Container

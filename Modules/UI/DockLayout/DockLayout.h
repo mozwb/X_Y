@@ -51,6 +51,8 @@ namespace X_Y
         bool DockBind(Dock &dock, BoundaryId top, BoundaryId bottom,
                       BoundaryId left, BoundaryId right);
         void RemoveDock(Dock *dock);
+        // 获取所有Dock列表（供子类使用）
+        const std::vector<Dock*>& GetDockList() const { return m_Docks; }
 
         void SetBackgroundColor(uint32_t color);
         uint32_t GetBackgroundColor() const { return m_BackgroundColor; }
@@ -92,6 +94,8 @@ namespace X_Y
 
         bool IsValidBoundary(BoundaryId id) const;
         int BoundaryPosition(BoundaryId id) const;
+        // 查找可用的boundary槽位（优先复用已移除的墓碑，没有则新增）
+        BoundaryId FindAvailableBoundarySlot();
         // 把某个边界槽解析为布局里的像素坐标（InvalidBoundary=贴外框）
         int HorizontalSidePosition(BoundaryId id, bool isRight) const;
         int VerticalSidePosition(BoundaryId id, bool isBottom) const;
