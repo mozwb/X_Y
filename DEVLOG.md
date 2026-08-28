@@ -1,3 +1,37 @@
+# DEVLOG
+
+## 2026-08-25 — UI 解耦重构（第一阶段：确认方向 + Panel + 壳 Container + 删旧 dock）
+
+> 砚台拍板大改 UI：**UI 层彻底与 XWidget 解耦**。重构中途有重要方向澄清（砚台纠偏后定案）：
+> - 砚台原设想「ShellWidget + Panel」；澄清后确定：**旧的 Container(XWidget 窗口容器) 就是 ShellWidget（壳），保留 Container 类名**，不删。
+> - 壳（Container）持有 Panel*（组合关系）→ 壳管窗口/画布/布局/系统消息，内容绘制委托给 Panel。
+> - **PanelDock / SimpleDock / MultiWindowDock 是旧无用代码，直接删除**（砚台指定）。
+> - **LogViewer / HexViewer 是旧 Container 的派生类，先不动**，正好当作"改造后的壳"的示例（继承 Container 即天然既能当独立窗口又能进 Dock 面板，靠设置父窗口决定身份）。
+> - 错误尝试：曾把旧 Container 类改名 PanelLegacy → 砚台指出不对，已恢复为 Container。
+
+### 架构（本次定稿）
+```
+Container （壳，: public XWidget，保留旧类名）
+   ├── [可选] 持有 Panel*  → 内容委托（纯逻辑内容单元）
+   ├── 自身也能 AddComponent 管理组件（旧路径，LogViewer/HexViewer override 用）
+   └── 窗口能力保留（画布 / Movement 事件转发）
+Panel （纯逻辑，无 HWND，不认宿主）
+   ├── AddComponent / SetLayoutRect / OnPaint(Canvas&)
+   └── DispatchMouse*/KeyDown/Char/Scrolled（输入转发，UI 私有事件系统前置）
+```
+
+### 改动文件（本次）
+- 新 `Modules/UI/Panel/Panel.h` + `Modules/UI/src/Panel.cpp`：纯逻辑内容单元（布局矩形 + 组件管理 + 绘制 + 输入转发）。
+- 改 `Modules/UI/Container/Container.h` + `src/Container.cpp`：旧 Container 改造为壳——保留名字，加 `SetPanel(Panel*)`；`OnPaint` 优先委托给 Panel。
+- 删 `src/SimpleDock.cpp` `src/PanelDock.cpp` `src/MultiWindowDock.cpp` → 旧无用 dock 类移除。
+- LogViewer / HexViewer：未动（仍继承 Container，作为壳示例）。
+
+### 待办（后续迭代）
+- [ ] Panel 的输入接入壳：Container 收到 Movement → 转发给挂载的 Panel（当前只做了绘制委托）
+- [ ] Docker 系统（Dock/DockLayout）纯逻辑化：从 XWidget 改成纯逻辑，由壳喂画布/布局
+- [ ] 拖外部窗口进 Dock：让渡 Panel（DetachPanel → Dock TakePanel → 壳销毁）
+- [ ] UI 私有事件系统（MarkDown4 分析）单独接
+
 ## 2026-08-18 — Dock 停靠系统重构为四层（DockLayout→Dock→Container→Component）
 
 > 与砚台讨论定案。原来 Dock 系统是四层+一 Panel（DockPanel），砚台主张把 Panel 合并进 Dock，简化为四层：顶层 `DockLayout`（集中式 boundary 管理 Dock）→ `Dock`（一个区域，直接持有多个 Container 做 tab 切换，预留 tab 栏位置暂不画）→ `Container`（有 HWND 内容容器）→ `Component`（轻量绘制单元）。

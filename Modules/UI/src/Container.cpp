@@ -1,5 +1,6 @@
-﻿#include "Container/Container.h"
+#include "Container/Container.h"
 #include "Component/Component.h"
+#include "Panel/Panel.h"
 #include "Movement/KeyMovement.h"
 #include "Movement/MouseMovement.h"
 #include "Widget/Dpi.h"
@@ -184,6 +185,22 @@ namespace X_Y
         m_Components.clear();
     }
 
+    void Container::SetPanel(Panel *panel)
+    {
+        m_Panel = panel;
+        if (m_Panel)
+        {
+            // 把 Panel 的重绘请求接回本壳：内容要刷 → 壳请求窗口重绘
+            m_Panel->SetHostRepaint([this]()
+                                    { RequestRepaint(); });
+            // 布局矩形：初始取当前窗口客户区（后续窗口 resize 时由外部同步）
+            m_Panel->SetLayoutRect(0, 0,
+                                   static_cast<int>(get_width()),
+                                   static_cast<int>(get_height()));
+            RequestRepaint();
+        }
+    }
+
     Component *Container::HitTest(int x, int y)
     {
         for (auto it = m_Components.rbegin(); it != m_Components.rend(); ++it)
@@ -203,6 +220,13 @@ namespace X_Y
 
     void Container::OnPaint(Canvas *canvas)
     {
+        // 壳委托：若挂有纯逻辑内容层 Panel，整棵内容交给它画
+        if (m_Panel)
+        {
+            m_Panel->OnPaint(*canvas);
+            return;
+        }
+
         for (auto *comp : m_Components)
         {
             if (comp->IsVisible())
