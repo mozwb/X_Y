@@ -1,6 +1,8 @@
 # DEVLOG
 
-## 2026-08-25 — UI 事件：泛型 HitTest 路由 + 事件对象化全链路（砚台决策）
+> 📌 下一个会话接手 UI 重构任务前，先读 `_notes/arch/UI_REWORK_HANDOFF.md`（新架构 + 任务 A【迁移 LogViewer/HexViewer】 + 任务 B【拖入拖出 DetachPanel/TakePanel】的完整说明）。
+
+## 2026-08-25（收工）— UI 事件：泛型 HitTest 路由 + 事件对象化全链路（砚台决策）
 
 > 砚台定：**不做独立 UIEvent 框架，做统一的 HitTest 路由**。鼠标是"单指针→单目标"，命中路由是物理事实；
 > Connect 广播解决"全体通知"，两者正交。方案：一套"壳→DockLayout→Dock→Panel→Component"的事件对象下传。
