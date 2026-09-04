@@ -1,6 +1,6 @@
 #pragma once
 
-#include "UI/Container/Container.h"
+#include "UI/Panel/Panel.h"
 #include "XCore/FilesSystem/FilesSystem.h"
 #include <cstddef>
 #include <memory>
@@ -12,10 +12,10 @@ namespace X_Y
     class Horizontal;
     class ScrollArea;
 
-    class HexViewer final : public Container
+    class HexViewer final : public Panel
     {
     public:
-        explicit HexViewer(XWidget *parent = nullptr);
+        HexViewer();
         ~HexViewer() override;
 
         bool OpenFile(const XPath &path);
@@ -25,7 +25,11 @@ namespace X_Y
         const XPath &GetActiveFile() const { return m_ActiveFile; }
 
     protected:
-        void OnPaint(Canvas *canvas) override;
+        void OnLayout() override;
+        void OnPaint(Canvas &canvas) override;
+        void OnFileDragEnter(const std::vector<XPath> &files, int x, int y) override;
+        void OnFileDragOver(const std::vector<XPath> &files, int x, int y) override;
+        void OnFileDragLeave() override;
         void OnFileDrop(const std::vector<XPath> &files, int x, int y) override;
 
     private:
@@ -34,8 +38,6 @@ namespace X_Y
         void ActivateFile(std::size_t index);
         void CloseFile(std::size_t index);
         void ProcessPendingClose();
-        void LayoutChildren();
-
         std::unique_ptr<Horizontal> m_FileBar;
         std::unique_ptr<ScrollArea> m_ScrollArea;
         std::unique_ptr<BinaryContent> m_Content;
@@ -43,6 +45,7 @@ namespace X_Y
         std::vector<XPath> m_Files;
         XPath m_ActiveFile;
         bool m_UpdatingSelection = false;
+        bool m_FileDragHover = false;
         std::size_t m_PendingClose = static_cast<std::size_t>(-1);
 
         static constexpr int kFileBarHeight = 28;

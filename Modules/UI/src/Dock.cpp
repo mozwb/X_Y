@@ -17,7 +17,14 @@ namespace X_Y
         m_LayoutW = w;
         m_LayoutH = h;
         RecalcRect();
-        ShowActivePanel();   // 重排后同步激活 Panel 的布局矩形
+        if (!m_PanelAreaCustomized)
+        {
+            m_PanelX = 0;
+            m_PanelY = m_MenuBarHeight;
+            m_PanelW = m_W;
+            m_PanelH = std::max(0, m_H - m_MenuBarHeight);
+        }
+        ShowActivePanel(); // 重排后同步激活 Panel 的布局矩形
     }
 
     void Dock::RecalcRect()
@@ -30,7 +37,7 @@ namespace X_Y
             const Boundary *b = m_Layout->GetBoundary(id);
             return b ? b->width / 2 : 0;
         };
-        auto sidePix = [&](BoundaryId id, bool isRight)->int
+        auto sidePix = [&](BoundaryId id, bool isRight) -> int
         {
             const Boundary *b = m_Layout->GetBoundary(id);
             if (b)
@@ -50,6 +57,38 @@ namespace X_Y
             m_W = right - left;
             m_H = bottom - top;
         }
+    }
+
+    void Dock::SetPanelArea(int x, int y, int w, int h)
+    {
+        m_PanelX = x;
+        m_PanelY = y;
+        m_PanelW = std::max(0, w);
+        m_PanelH = std::max(0, h);
+        m_PanelAreaCustomized = true;
+        ShowActivePanel();
+        RequestRepaint();
+    }
+
+    void Dock::GetPanelArea(int &x, int &y, int &w, int &h) const
+    {
+        x = m_PanelX;
+        y = m_PanelY;
+        w = m_PanelW;
+        h = m_PanelH;
+    }
+
+    void Dock::SetMenuBarHeight(int height)
+    {
+        m_MenuBarHeight = std::max(0, height);
+        if (!m_PanelAreaCustomized)
+        {
+            m_PanelY = m_MenuBarHeight;
+            m_PanelW = m_W;
+            m_PanelH = std::max(0, m_H - m_MenuBarHeight);
+        }
+        ShowActivePanel();
+        RequestRepaint();
     }
 
     // ── 边界命中（供拖分割线；布局坐标）──
@@ -78,28 +117,27 @@ namespace X_Y
             return spanCoord >= spanLo && spanCoord <= spanHi;
         };
 
-        if (hitSide(m_Boundary.left, true))  return m_Boundary.left;
-        if (hitSide(m_Boundary.right, true)) return m_Boundary.right;
-        if (hitSide(m_Boundary.top, false))  return m_Boundary.top;
-        if (hitSide(m_Boundary.bottom, false)) return m_Boundary.bottom;
+        if (hitSide(m_Boundary.left, true))
+            return m_Boundary.left;
+        if (hitSide(m_Boundary.right, true))
+            return m_Boundary.right;
+        if (hitSide(m_Boundary.top, false))
+            return m_Boundary.top;
+        if (hitSide(m_Boundary.bottom, false))
+            return m_Boundary.bottom;
         return InvalidBoundary;
     }
 
     Panel *Dock::HitTestPanel(int x, int y) const
     {
-        // x/y 为 dock 内坐标(原点 dock 左上)；tab 栏区域不算面板内容
-        if (y < kTabBarHeight)
+        // x/y 为 dock 内坐标(原点 dock 左上)；菜单栏区域不算面板内容
+        if (x < m_PanelX || x >= m_PanelX + m_PanelW ||
+            y < m_PanelY || y >= m_PanelY + m_PanelH)
             return nullptr;
         Panel *p = GetActivePanel();
         if (!p)
             return nullptr;
-        // panel 在 dock 内的位置 = 自身布局矩形减去 dock 左上
-        const int px0 = p->GetX() - m_X;
-        const int py0 = p->GetY() - m_Y;
-        const int pw = p->GetWidth(), ph = p->GetHeight();
-        if (x >= px0 && x < px0 + pw && y >= py0 && y < py0 + ph)
-            return p;
-        return nullptr;
+        return p;
     }
 
     // ── 输入：命中 tab 栏切 tab；否则下传给激活 Panel ──
@@ -108,7 +146,7 @@ namespace X_Y
         // e.x/e.y 为 dock 内坐标（0,0 = dock 左上，由 DockLayout 平移好）
         if (auto *me = dynamic_cast<UIMouseEvent *>(&e))
         {
-            if (me->action == MouseAction::Press && e.y >= 0 && e.y < kTabBarHeight)
+            if (me->action == MouseAction::Press && e.y >= 0 && e.y < m_MenuBarHeight)
             {
                 const int tabW = 120;
                 int x0 = 0;
@@ -139,7 +177,7 @@ namespace X_Y
         Panel *p = HitTestPanel(e.x, e.y);
         if (p)
         {
-            const int px0 = p->GetX() - m_X;   // panel 相对 dock 的偏移
+            const int px0 = p->GetX() - m_X; // panel 相对 dock 的偏移
             const int py0 = p->GetY() - m_Y;
             e.x -= px0;
             e.y -= py0;
@@ -152,8 +190,9 @@ namespace X_Y
     // ── 面板管理 ──
     Panel *Dock::AddPanel(Panel *panel, const std::string &title)
     {
-        if (!panel)
+        if (!panel || !CanAddPanel())
             return nullptr;
+        panel->SetHostRepaint(m_HostRepaint);
         m_Panels.push_back(panel);
         m_Titles.push_back(title);
         m_ActiveIndex = (int)m_Panels.size() - 1;
@@ -177,6 +216,35 @@ namespace X_Y
             m_ActiveIndex = -1;
         RequestRepaint();
         return true;
+    }
+
+    Panel *Dock::DetachPanel(Panel *panel, std::string *title)
+    {
+        auto it = std::find(m_Panels.begin(), m_Panels.end(), panel);
+        if (it == m_Panels.end())
+            return nullptr;
+
+        const int idx = static_cast<int>(it - m_Panels.begin());
+        if (title)
+            *title = m_Titles[idx];
+
+        m_Panels.erase(it);
+        m_Titles.erase(m_Titles.begin() + idx);
+        if (m_Panels.empty())
+            m_ActiveIndex = -1;
+        else if (m_ActiveIndex > idx)
+            --m_ActiveIndex;
+        else if (m_ActiveIndex >= static_cast<int>(m_Panels.size()))
+            m_ActiveIndex = static_cast<int>(m_Panels.size()) - 1;
+
+        ShowActivePanel();
+        RequestRepaint();
+        return panel;
+    }
+
+    bool Dock::ContainsPanel(const Panel *panel) const
+    {
+        return std::find(m_Panels.begin(), m_Panels.end(), panel) != m_Panels.end();
     }
 
     void Dock::ActivatePanel(int idx)
@@ -225,12 +293,11 @@ namespace X_Y
 
     void Dock::ShowActivePanel()
     {
-        // 让激活面板占据本 Dock 的内容区（去掉 tab 栏高度）
-        const int contentY = m_Y + kTabBarHeight;
-        const int contentH = std::max(0, m_H - kTabBarHeight);
+        // Panel 矩形使用 Dock 内局部坐标，避免 Tab 栏和内容区的坐标约定分裂。
         Panel *active = GetActivePanel();
         if (active)
-            active->SetLayoutRect(m_X, contentY, m_W, contentH);
+            active->SetLayoutRect(m_X + m_PanelX, m_Y + m_PanelY,
+                                  m_PanelW, m_PanelH);
         RequestRepaint();
     }
 
@@ -246,7 +313,7 @@ namespace X_Y
         {
             const bool active = (i == m_ActiveIndex);
             const int tabW = 120;
-            canvas.FillRect(tabX, tabY, tabW, kTabBarHeight,
+            canvas.FillRect(tabX, tabY, tabW, m_MenuBarHeight,
                             active ? 0xFF007ACC : 0xFF3E3E42);
             // 用 Panel 首标/序列做标题占位（标题存 m_Titles）
             // (字体绘制后续接 FontLibrary；先只画色块+索引)

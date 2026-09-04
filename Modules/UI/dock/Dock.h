@@ -1,6 +1,6 @@
 #pragma once
 
-#include "UI/Panel/Panel.h"
+#include "../Panel/Panel.h"
 #include <string>
 #include <vector>
 #include <functional>
@@ -34,16 +34,16 @@ namespace X_Y
     struct Boundary
     {
         BoundaryOrientation orientation = BoundaryOrientation::Vertical;
-        float line = 0.0f;                 // 0~1 相对 t（×布局对应方向尺寸 = 像素位置）
+        float line = 0.0f; // 0~1 相对 t（×布局对应方向尺寸 = 像素位置）
         BoundaryStatus status = BoundaryStatus::Movable;
         uint32_t color = 0xFF909090;
         uint32_t dragcolor = 0xFF00FF00;
         float min = 0.05f;
         float max = 0.95f;
-        int width = 4;                     // 缝隙总宽（两侧各露 width/2）
+        int width = 4; // 缝隙总宽（两侧各露 width/2）
         float start = 0.0f;
         float end = 1.0f;
-        bool removed = false;              // 墓碑
+        bool removed = false; // 墓碑
     };
 
     // 每个 Dock 引用的 4 条边界槽（可与邻居共享同一条）
@@ -67,9 +67,13 @@ namespace X_Y
     class Dock
     {
     public:
-        enum class Direction { Top, Bottom, Left, Right };
-
-        static constexpr int kTabBarHeight = 24;
+        enum class Direction
+        {
+            Top,
+            Bottom,
+            Left,
+            Right
+        };
 
         Dock() = default;
         virtual ~Dock();
@@ -79,7 +83,11 @@ namespace X_Y
 
         // ── 重绘回调（宿主注入）──
         void SetHostRepaint(std::function<void()> cb) { m_HostRepaint = std::move(cb); }
-        void SetDockLayout(DockLayout *layout) { m_Layout = layout; }
+        std::function<void()> GetHostRepaint() const { return m_HostRepaint; }
+        void SetDockLayout(DockLayout *layout)
+        {
+            m_Layout = layout;
+        }
         DockLayout *GetDockLayout() const { return m_Layout; }
 
         // ── 边界槽（由自己的 boundary 定位）──
@@ -88,15 +96,26 @@ namespace X_Y
 
         // ── 布局（宿主喂总尺寸，Dock 由自己边界换算位置矩形）──
         void SetActiveRect(int w, int h);
-        void RecalcRect();   // 用边界 + 布局总尺寸算 m_X/m_Y/m_W/m_H
+        void RecalcRect(); // 用边界 + 布局总尺寸算 m_X/m_Y/m_W/m_H
         int GetX() const { return m_X; }
         int GetY() const { return m_Y; }
         int GetWidth() const { return m_W; }
         int GetHeight() const { return m_H; }
 
+        // ── 面板显示区域 ──
+        // 坐标相对 Dock 左上角；默认区域为整个 Dock（菜单栏由 Dock 自动避让）。
+        void SetPanelArea(int x, int y, int w, int h);
+        void GetPanelArea(int &x, int &y, int &w, int &h) const;
+
+        // 设置 Dock 顶部菜单/Tab 栏高度。面板区域会自动从该高度之后开始。
+        void SetMenuBarHeight(int height);
+        int GetMenuBarHeight() const { return m_MenuBarHeight; }
+
         // ── 面板管理（tab）──
         Panel *AddPanel(Panel *panel, const std::string &title = "");
         bool RemovePanel(Panel *panel);
+        Panel *DetachPanel(Panel *panel, std::string *title = nullptr);
+        bool ContainsPanel(const Panel *panel) const;
         void ActivatePanel(int idx);
         bool ActivatePanel(Panel *panel);
         Panel *GetActivePanel() const;
@@ -130,7 +149,12 @@ namespace X_Y
         Panel *HitTestPanel(int x, int y) const;
 
         // ── 输入（事件对象下传）：命中 tab 栏→切 tab；否则下传给激活 Panel ──
-        void RouteInput(UIInputEvent &e);
+        virtual void RouteInput(UIInputEvent &e);
+        bool CanAddPanel() const
+        {
+            return m_MaxPanelCount < 0 || (int)m_Panels.size() < m_MaxPanelCount;
+        }
+        void SetMaxPanelCount(int max) { m_MaxPanelCount = max; }
 
     protected:
         void ShowActivePanel();
@@ -138,20 +162,29 @@ namespace X_Y
         void RemovePanelInternal(Panel *panel);
 
         int m_X = 0, m_Y = 0, m_W = 100, m_H = 100;
-        int m_LayoutW = 0, m_LayoutH = 0;   // 宿主喂的布局总尺寸
+        int m_LayoutW = 0, m_LayoutH = 0; // 宿主喂的布局总尺寸
+        int m_PanelX = 0, m_PanelY = 0;
+        int m_PanelW = 100, m_PanelH = 76;
+        int m_MenuBarHeight = 0;
+        bool m_PanelAreaCustomized = false;
+        int m_MaxPanelCount = -1; // 最大面板数，为负数表示不限制
         std::vector<Panel *> m_Panels;
         std::vector<std::string> m_Titles;
         int m_ActiveIndex = -1;
 
         DockLayout *m_Layout = nullptr;
-        Dock *m_DockFather = nullptr;           // 同宗（分割树根=nullptr）
+        Dock *m_DockFather = nullptr; // 同宗（分割树根=nullptr）
         BoundaryId m_MergedBoundaryId = InvalidBoundary;
-        bool m_Splittable = true;               // 是否允许切分自己
+        bool m_Splittable = true; // 是否允许切分自己
 
-        DockBoundary m_Boundary;                // 我引用的 4 条边界
+        DockBoundary m_Boundary; // 我引用的 4 条边界
 
         std::function<void()> m_HostRepaint;
-        void RequestRepaint() { if (m_HostRepaint) m_HostRepaint(); }
+        void RequestRepaint()
+        {
+            if (m_HostRepaint)
+                m_HostRepaint();
+        }
     };
 
 } // namespace X_Y

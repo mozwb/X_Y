@@ -2,6 +2,7 @@
 #include "XCore/XLog/LogConfigure.h"
 #include "DataStore/DataStore.h"
 #include "XCore/FilesSystem/FilesSystem.h"
+#include <cstdio>
 
 namespace X_Y
 {
@@ -21,10 +22,7 @@ namespace X_Y
     public:
         explicit DataStoreDevice(const std::string &key = "",
                                  uint64_t capacity = 65536)
-            : m_Key(key.empty() ? DefaultKey() : key), m_Capacity(capacity)
-        {
-            DataStore::Instance().Remove(m_Key);
-        }
+            : m_Key(key.empty() ? DefaultKey() : key), m_Capacity(capacity) {}
 
         std::string toString() const override
         {
@@ -34,7 +32,11 @@ namespace X_Y
         void Log(const std::string &message) const override
         {
             std::string record = message + "\n";
-            DataStore::Instance().Append(m_Key, record.data(), record.size(), m_Capacity);
+            const bool ok = DataStore::Instance().Append(
+                m_Key, record.data(), record.size(), m_Capacity);
+            std::fprintf(stderr, "[LOG][DataStoreDevice] key=%s bytes=%zu append=%s enabled=%s\n",
+                         m_Key.c_str(), record.size(), ok ? "ok" : "failed",
+                         DataStore::Instance().IsEnabled() ? "yes" : "no");
         }
 
         ~DataStoreDevice()

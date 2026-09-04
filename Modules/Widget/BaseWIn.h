@@ -43,25 +43,30 @@ namespace X_Y
         //   默认方法（无后缀）返回/接收【逻辑坐标】，供 UI 布局/绘制/命中测试用。
         //   需要真实像素的地方（如 DockLayer 停靠区判定、跨窗口坐标）
         //   用带 Physical 后缀的方法。上层不用自己乘/除 scale。
+        // 因为内部UI设计使用得是逻辑，但是接收消息确实物理，所以补全物理到逻辑，同时留一个逻辑到物理但是估计很少用
         void GetScreenRect(int &left, int &top, int &right, int &bottom) const;
         void ScreenToClient(int &x, int &y) const;                        // 物理屏幕→逻辑客户区
-        void ClientToScreen(int &x, int &y) const;                        // 逻辑客户区→物理屏幕
+        void ClientPhysicalToLogical(int &x, int &y) const;               // 物理客户区→逻辑客户区
         void ScreenToClientPhysical(int &x, int &y) const;                // 物理屏幕→物理客户区
         void ClientToScreenPhysical(int &x, int &y) const;                // 物理客户区→物理屏幕
         void GetClientRectPhysical(int &l, int &t, int &r, int &b) const; // 物理客户区
+
+        void ClientToScreen(int &x, int &y) const; // 逻辑客户区→物理屏幕
+
         void CaptureMouse();
         void ReleaseMouseCapture();
         void *GetParentNativeHandle() const;
         bool SetParent(void *newParent);
 
-        // ── 鼠标相对本窗口客户区坐标(逻辑) ────────
-        // Get: 当前鼠标屏幕坐标 → 本窗口客户区相对坐标。
+        // ── 鼠标相对本窗口客户区坐标(物理) ────────
+        // Get: 当前鼠标屏幕坐标 → 本窗口物理客户区相对坐标。
         //      鼠标不在本窗口内时返回 false 且 (x,y) 置负值。
         bool GetMouseClientPos(int &x, int &y) const;
-        // Set: 输入本窗口客户区相对坐标(逻辑) → 搬真实光标到该位置。
+        // Set: 输入本窗口物理客户区相对坐标 → 搬真实光标到该位置。
         void SetMouseClientPos(int x, int y) const;
 
         void SetCursorStyle(CursorStyle style);
+        // 把窗口搬到物理位置
         void MoveAndResize(int x, int y, int w, int h, bool noZOrder = true);
 
         // 置顶/取消置顶(运行时可切换，通用工具)

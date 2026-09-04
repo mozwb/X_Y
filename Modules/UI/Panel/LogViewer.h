@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include "UI/Container/Container.h"
+#include "UI/Panel/Panel.h"
 #include "UI/Component/ListBox.h"
 #include "UI/Component/ScrollArea.h"
 #include "UI/Component/TextInput.h"
@@ -31,7 +31,7 @@ namespace X_Y
         void SetEntries(const std::vector<LogEntry> &entries);
     };
 
-    class LogViewer : public Container
+    class LogViewer : public Panel
     {
     public:
         LogViewer();
@@ -44,7 +44,8 @@ namespace X_Y
         void Stop();
 
     protected:
-        void OnPaint(Canvas *canvas) override;
+        void OnLayout() override;
+        void OnPaint(Canvas &canvas) override;
 
     private:
         class TagStrip;
@@ -60,8 +61,6 @@ namespace X_Y
         bool MatchesKeyword(const LogEntry &e) const;             // 命中任一关键词（OR）即通过
         void RebuildAll();                                        // 全量重建（关键词变 / 数据重置时）
         void IncrementalAppend(uint64_t fromSeq, uint64_t toSeq); // 增量喂新条目
-        void LayoutChildren();
-
         std::unique_ptr<TextInput> m_KeywordInput;
         std::unique_ptr<TagStrip> m_TagStrip;
         std::unique_ptr<ScrollArea> m_ScrollArea;

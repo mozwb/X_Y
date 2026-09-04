@@ -1,7 +1,6 @@
 #pragma once
 #include "Widget/Canvas.h"
-#include "UiCore/UIEvent.h"
-#include "XCore/FilesSystem/FilesSystem.h"
+#include "../UiCore/UIEvent.h"
 #include <functional>
 namespace X_Y
 {
@@ -45,12 +44,6 @@ namespace X_Y
             (void)scrollOffset;
             (void)viewHeight;
         }
-
-        // ── 文件拖拽（独立通道：窗口级，不进输入路由）──
-        virtual void OnFileDragEnter(const std::vector<XPath> &files, int localX, int localY) { (void)files; (void)localX; (void)localY; }
-        virtual void OnFileDragOver(const std::vector<XPath> &files, int localX, int localY) { (void)files; (void)localX; (void)localY; }
-        virtual void OnFileDragLeave() {}
-        virtual void OnFileDrop(const std::vector<XPath> &files, int localX, int localY) { (void)files; (void)localX; (void)localY; }
 
         // 请求所属窗口重绘（由 Panel 在 AddComponent 时注入实现）
         void RequestRepaint()

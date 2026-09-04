@@ -220,6 +220,21 @@ namespace X_Y
         return idx;
     }
 
+    void ListBox::OnInput(UIInputEvent &e)
+    {
+        auto *mouse = dynamic_cast<UIMouseEvent *>(&e);
+        if (!mouse || mouse->action != MouseAction::Press)
+            return;
+
+        const int index = GetRowFromMouseY(e.y);
+        if (index < 0)
+            return;
+
+        m_SelectedIndex = index;
+        RequestRepaint();
+        e.Handled = true;
+    }
+
     void ListBox::OnPaint(Canvas &canvas)
     {
         // 惰性折叠：宽度变化 / 有新增时重算（需 Canvas 测宽）

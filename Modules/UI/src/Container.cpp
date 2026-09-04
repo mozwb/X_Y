@@ -1,13 +1,22 @@
-#include "Container/Container.h"
-#include "DockLayout/DockLayout.h"
+#include "../Container/Container.h"
+#include "../DockLayout/DockLayout.h"
 #include "UI/dock/Dock.h"
-#include "UiCore/UIEvent.h"
+#include "../UiCore/UIEvent.h"
 #include "Movement/MouseMovement.h"
 #include "Movement/KeyMovement.h"
 #include "Widget/Application.h"
+#include <cstdio>
 
 namespace X_Y
 {
+
+    namespace
+    {
+        void TraceUI(const char *kind, int x, int y)
+        {
+            std::fprintf(stderr, "[UI] %s logical=(%d,%d)\n", kind, x, y);
+        }
+    }
 
     // 取相对本窗口客户区的逻辑坐标（命中路由统一用它）
     void GetClientPos(Container &self, int &x, int &y)
@@ -19,6 +28,9 @@ namespace X_Y
     Container::Container(XWidget *parent)
         : XWidget(parent)
     {
+        // 文件拖拽是窗口行为；Container 负责开启，具体面板决定如何处理。
+        EnableFileDrop(true);
+
         // 布局 resize → 同步 DockLayout 尺寸并重排
         Connect(this, MovementType::WindowResize, this,
                 [this](const XMovement &)
@@ -28,13 +40,14 @@ namespace X_Y
         Connect(this, MovementType::MouseButtonPressed, this,
                 [this](const XMovement &e)
                 {
-            int lx = 0, ly = 0;
-            GetClientPos(*this, lx, ly);
             const auto &mb = dynamic_cast<const MouseButtonPressed &>(e);
             UIMouseEvent uie;
             uie.action = MouseAction::Press;
             uie.button = static_cast<Input_t::MouseCode>(mb.GetMouseButton());
-            uie.x = lx; uie.y = ly;
+            uie.x = static_cast<int>(mb.GetX());
+            uie.y = static_cast<int>(mb.GetY());
+            ClientPhysicalToLogical(uie.x, uie.y);
+            TraceUI("mouse-press", uie.x, uie.y);
             if (m_Layout)
             {
                 m_Layout->RouteInput(uie);
@@ -43,25 +56,29 @@ namespace X_Y
 
         // 鼠标移动 → UIEvent(Move)
         Connect(this, MovementType::MouseMoved, this,
-                [this](const XMovement &)
+                [this](const XMovement &e)
                 {
-            int lx = 0, ly = 0;
-            GetClientPos(*this, lx, ly);
+            const auto &mm = dynamic_cast<const MouseMoved &>(e);
             UIMouseEvent uie;
             uie.action = MouseAction::Move;
-            uie.x = lx; uie.y = ly;
+            uie.x = static_cast<int>(mm.GetX());
+            uie.y = static_cast<int>(mm.GetY());
+            ClientPhysicalToLogical(uie.x, uie.y);
+            TraceUI("mouse-release", uie.x, uie.y);
             if (m_Layout)
                 m_Layout->RouteInput(uie); });
 
         // 鼠标抬起 → UIEvent(Release)
         Connect(this, MovementType::MouseButtonReleased, this,
-                [this](const XMovement &)
+                [this](const XMovement &e)
                 {
-            int lx = 0, ly = 0;
-            GetClientPos(*this, lx, ly);
+            const auto &mb = dynamic_cast<const MouseButtonReleased &>(e);
             UIMouseEvent uie;
             uie.action = MouseAction::Release;
-            uie.x = lx; uie.y = ly;
+            uie.x = static_cast<int>(mb.GetX());
+            uie.y = static_cast<int>(mb.GetY());
+            ClientPhysicalToLogical(uie.x, uie.y);
+            TraceUI("mouse-scroll", uie.x, uie.y);
             if (m_Layout)
                 m_Layout->RouteInput(uie);
             ReleaseMouseCapture(); });
@@ -70,13 +87,13 @@ namespace X_Y
         Connect(this, MovementType::MouseScrolled, this,
                 [this](const XMovement &e)
                 {
-            int lx = 0, ly = 0;
-            GetClientPos(*this, lx, ly);
             const auto &ms = dynamic_cast<const MouseScrolled &>(e);
             UIMouseEvent uie;
             uie.action = MouseAction::Scroll;
             uie.scrollDelta = (int)ms.GetYOffset();
-            uie.x = lx; uie.y = ly;
+            uie.x = static_cast<int>(ms.GetX());
+            uie.y = static_cast<int>(ms.GetY());
+            ClientPhysicalToLogical(uie.x, uie.y);
             if (m_Layout)
                 m_Layout->RouteInput(uie); });
 
@@ -130,7 +147,7 @@ namespace X_Y
         if (m_Layout)
             m_Layout->SetHostRepaint([this]()
                                      { RequestRepaint(); });
-        if (GetNativeHandle())
+        if (m_Layout && GetNativeHandle())
         {
             m_Layout->SetActiveSize(static_cast<int>(get_width()),
                                     static_cast<int>(get_height()));
@@ -140,34 +157,28 @@ namespace X_Y
 
     Panel *Container::AddSinglePanel(Panel *panel, const std::string &title)
     {
+        if (m_Layout)
+            return nullptr; // 复杂场景：已有布局，不能再塞单面板
+
         EnsureLayout();
-        // 若布局还没有任何 Dock，懒建一个占满的 Dock
-        Dock *dock = nullptr;
-        if (!m_Layout->GetDockList().empty())
-        {
-            // 已有 dock，直接往最近一个加 tab；这里取第一个，后续可扩展
-            dock = m_Layout->GetDockList().front();
-        }
+        Dock *dock = new Dock();
         if (!dock)
-        {
-            dock = new Dock();
-            m_Layout->AddDock(dock);
-            dock->SetHostRepaint([this]()
-                                 { RequestRepaint(); });
-            // 占满布局
-            m_Layout->DockBind(*dock, InvalidBoundary, InvalidBoundary,
-                               InvalidBoundary, InvalidBoundary);
-        }
+            return nullptr;
+        dock->SetMaxPanelCount(1); // 单面板
+        m_Layout->AddDock(dock);
+        // 占满布局
+        m_Layout->DockBind(*dock, InvalidBoundary, InvalidBoundary,
+                           InvalidBoundary, InvalidBoundary);
         return dock->AddPanel(panel, title);
     }
 
-    Panel *Container::DetachPanel(Panel *panel)
+    Panel *Container::DetachPanel(Panel *panel, std::string *title)
     {
         if (!m_Layout)
             return nullptr;
         for (Dock *dock : m_Layout->GetDockList())
         {
-            if (dock && dock->RemovePanel(panel))
+            if (dock && dock->DetachPanel(panel, title))
             {
                 RequestRepaint();
                 return panel;
@@ -196,6 +207,30 @@ namespace X_Y
         }
         // 无内容：清默认背景
         canvas->Clear(0xFF202124);
+    }
+
+    void Container::OnFileDragEnter(const std::vector<XPath> &files, int x, int y)
+    {
+        if (m_Layout)
+            m_Layout->RouteFileDragEnter(files, x, y);
+    }
+
+    void Container::OnFileDragOver(const std::vector<XPath> &files, int x, int y)
+    {
+        if (m_Layout)
+            m_Layout->RouteFileDragOver(files, x, y);
+    }
+
+    void Container::OnFileDragLeave()
+    {
+        if (m_Layout)
+            m_Layout->RouteFileDragLeave();
+    }
+
+    void Container::OnFileDrop(const std::vector<XPath> &files, int x, int y)
+    {
+        if (m_Layout)
+            m_Layout->RouteFileDrop(files, x, y);
     }
 
 } // namespace X_Y

@@ -3,6 +3,7 @@
 #include <sstream>
 #include <fstream>
 #include <mutex>
+#include <cstdio>
 
 namespace X_Y
 {
@@ -10,7 +11,21 @@ namespace X_Y
     // ═════════════════════════════════════════════════════════════════════════════
     //  单例
     // ═════════════════════════════════════════════════════════════════════════════
-
+    DataStore::~DataStore()
+    {
+        for (auto it = m_Entries.begin(); it != m_Entries.end();)
+        {
+            if (!it->second)
+            {
+                it = m_Entries.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+        SaveIndex();
+    }
     DataStore &DataStore::Instance()
     {
         static DataStore inst;
@@ -175,11 +190,19 @@ namespace X_Y
                            uint64_t reserveSize)
     {
         if (!data && size > 0)
+        {
+            std::fprintf(stderr, "[DataStore] append key=%s bytes=%llu result=invalid-data\n",
+                         key.c_str(), static_cast<unsigned long long>(size));
             return false;
+        }
 
         std::unique_lock lock(m_Mutex);
         if (!m_Enabled)
+        {
+            std::fprintf(stderr, "[DataStore] append key=%s bytes=%llu result=disabled\n",
+                         key.c_str(), static_cast<unsigned long long>(size));
             return false;
+        }
 
         auto it = m_Entries.find(key);
         if (it == m_Entries.end())
@@ -212,12 +235,20 @@ namespace X_Y
             if (!parent.Exists())
                 parent.CreateDirectory();
             if (buffer && !FilesSystem::AppendFileBinary(path, buffer))
+            {
+                std::fprintf(stderr, "[DataStore] append key=%s flush-path=%s result=flush-failed\n",
+                             key.c_str(), path.Path().string().c_str());
                 return false;
+            }
             buffer.Allocate(0);
             buffer.Reserve(reserveSize);
         }
 
         buffer.Append(data, size);
+        std::fprintf(stderr, "[DataStore] append key=%s bytes=%llu buffer-size=%llu path=%s result=ok\n",
+                     key.c_str(), static_cast<unsigned long long>(size),
+                     static_cast<unsigned long long>(buffer.Size),
+                     KeyToPath(key).Path().string().c_str());
         return true;
     }
 

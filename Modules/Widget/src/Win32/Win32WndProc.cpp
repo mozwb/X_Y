@@ -200,7 +200,9 @@ namespace X_Y::Win32
 
                 // 非拖拽时走正常事件 + DefWindowProc
                 mbutton = InputMapping::TranslateMouse(VK_LBUTTON);
-                movement = new MouseButtonReleased(pThis, mbutton);
+                movement = new MouseButtonReleased(pThis, mbutton,
+                                                   (float)(short)LOWORD(lParam),
+                                                   (float)(short)HIWORD(lParam));
                 app->GetEventQueue().Push(movement);
                 break;
             }
@@ -243,21 +245,27 @@ namespace X_Y::Win32
             case WM_LBUTTONDOWN:
             {
                 mbutton = InputMapping::TranslateMouse(VK_LBUTTON);
-                movement = new MouseButtonPressed(pThis, mbutton);
+                movement = new MouseButtonPressed(pThis, mbutton,
+                                                  (float)(short)LOWORD(lParam),
+                                                  (float)(short)HIWORD(lParam));
                 app->GetEventQueue().Push(movement);
                 return 0;
             }
             case WM_RBUTTONDOWN:
             {
                 mbutton = InputMapping::TranslateMouse(VK_RBUTTON);
-                movement = new MouseButtonPressed(pThis, mbutton);
+                movement = new MouseButtonPressed(pThis, mbutton,
+                                                  (float)(short)LOWORD(lParam),
+                                                  (float)(short)HIWORD(lParam));
                 app->GetEventQueue().Push(movement);
                 return 0;
             }
             case WM_RBUTTONUP:
             {
                 mbutton = InputMapping::TranslateMouse(VK_RBUTTON);
-                movement = new MouseButtonReleased(pThis, mbutton);
+                movement = new MouseButtonReleased(pThis, mbutton,
+                                                   (float)(short)LOWORD(lParam),
+                                                   (float)(short)HIWORD(lParam));
                 app->GetEventQueue().Push(movement);
                 return 0;
             }
@@ -265,7 +273,11 @@ namespace X_Y::Win32
             {
                 int delta = GET_WHEEL_DELTA_WPARAM(wParam);
                 float yOffset = static_cast<float>(delta) / WHEEL_DELTA;
-                movement = new MouseScrolled(pThis, 0.0, yOffset);
+                int mouseX = (short)LOWORD(lParam);
+                int mouseY = (short)HIWORD(lParam);
+                pThis->ScreenToClient(mouseX, mouseY);
+                movement = new MouseScrolled(pThis, 0.0, yOffset,
+                                             (float)mouseX, (float)mouseY);
                 app->GetEventQueue().Push(movement);
                 return 0;
             }

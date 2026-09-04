@@ -5,7 +5,8 @@
 #include <string>
 #include <sstream>
 #include <cctype>
-
+#include <span>
+#include <type_traits>
 namespace X_Y
 {
 
@@ -71,7 +72,24 @@ namespace X_Y
             if (needed > Size)
                 Size = needed;
         }
+        void WriteBytes(uint64_t offset, const void *src, uint64_t byteCount)
+        {
+            if (byteCount == 0)
+                return;
+            // 防溢出：offset + byteCount 算术溢出
+            if (offset > UINT64_MAX - byteCount)
+                return;
 
+            uint64_t needed = offset + byteCount;
+            if (needed > Size)
+            {
+                if (!Ensure(needed))
+                    return;
+            }
+            memcpy(Data + offset, src, byteCount);
+            if (needed > Size)
+                Size = needed;
+        }
         void Append(const void *src, uint64_t len);
 
         template <typename T>
@@ -102,6 +120,49 @@ namespace X_Y
         Buffer Copy() const { return Buffer(*this); }
 
         std::string toString() const;
+
+        // 添加视图方法
+        /// @param offset 字节偏移
+        /// @param elementCount 元素个数；传0自动取到buffer末尾（只取完整T，丢弃尾部不足一个T的零碎字节）
+        template <typename T>
+        std::span<T> Span(uint64_t offset, uint64_t elementCount = 0)
+        {
+            static_assert(std::is_trivially_copyable_v<T>, "Only trivially‑copyable POD");
+            assert(offset <= Size);
+
+            if (elementCount == 0)
+            {
+                // 剩余字节
+                const uint64_t byteRemain = Size - offset;
+                // 最多能容纳多少完整 T
+                elementCount = byteRemain / sizeof(T);
+            }
+
+            const uint64_t totalBytesNeeded = offset + elementCount * sizeof(T);
+            assert(totalBytesNeeded <= Size);
+
+            T *ptr = As<T>(offset);
+            return std::span<T>{ptr, elementCount};
+        }
+
+        template <typename T>
+        std::span<const T> Span(uint64_t offset, uint64_t elementCount = 0) const
+        {
+            static_assert(std::is_trivially_copyable_v<T>, "Only trivially‑copyable POD");
+            assert(offset <= Size);
+
+            if (elementCount == 0)
+            {
+                const uint64_t byteRemain = Size - offset;
+                elementCount = byteRemain / sizeof(T);
+            }
+
+            const uint64_t totalBytesNeeded = offset + elementCount * sizeof(T);
+            assert(totalBytesNeeded <= Size);
+
+            const T *ptr = As<T>(offset);
+            return std::span<const T>{ptr, elementCount};
+        }
     };
 
     // @@ BufferView：不拥有内存的只读视图

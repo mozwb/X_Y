@@ -20,11 +20,17 @@ namespace X_Y
 			this->add(new DEVICE());
 			this->add(new DataStoreDevice()); // 追加到 DataStore，key=当天日期.log
 		}
+		static LOG &Instance()
+		{
+			static LOG logger("log");
+			return logger;
+		}
 	};
 }
-inline X_Y::LOG logger("log");
+// inline X_Y::LOG logger("log");
+#define logger X_Y::LOG::Instance()
 #define LOG(Logger, LEVEL, ...) \
-	Logger.Log<decltype(logger)::LEVEL>(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__);
+	Logger.Log<std::remove_reference_t<decltype(logger)>::LEVEL>(__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__);
 #define XINFO(...) \
 	LOG(logger, Info, __VA_ARGS__)
 #define XTRACE(...) \

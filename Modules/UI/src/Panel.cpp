@@ -10,6 +10,7 @@ namespace X_Y
         m_Y = y;
         m_W = w;
         m_H = h;
+        OnLayout();
     }
 
     void Panel::GetLayoutRect(int &x, int &y, int &w, int &h) const
@@ -25,7 +26,7 @@ namespace X_Y
         if (comp)
         {
             comp->SetRepaintCallback([this]()
-                                    { RequestRepaint(); });
+                                     { RequestRepaint(); });
             m_Components.push_back(comp);
         }
     }

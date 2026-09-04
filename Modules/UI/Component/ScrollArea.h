@@ -60,6 +60,7 @@ namespace X_Y
         Component *m_Content = nullptr;
         int m_ScrollOffset = 0;
         static constexpr int kScrollbarWidth = 8;
+        static constexpr int kScrollbarHitWidth = 16;
 
         // 滑块拖拽状态
         bool m_DraggingThumb = false;

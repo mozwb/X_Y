@@ -1,4 +1,4 @@
-#include "Component/Button.h"
+#include "../Component/Button.h"
 #include "Widget/FontLibrary.h"
 
 namespace X_Y

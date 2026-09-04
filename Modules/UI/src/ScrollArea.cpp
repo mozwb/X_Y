@@ -118,7 +118,7 @@ namespace X_Y
         // 滚轮：内容滚动
         if (me->action == MouseAction::Scroll)
         {
-            if (m_Content && m_Content->IsVisible() && localX < GetWidth() - kScrollbarWidth)
+            if (m_Content && m_Content->IsVisible() && localX < GetWidth() - kScrollbarHitWidth)
             {
                 // 给内容自己先处理（如列表按行滚）；未处理再自己卷
                 m_Content->OnInput(e);
@@ -135,7 +135,8 @@ namespace X_Y
         if (me->action == MouseAction::Press)
         {
             // 命中滑块条竖带 → 滑块/翻页；否则下传内容
-            if (NeedsScrollbar() && localX >= GetWidth() - kScrollbarWidth)
+            // 命中区比视觉滚动条更宽，避免 8px 滚动条在缩放或取整后难以按中。
+            if (NeedsScrollbar() && localX >= GetWidth() - kScrollbarHitWidth)
             {
                 int thumbY, thumbH;
                 GetThumbRect(thumbY, thumbH);
@@ -177,11 +178,16 @@ namespace X_Y
                 if (contentH <= viewH)
                     return;
                 int thumbH;
-                { int ty; GetThumbRect(ty, thumbH); }
+                {
+                    int ty;
+                    GetThumbRect(ty, thumbH);
+                }
                 int thumbRange = viewH - thumbH;
                 int newThumbY = localY - m_DragOffsetY;
-                if (newThumbY < 0) newThumbY = 0;
-                if (newThumbY > thumbRange) newThumbY = thumbRange;
+                if (newThumbY < 0)
+                    newThumbY = 0;
+                if (newThumbY > thumbRange)
+                    newThumbY = thumbRange;
                 int scrollRange = contentH - viewH;
                 SetScrollOffset((int)((float)newThumbY / thumbRange * scrollRange));
                 return;

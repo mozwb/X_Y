@@ -6,6 +6,7 @@
 // #include <ctime>
 #include <ostream>
 #include <fstream>
+#include <cstdio>
 #include "LogTools.h"
 #include "../Timer/Timer.h"
 namespace X_Y
@@ -159,8 +160,13 @@ public:                                                   \
 			}
 			void logAll(const std::string &msg)
 			{
+				std::fprintf(stderr, "[LOG] dispatch bytes=%zu devices=%zu\n",
+							 msg.size(), devices.size());
 				for (auto &dev : devices)
+				{
+					std::fprintf(stderr, "[LOG] device=%s\n", dev->toString().c_str());
 					dev->Log(msg);
+				}
 			}
 			std::string toString() const
 			{

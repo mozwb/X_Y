@@ -64,6 +64,7 @@ namespace X_Y
         // 鼠标 y → 命中的逻辑 item 索引（-1 = 未命中）
         int GetRowFromMouseY(int localY) const;
 
+        void OnInput(UIInputEvent &e) override;
         void OnPaint(Canvas &canvas) override;
 
     private:

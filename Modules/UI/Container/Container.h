@@ -1,6 +1,7 @@
 #pragma once
 #include "Widget/XWidget.h"
 #include "Widget/Canvas.h"
+#include "XCore/FilesSystem/FilesSystem.h"
 #include <string>
 
 namespace X_Y
@@ -31,7 +32,7 @@ namespace X_Y
         ~Container() override;
 
         // ── 统一模型：总是挂一个纯逻辑 DockLayout ──
-        void SetDockLayout(DockLayout *layout);   // 复杂场景：塞整个布局
+        void SetDockLayout(DockLayout *layout); // 复杂场景：塞整个布局
 
         // 便捷：一行造一个"单面板工具窗"。内部自动 DockLayout → Dock → Panel。
         // 返回生成的布局，供后续再 add 更多面板；panel 所有权交托给 Dock。
@@ -41,18 +42,22 @@ namespace X_Y
 
         // 让渡：把一个 Panel 交出去（拖进别的 Dock / 摘成独立窗）
         // 从本壳的 DockLayout 里脱出，返回 panel；调用方随后接管。
-        Panel *DetachPanel(Panel *panel);
+        Panel *DetachPanel(Panel *panel, std::string *title = nullptr);
 
     protected:
-        void OnPaint(Canvas *canvas) override;   // 壳把画布交给 DockLayout
+        void OnPaint(Canvas *canvas) override; // 壳把画布交给 DockLayout
+        void OnFileDragEnter(const std::vector<XPath> &files, int x, int y) override;
+        void OnFileDragOver(const std::vector<XPath> &files, int x, int y) override;
+        void OnFileDragLeave() override;
+        void OnFileDrop(const std::vector<XPath> &files, int x, int y) override;
 
     private:
         // 尺寸/输入转发（由 WndProc 消息经 XWidget 回调触发）
         void OnWindowResize();
-        void EnsureLayout();                     // 懒建默认 DockLayout
+        void EnsureLayout(); // 懒建默认 DockLayout
 
         DockLayout *m_Layout = nullptr;
-        bool m_OwnLayout = false;                // 是否是我 new 的默认布局
+        bool m_OwnLayout = false; // 是否是我 new 的默认布局
     };
 
 } // namespace X_Y

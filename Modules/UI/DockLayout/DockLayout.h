@@ -1,8 +1,9 @@
 #pragma once
 
-#include "UI/dock/Dock.h"
-#include "UiCore/UIEvent.h"
+#include "../dock/Dock.h"
+#include "../UiCore/UIEvent.h"
 #include "Widget/Canvas.h"
+#include "XCore/FilesSystem/FilesSystem.h"
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -28,7 +29,8 @@ namespace X_Y
 
         // ── 宿主注入 ──
         void SetHostRepaint(std::function<void()> cb) { m_HostRepaint = std::move(cb); }
-        void SetActiveSize(int w, int h);   // 壳的布局区域尺寸
+        std::function<void()> GetHostRepaint() const { return m_HostRepaint; }
+        void SetActiveSize(int w, int h); // 壳的布局区域尺寸
 
         int GetLayoutWidth() const { return m_LayoutW; }
         int GetLayoutHeight() const { return m_LayoutH; }
@@ -45,13 +47,17 @@ namespace X_Y
         bool RemoveBoundary(BoundaryId id);
 
         const Boundary *GetBoundary(BoundaryId id) const;
-        int GetBoundaryPosition(BoundaryId id) const;    // 布局坐标（像素）
+        int GetBoundaryPosition(BoundaryId id) const; // 布局坐标（像素）
 
         // ── dock 管理 ──
         void AddDock(Dock *dock);
         bool DockBind(Dock &dock, BoundaryId top, BoundaryId bottom,
                       BoundaryId left, BoundaryId right);
         void RemoveDock(Dock *dock);
+        // 收容一个已脱离宿主的 Panel；不销毁或复制 Panel。
+        Panel *TakePanel(Panel *panel, const std::string &title = "");
+        Panel *AddPanelAt(Panel *panel, int x, int y,
+                          const std::string &title = "");
         const std::vector<Dock *> &GetDockList() const { return m_Docks; }
 
         void SetBackgroundColor(uint32_t color) { m_BackgroundColor = color; }
@@ -68,6 +74,11 @@ namespace X_Y
         //    先判拖分割线（鼠标 Press 命中边界→进入拖拽态，Move→拖，Release→结束）。
         //    非拖拽态：命中命中的 Dock → 下传给其激活面板。
         void RouteInput(UIInputEvent &e);
+
+        void RouteFileDragEnter(const std::vector<XPath> &files, int x, int y);
+        void RouteFileDragOver(const std::vector<XPath> &files, int x, int y);
+        void RouteFileDragLeave();
+        void RouteFileDrop(const std::vector<XPath> &files, int x, int y);
 
         // ── 全局激活面板（供壳转发输入 / 命中）──
         Panel *GetActivePanel() const;
@@ -86,9 +97,14 @@ namespace X_Y
 
         BoundaryId m_DraggingBoundary = InvalidBoundary;
         int m_LastDragX = 0, m_LastDragY = 0;
+        Panel *m_FileDropPanel = nullptr;
 
         std::function<void()> m_HostRepaint;
-        void RequestRepaint() { if (m_HostRepaint) m_HostRepaint(); }
+        void RequestRepaint()
+        {
+            if (m_HostRepaint)
+                m_HostRepaint();
+        }
     };
 
 } // namespace X_Y

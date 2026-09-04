@@ -1,12 +1,22 @@
-﻿#include "Container/LogViewer.h"
+﻿#include "../panel/LogViewer.h"
 #include "DataStore/DataStore.h"
 #include "XCore/Timer/Timer.h"
 #include "Widget/BaseWin.h"
 #include "Widget/FontLibrary.h"
 #include <algorithm>
+#include <cstdio>
 
 namespace X_Y
 {
+
+    namespace
+    {
+        void TraceLogViewer(const char *key, uint64_t size)
+        {
+            std::fprintf(stderr, "[UI][LogViewer] key=%s bytes=%llu\n",
+                         key, static_cast<unsigned long long>(size));
+        }
+    }
 
     void LogStripe::SetEntries(const std::vector<LogEntry> &entries)
     {
@@ -82,24 +92,25 @@ namespace X_Y
 
         void OnPaint(Canvas &canvas) override { m_Owner->PaintTags(canvas); }
 
-        void OnMouseMoved(int x, int y) override
+        void OnInput(UIInputEvent &e) override
         {
-            const int index = m_Owner->HitTestTag(x, y);
-            if (index != m_Owner->m_TagHoverIndex)
+            auto *mouse = dynamic_cast<UIMouseEvent *>(&e);
+            if (!mouse)
+                return;
+
+            const int index = m_Owner->HitTestTag(e.x, e.y);
+            if (mouse->action == MouseAction::Move && index != m_Owner->m_TagHoverIndex)
             {
                 m_Owner->m_TagHoverIndex = index;
                 m_Owner->RequestRepaint();
             }
-        }
-
-        void OnMousePressed(int x, int y) override
-        {
-            const int index = m_Owner->HitTestTag(x, y);
-            if (index >= 0 && m_Owner->IsInTagClose(index, x, y))
+            else if (mouse->action == MouseAction::Press &&
+                     index >= 0 && m_Owner->IsInTagClose(index, e.x, e.y))
             {
                 m_Owner->OnTagRemoved(m_Owner->m_Keywords[static_cast<std::size_t>(index)]);
                 m_Owner->m_TagHoverIndex = -1;
                 m_Owner->RequestRepaint();
+                e.Handled = true;
             }
         }
 
@@ -169,6 +180,11 @@ namespace X_Y
         m_Timer->Start(500, [this]()
                        {
         Buffer buf = DataStore::Instance().ReadCopy(m_Key);
+        static bool reportedState = false;
+        if (!reportedState) {
+            TraceLogViewer(m_Key.c_str(), buf ? buf.Size : 0);
+            reportedState = true;
+        }
         if (!buf || !buf.Data || buf.Size == 0) return;
 
         uint64_t currentSize = buf.Size;
@@ -362,7 +378,7 @@ namespace X_Y
             return 0;
 
         const Font &font = FontLibrary::Instance().GetDefault();
-        const int contentWidth = std::max(0, static_cast<int>(get_width()));
+        const int contentWidth = std::max(0, GetWidth());
         const int closeSize = 12;
         const int closePad = 3;
         const int textPadLeft = 8;
@@ -438,17 +454,16 @@ namespace X_Y
     // 绘制（主线程）
     // ════════════════════════════════════════════════════════════
 
-    void LogViewer::OnPaint(Canvas *canvas)
+    void LogViewer::OnPaint(Canvas &canvas)
     {
-        MeasureTags(*canvas);
-        LayoutChildren();
+        MeasureTags(canvas);
 
-        canvas->FillRect(0, 0, get_width(), get_height(), 0xFF1E1E1E);
+        canvas.FillRect(GetX(), GetY(), GetWidth(), GetHeight(), 0xFF1E1E1E);
 
         // 共享锁：保护 m_LogStripe（Ticker 线程可能正增量写）以及绘制
         {
             std::shared_lock<std::shared_mutex> lock(m_EntriesMutex);
-            Container::OnPaint(canvas);
+            Panel::OnPaint(canvas);
         }
     }
 
@@ -456,10 +471,10 @@ namespace X_Y
     // 布局
     // ════════════════════════════════════════════════════════════
 
-    void LogViewer::LayoutChildren()
+    void LogViewer::OnLayout()
     {
-        int w = get_width();
-        int h = get_height();
+        int w = GetWidth();
+        int h = GetHeight();
         if (w <= 0 || h <= 0)
             return;
 

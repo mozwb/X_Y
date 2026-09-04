@@ -62,7 +62,8 @@ namespace X_Y
             return 0;
         const auto &b = m_Boundaries[id];
         const int extent = b.orientation == BoundaryOrientation::Vertical
-                               ? m_LayoutW : m_LayoutH;
+                               ? m_LayoutW
+                               : m_LayoutH;
         return static_cast<int>(b.line * extent);
     }
 
@@ -131,11 +132,12 @@ namespace X_Y
             m_Boundaries[id].status != BoundaryStatus::Movable)
             return false;
         const int extent = m_Boundaries[id].orientation == BoundaryOrientation::Vertical
-                               ? m_LayoutW : m_LayoutH;
+                               ? m_LayoutW
+                               : m_LayoutH;
         if (extent <= 0)
             return false;
         return SetBoundaryLine(id, m_Boundaries[id].line +
-                                   static_cast<float>(delta) / extent);
+                                       static_cast<float>(delta) / extent);
     }
 
     bool DockLayout::RemoveBoundary(BoundaryId id)
@@ -147,10 +149,14 @@ namespace X_Y
             if (!dock)
                 continue;
             auto &slots = dock->GetBoundarySlots();
-            if (slots.top == id)    slots.top = InvalidBoundary;
-            if (slots.bottom == id) slots.bottom = InvalidBoundary;
-            if (slots.left == id)   slots.left = InvalidBoundary;
-            if (slots.right == id)  slots.right = InvalidBoundary;
+            if (slots.top == id)
+                slots.top = InvalidBoundary;
+            if (slots.bottom == id)
+                slots.bottom = InvalidBoundary;
+            if (slots.left == id)
+                slots.left = InvalidBoundary;
+            if (slots.right == id)
+                slots.right = InvalidBoundary;
         }
         m_Boundaries[id].removed = true;
         RecalcLayout();
@@ -167,6 +173,7 @@ namespace X_Y
             return;
         m_Docks.push_back(dock);
         dock->SetDockLayout(this);
+        dock->SetHostRepaint(m_HostRepaint);
         RecalcLayout();
         RequestRepaint();
     }
@@ -177,7 +184,7 @@ namespace X_Y
         auto checkSide = [this](BoundaryId id, BoundaryOrientation orient)
         {
             return id == InvalidBoundary || (IsValidBoundary(id) &&
-                    m_Boundaries[id].orientation == orient);
+                                             m_Boundaries[id].orientation == orient);
         };
         if (!checkSide(top, BoundaryOrientation::Horizontal) ||
             !checkSide(bottom, BoundaryOrientation::Horizontal) ||
@@ -202,6 +209,114 @@ namespace X_Y
             dock->SetDockLayout(nullptr);
         RecalcLayout();
         RequestRepaint();
+    }
+    // 这个行为貌似是错的
+    Panel *DockLayout::TakePanel(Panel *panel, const std::string &title)
+    {
+        if (!panel)
+            return nullptr;
+
+        Dock *target = nullptr;
+        for (Dock *dock : m_Docks)
+        {
+            if (dock && dock->GetActivePanel())
+            {
+                target = dock;
+                break;
+            }
+        }
+
+        if (!target)
+        {
+            target = new Dock();
+            AddDock(target);
+            DockBind(*target, InvalidBoundary, InvalidBoundary,
+                     InvalidBoundary, InvalidBoundary);
+        }
+
+        return target->AddPanel(panel, title);
+    }
+
+    Panel *DockLayout::AddPanelAt(Panel *panel, int x, int y,
+                                  const std::string &title)
+    {
+        if (!panel)
+            return nullptr;
+
+        for (Dock *dock : m_Docks)
+        {
+            if (!dock)
+                continue;
+            if (x >= dock->GetX() && x < dock->GetX() + dock->GetWidth() &&
+                y >= dock->GetY() && y < dock->GetY() + dock->GetHeight())
+                return dock->AddPanel(panel, title);
+        }
+
+        return nullptr;
+    }
+
+    void DockLayout::RouteFileDragEnter(const std::vector<XPath> &files, int x, int y)
+    {
+        RouteFileDragOver(files, x, y);
+    }
+
+    void DockLayout::RouteFileDragOver(const std::vector<XPath> &files, int x, int y)
+    {
+        Panel *target = nullptr;
+        for (Dock *dock : m_Docks)
+        {
+            if (!dock || x < dock->GetX() || x >= dock->GetX() + dock->GetWidth() ||
+                y < dock->GetY() || y >= dock->GetY() + dock->GetHeight())
+                continue;
+
+            const int localX = x - dock->GetX();
+            const int localY = y - dock->GetY();
+            target = dock->HitTestPanel(localX, localY);
+            if (target)
+            {
+                const int panelX = target->GetX();
+                const int panelY = target->GetY();
+                if (target != m_FileDropPanel)
+                {
+                    if (m_FileDropPanel)
+                        m_FileDropPanel->OnFileDragLeave();
+                    m_FileDropPanel = target;
+                    target->OnFileDragEnter(files, x - panelX, y - panelY);
+                }
+                else
+                {
+                    target->OnFileDragOver(files, x - panelX, y - panelY);
+                }
+                return;
+            }
+        }
+
+        if (m_FileDropPanel)
+        {
+            m_FileDropPanel->OnFileDragLeave();
+            m_FileDropPanel = nullptr;
+        }
+    }
+
+    void DockLayout::RouteFileDragLeave()
+    {
+        if (m_FileDropPanel)
+        {
+            m_FileDropPanel->OnFileDragLeave();
+            m_FileDropPanel = nullptr;
+        }
+    }
+
+    void DockLayout::RouteFileDrop(const std::vector<XPath> &files, int x, int y)
+    {
+        RouteFileDragOver(files, x, y);
+        if (m_FileDropPanel)
+        {
+            Panel *target = m_FileDropPanel;
+            target->OnFileDrop(files, x - target->GetX(), y - target->GetY());
+            target->OnFileDragLeave();
+            m_FileDropPanel = nullptr;
+        }
     }
 
     // ── 布局重排 ──
@@ -281,7 +396,8 @@ namespace X_Y
                         {
                             Boundary &bd = m_Boundaries[m_DraggingBoundary];
                             const int extent = bd.orientation == BoundaryOrientation::Vertical
-                                                   ? m_LayoutW : m_LayoutH;
+                                                   ? m_LayoutW
+                                                   : m_LayoutH;
                             if (extent > 0)
                                 bd.line = std::clamp(bd.line + static_cast<float>(delta) / extent,
                                                      bd.min, bd.max);

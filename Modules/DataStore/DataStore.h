@@ -35,7 +35,7 @@ namespace X_Y
     //   - .dsidx 索引文件记录所有 key 列表，启动时加载
     //   - Save = 覆盖写入，Flush = 追加写入
     //   - 析构不自动 Flush/Save，由业务决定
-
+    //   - 析构时去除空的条目
     //$$ 好像对索引的维护有点问题，每次启动的时候都忘记重新加载文件内容，但还是照常保存索引，导致索引和实际文件不一致
     //$$ 我在Instance进行了补充
     class DataStore
@@ -81,9 +81,10 @@ namespace X_Y
         DataStoreStats GetStats() const;
         std::string ToString() const;
 
+        ~DataStore();
+
     private:
         DataStore() = default;
-        ~DataStore() = default;
         DataStore(const DataStore &) = delete;
         DataStore &operator=(const DataStore &) = delete;
 

@@ -1,4 +1,4 @@
-#include "Container/HexViewer.h"
+#include "../panel/HexViewer.h"
 #include "UI/Component/Button.h"
 #include "UI/Component/ScrollArea.h"
 #include "UI/Component/horizontal.h"
@@ -6,6 +6,7 @@
 #include "XCore/Memory/Buffer.h"
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <iterator>
 #include <string>
 #include <utility>
@@ -62,7 +63,6 @@ namespace X_Y
             const Font &font = FontLibrary::Instance().GetDefault();
             const int addressWidth = font.MeasureText("0000000000000000");
             const int hexX = x + kLeftPadding + addressWidth + kColumnGap;
-            canvas.FillRect(x, y, width, GetHeight(), 0xFF11151A);
             canvas.FillRect(x, y, width, kHeaderHeight, 0xFF202832);
             canvas.DrawText(font, x + kLeftPadding, y + 4, "Offset", 0xFF9DAAB8);
             canvas.DrawText(font, hexX, y + 4, "Hexadecimal", 0xFF9DAAB8);
@@ -75,6 +75,7 @@ namespace X_Y
 
                 char address[32] = {};
                 char hex[3 * kBytesPerRow + 1] = {};
+                FormatOffset(address, offset);
                 for (int column = 0; column < kBytesPerRow; ++column)
                 {
                     const uint64_t index = offset + column;
@@ -87,21 +88,35 @@ namespace X_Y
                     }
 
                     const unsigned char value = m_Data[index];
-                    std::snprintf(hex + column * 3, 4, "%02X ", value);
+                    const char *digits = "0123456789ABCDEF";
+                    hex[column * 3] = digits[value >> 4];
+                    hex[column * 3 + 1] = digits[value & 0x0F];
+                    hex[column * 3 + 2] = ' ';
                 }
                 hex[3 * kBytesPerRow] = '\0';
-                std::snprintf(address, sizeof(address), "%016llX",
-                              static_cast<unsigned long long>(offset));
 
                 const int rowY = y + kHeaderHeight + row * kRowHeight;
                 if ((row & 1) == 0)
                     canvas.FillRect(x, rowY, width, kRowHeight, 0xFF171D24);
-                canvas.DrawText(font, x + kLeftPadding, rowY + 2, address, 0xFF7F8C99);
-                canvas.DrawText(font, hexX, rowY + 2, hex, 0xFFD7DEE5);
+                char line[sizeof(address) + 2 + sizeof(hex)] = {};
+                std::memcpy(line, address, 16);
+                line[16] = ' ';
+                line[17] = ' ';
+                std::memcpy(line + 18, hex, sizeof(hex));
+                canvas.DrawText(font, x + kLeftPadding, rowY + 2,
+                                line, 0xFFD7DEE5);
             }
         }
 
     private:
+        static void FormatOffset(char (&buffer)[32], uint64_t offset)
+        {
+            static constexpr char digits[] = "0123456789ABCDEF";
+            for (int i = 0; i < 16; ++i)
+                buffer[i] = digits[(offset >> ((15 - i) * 4)) & 0x0F];
+            buffer[16] = '\0';
+        }
+
         static constexpr int kBytesPerRow = 16;
         static constexpr int kRowHeight = 20;
         static constexpr int kHeaderHeight = 24;
@@ -114,8 +129,8 @@ namespace X_Y
         int m_ViewportHeight = 0;
     };
 
-    HexViewer::HexViewer(XWidget *parent)
-        : Container(parent),
+    HexViewer::HexViewer()
+        : Panel(),
           m_FileBar(std::make_unique<Horizontal>()),
           m_ScrollArea(std::make_unique<ScrollArea>()),
           m_Content(std::make_unique<BinaryContent>())
@@ -126,8 +141,8 @@ namespace X_Y
             if (!m_UpdatingSelection)
                 ActivateFile(index);
         };
-        AddComponent(m_FileBar.get());
-        AddComponent(m_ScrollArea.get());
+        Panel::AddComponent(m_FileBar.get());
+        Panel::AddComponent(m_ScrollArea.get());
     }
 
     HexViewer::~HexViewer() = default;
@@ -237,27 +252,54 @@ namespace X_Y
         CloseFile(index);
     }
 
-    void HexViewer::LayoutChildren()
+    void HexViewer::OnLayout()
     {
-        const int width = static_cast<int>(get_width());
-        const int height = static_cast<int>(get_height());
+        const int width = GetWidth();
+        const int height = GetHeight();
         const int barHeight = std::min(kFileBarHeight, std::max(0, height));
         m_FileBar->SetRect(0, 0, width, barHeight);
         m_ScrollArea->SetRect(0, barHeight, width, std::max(0, height - barHeight));
     }
 
-    void HexViewer::OnPaint(Canvas *canvas)
+    void HexViewer::OnPaint(Canvas &canvas)
     {
         ProcessPendingClose();
-        LayoutChildren();
-        Container::OnPaint(canvas);
+        canvas.FillRect(GetX(), GetY(), GetWidth(), GetHeight(), 0xFF11151A);
+        Panel::OnPaint(canvas);
+        if (m_FileDragHover)
+        {
+            canvas.FillRect(GetX(), GetY(), GetWidth(), 3, 0xFF36A3FF);
+            canvas.FillRect(GetX(), GetY() + GetHeight() - 3,
+                            GetWidth(), 3, 0xFF36A3FF);
+        }
+    }
+
+    void HexViewer::OnFileDragEnter(const std::vector<XPath> &files, int x, int y)
+    {
+        (void)x;
+        (void)y;
+        m_FileDragHover = !files.empty();
+        RequestRepaint();
+    }
+
+    void HexViewer::OnFileDragOver(const std::vector<XPath> &files, int x, int y)
+    {
+        OnFileDragEnter(files, x, y);
+    }
+
+    void HexViewer::OnFileDragLeave()
+    {
+        m_FileDragHover = false;
+        RequestRepaint();
     }
 
     void HexViewer::OnFileDrop(const std::vector<XPath> &files, int x, int y)
     {
         (void)x;
         (void)y;
-        if (!files.empty())
-            OpenFile(files.front());
+        m_FileDragHover = false;
+        for (const XPath &file : files)
+            OpenFile(file);
+        RequestRepaint();
     }
 }

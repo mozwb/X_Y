@@ -1,6 +1,7 @@
 #include "BaseWin.h"
 #include "Canvas.h"
 #include "XCore/Input/Input.h"
+#include "Dpi.h"
 #include <set>
 #ifdef XY_PLATFORM_WINDOWS
 #include <windows.h>
@@ -115,6 +116,13 @@ namespace X_Y
             m_Impl->ScreenToClient(x, y);
     }
 
+    void BaseWin::ClientPhysicalToLogical(int &x, int &y) const
+    {
+        const float scale = Dpi::GetScale();
+        x = static_cast<int>(x / scale);
+        y = static_cast<int>(y / scale);
+    }
+
     void BaseWin::ClientToScreen(int &x, int &y) const
     {
         if (m_Impl)
@@ -139,17 +147,17 @@ namespace X_Y
             m_Impl->GetClientRectPhysical(l, t, r, b);
     }
 
-    // ── 鼠标相对本窗口客户区坐标(逻辑) ──────────────
+    // ── 鼠标相对本窗口客户区坐标(物理) ──────────────
 
     bool BaseWin::GetMouseClientPos(int &x, int &y) const
     {
         x = y = -1; // 默认：不在窗口内
         int sx, sy;
-        GetMouseScreenPos(sx, sy); // 物理屏幕坐标
-        ScreenToClient(sx, sy);    // → 逻辑客户区(输入物理，输出逻辑)
-        // 判断是否落在本窗口客户区矩形内(用 BaseWin 自带的逻辑版 GetClientRect)
+        GetMouseScreenPos(sx, sy);      // 物理屏幕坐标
+        ScreenToClientPhysical(sx, sy); // → 物理客户区
+        // 判断是否落在本窗口客户区矩形内(物理坐标)
         int l, t, r, b;
-        GetScreenRect(l, t, r, b); // 逻辑客户区
+        GetClientRectPhysical(l, t, r, b);
         if (sx >= l && sx < r && sy >= t && sy < b)
         {
             x = sx;
@@ -161,8 +169,8 @@ namespace X_Y
 
     void BaseWin::SetMouseClientPos(int x, int y) const
     {
-        // 逻辑客户区 → 物理屏幕(全局坐标)
-        ClientToScreen(x, y);
+        // 物理客户区 → 物理屏幕(全局坐标)
+        ClientToScreenPhysical(x, y);
         // 复用 Input 层搬光标，不在此重复封装 Win32 API
         Input_t::Input::SetMousePosition((float)x, (float)y);
     }
