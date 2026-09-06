@@ -1,11 +1,18 @@
 ﻿#pragma once
 #include <stdint.h>
+#include <string>
 namespace X_Y
 {
 	namespace Input_t
 	{
 		using KeyCode = unsigned int;
 		using MouseCode = unsigned int;
+		enum class EatMode : unsigned char
+		{
+			Pass,
+			Block,
+			Capture
+		};
 		struct xpos
 		{
 			float x, y;
@@ -13,8 +20,16 @@ namespace X_Y
 		class Input
 		{
 		public:
+			// pressed适合Ui,窗口行为，否则建议使用down的相关函数
+			//  检测按键/鼠标按下状态。返回 true 表示当前帧按下，false 表示未按下。
+			//   注意：IsKeyPressed/IsMouseButtonPressed 走 KeyMapper(供 UI/窗口事件)，
+			//       与 IsKeyDown/IsMouseDown 走硬件轮询并存，各司其职。
 			static bool IsKeyPressed(KeyCode key);
 			static bool IsMouseButtonPressed(MouseCode button);
+			// 返回当前按下的键码/鼠标按键码,如果没有按下返回0
+			// 多个按键同时按下时,返回第一个或者键码值小的，反正只能获取一个
+			static KeyCode GetKeyPressed();
+			static MouseCode GetMouseButtonPressed();
 
 			// 获取鼠标位置。返回的是全局屏幕坐标，非窗口客户区坐标。
 			// 需要窗口客户区坐标时，去 BaseWin 找 ScreenToClient / GetMouseScreenPos 等接口。
@@ -42,7 +57,68 @@ namespace X_Y
 			//     与这里的硬件轮询并存，各司其职。
 			static bool IsKeyDown(KeyCode key);		   // GetAsyncKeyState 直读
 			static bool IsMouseDown(MouseCode button); // GetAsyncKeyState 直读
+			static KeyCode GetKeyDown();			   // GetAsyncKeyState 直读
+			static MouseCode GetMouseDown();		   // GetAsyncKeyState 直读
+			// 平台键 → 内部键（接收 uint32_t 类型键码）
+			static Input_t::KeyCode Translate(uint32_t platformKey);
+
+			// 内部键 → 平台键
+			static uint32_t TranslateKey(Input_t::KeyCode key);
+
+			// 平台鼠标键 → 内部鼠标键
+			static Input_t::MouseCode TranslateMouse(uint32_t platformButton);
+
+			// 内部鼠标键 → 平台键
+			static uint32_t TranslateMouseKey(Input_t::MouseCode button);
+
+			// 给Input添加模拟输入的方法,直接输入到系统输入流,不依赖窗口焦点,可用于全局输入
+			/**
+			 * @brief 模拟输入一段文本（走 SendInput KEYEVENTF_UNICODE，全局输入流）
+			 * @param wstr 要输入的UTF‑16宽字符串，nullptr终止
+			 * @param charIntervalMs 字符之间的等待时间（毫秒），0表示不等待
+			 */
+			static bool SimulateTypeText(const wchar_t *wstr, uint32_t charIntervalMs = 0);
+			static bool SimulateTypeText(const char *utf8Str, uint32_t charIntervalMs = 0);
+			static bool SimulateTypeText(const std::string &utf8Str, uint32_t charIntervalMs = 0);
+			/**
+			 * @brief 模拟物理按键（VK虚拟键路径，SendInput）
+			 * @param key 内部GLFW风格KeyCode
+			 * @param pressed true=按下，false=松开
+			 * @note 内部会通过KeyMapper翻译成平台VK；映射失败直接return无动作
+			 */
+			static bool SimulateKey(KeyCode key, bool pressed);
+
+			/**
+			 * @brief 模拟鼠标按键按下/释放
+			 * @param button 内部MouseCode（Left / Right / Middle）
+			 * @param pressed true按下；false松开
+			 */
+			static bool SimulateMouse(MouseCode button, bool pressed);
+
+			/**
+			 * @brief 模拟鼠标滚轮
+			 * @param delta Windows标准滚轮单位：一个齿是 WHEEL_DELTA(120)；正数向上滚，负数向下滚
+			 */
+			static bool SimulateMouseWheel(float delta);
+
+			// 全局吞掉指定的真实输入，使其他窗口/页面收不到该按键。
+			// Pass=本程序通过查询接口/队列接收且放行给其他窗口，
+			// Block=本程序仍可通过原始查询接口接收，但拦截其他窗口，
+			// Capture=本程序通过 TryGetEat* 接收且拦截其他窗口。
+			static bool EatKey(KeyCode key, EatMode mode = EatMode::Block);
+			static bool EatMouse(MouseCode button, EatMode mode = EatMode::Block);
+			// 兼容旧接口：true=Block，false=Pass。
+			static bool EatKey(KeyCode key, bool enabled);
+			static bool EatMouse(MouseCode button, bool enabled);
+			// 取出一个 Capture 模式捕获的事件，返回 false 表示队列为空。
+			static bool TryGetEatKey(KeyCode &key, bool &pressed);
+			static bool TryGetEatMouse(MouseCode &button, bool &pressed);
+			static void ClearEatKeyQueue();
+			static void ClearEatMouseQueue();
+			static void ResetEatState();
+			static void StopHooks();
 		};
+
 		namespace Key
 		{
 			enum : KeyCode

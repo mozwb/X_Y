@@ -1,15 +1,16 @@
-#include "Input/Input.h"
-#include "Input/KeyMapper.h"
+// #include "../../Input/Input.h"
+#include "../../Input/KeyMapper.h"
 
 #ifdef XY_PLATFORM_WINDOWS
 // OEMRESOURCE 让 winuser.h 暴露 OCR_* 系统光标 id（SetSystemCursor 用）
 #define OEMRESOURCE
 #include <windows.h>
 #endif
+#include "../../XYTools.h"
 
 namespace X_Y
 {
-
+    // extern KeyMapper *GetMapper();
     // 全局 mapper 实例
     static KeyMapper *s_Mapper = nullptr;
 
@@ -35,6 +36,16 @@ namespace X_Y
         {
             auto *mapper = GetMapper();
             return mapper->IsMousePressed(static_cast<uint32_t>(button));
+        }
+        KeyCode Input::GetKeyPressed()
+        {
+            auto *mapper = GetMapper();
+            return static_cast<KeyCode>(mapper->GetKeyPressed());
+        }
+        MouseCode Input::GetMouseButtonPressed()
+        {
+            auto *mapper = GetMapper();
+            return static_cast<MouseCode>(mapper->GetMouseButtonPressed());
         }
 
         xpos Input::GetMousePosition()
@@ -139,5 +150,134 @@ namespace X_Y
             return mapper->IsMouseDown(static_cast<uint32_t>(button));
         }
 
+        KeyCode Input::GetKeyDown()
+        {
+            auto *mapper = GetMapper();
+            return static_cast<KeyCode>(mapper->GetKeyDown());
+        }
+        MouseCode Input::GetMouseDown()
+        {
+            auto *mapper = GetMapper();
+            return static_cast<MouseCode>(mapper->GetMouseDown());
+        }
+
+        Input_t::KeyCode Input::Translate(uint32_t platformKey)
+        {
+            auto *mapper = GetMapper();
+            return static_cast<Input_t::KeyCode>(mapper->PlatformToKey(platformKey));
+        }
+
+        uint32_t Input::TranslateKey(Input_t::KeyCode key)
+        {
+            auto *mapper = GetMapper();
+            return mapper->KeyToPlatform(static_cast<uint32_t>(key));
+        }
+
+        Input_t::MouseCode Input::TranslateMouse(uint32_t platformButton)
+        {
+            auto *mapper = GetMapper();
+            return static_cast<Input_t::MouseCode>(mapper->PlatformToMouse(platformButton));
+        }
+
+        uint32_t Input::TranslateMouseKey(Input_t::MouseCode button)
+        {
+            auto *mapper = GetMapper();
+            return mapper->MouseToPlatform(static_cast<uint32_t>(button));
+        }
+
+        bool Input::SimulateTypeText(const wchar_t *wstr, uint32_t charIntervalMs)
+        {
+            auto *mapper = GetMapper();
+            return mapper->SimulateTypeText(wstr, charIntervalMs);
+        }
+
+        bool Input::SimulateKey(KeyCode key, bool pressed)
+        {
+            auto *mapper = GetMapper();
+            return mapper->SimulateKey(static_cast<uint32_t>(key), pressed);
+        }
+        bool Input::SimulateMouse(MouseCode button, bool pressed)
+        {
+            auto *mapper = GetMapper();
+            return mapper->SimulateMouse(static_cast<uint32_t>(button), pressed);
+        }
+
+        bool Input::SimulateMouseWheel(float delta)
+        {
+            auto *mapper = GetMapper();
+            return mapper->SimulateMouseWheel(delta);
+        }
+
+        bool Input::EatKey(KeyCode key, EatMode mode)
+        {
+            return GetMapper()->EatKey(static_cast<uint32_t>(key), mode);
+        }
+
+        bool Input::EatMouse(MouseCode button, EatMode mode)
+        {
+            return GetMapper()->EatMouse(static_cast<uint32_t>(button), mode);
+        }
+
+        bool Input::EatKey(KeyCode key, bool enabled)
+        {
+            return EatKey(key, enabled ? EatMode::Block : EatMode::Pass);
+        }
+
+        bool Input::EatMouse(MouseCode button, bool enabled)
+        {
+            return EatMouse(button, enabled ? EatMode::Block : EatMode::Pass);
+        }
+
+        bool Input::TryGetEatKey(KeyCode &key, bool &pressed)
+        {
+            uint32_t platformKey = 0;
+            if (!GetMapper()->TryGetEatKey(platformKey, pressed))
+                return false;
+            key = static_cast<KeyCode>(GetMapper()->PlatformToKey(platformKey));
+            return key != 0;
+        }
+
+        bool Input::TryGetEatMouse(MouseCode &button, bool &pressed)
+        {
+            uint32_t platformButton = 0;
+            if (!GetMapper()->TryGetEatMouse(platformButton, pressed))
+                return false;
+            button = static_cast<MouseCode>(GetMapper()->PlatformToMouse(platformButton));
+            return true;
+        }
+
+        void Input::ClearEatKeyQueue()
+        {
+            GetMapper()->ClearEatKeyQueue();
+        }
+
+        void Input::ClearEatMouseQueue()
+        {
+            GetMapper()->ClearEatMouseQueue();
+        }
+
+        void Input::ResetEatState()
+        {
+            GetMapper()->ResetEatState();
+        }
+
+        void Input::StopHooks()
+        {
+            GetMapper()->StopHooks();
+        }
+
+        bool Input::SimulateTypeText(const char *utf8Str, uint32_t charIntervalMs)
+        {
+            if (!utf8Str)
+                return false;
+            auto wopt = utf8_to_wstring(utf8Str);
+            if (!wopt)
+                return false;
+            return SimulateTypeText(wopt->c_str(), charIntervalMs);
+        }
+        bool Input::SimulateTypeText(const std::string &utf8Str, uint32_t charIntervalMs)
+        {
+            return SimulateTypeText(utf8Str.c_str(), charIntervalMs);
+        }
     } // namespace Input_t
 } // namespace X_Y

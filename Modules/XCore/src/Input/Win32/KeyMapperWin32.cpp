@@ -1,51 +1,202 @@
-#include "Input/MapCode.h"
-#include "Input/KeyMapper.h"
+#include "../../../Input/KeyMapper.h"
+#include <array>
+#include <atomic>
+#include <condition_variable>
+#include <cstdlib>
+#include <deque>
+#include <mutex>
+#include <thread>
 #include <windows.h>
 
 namespace X_Y
 {
-
-    // ── 全局 KeyMapper 实例 ───────────────────────────
-    static KeyMapper *s_Mapper = nullptr;
-
-    // 懒初始化（在首次 Translate 调用时创建）
-    static KeyMapper *GetMapper()
+    namespace
     {
-        if (!s_Mapper)
+        std::array<std::atomic<Input_t::EatMode>, 256> s_keyModes{};
+        std::array<std::atomic<Input_t::EatMode>, 3> s_mouseModes{};
+        struct EatEvent
         {
-            s_Mapper = KeyMapperFactory::Create();
+            uint32_t code;
+            bool pressed;
+        };
+        std::mutex s_eatQueueMutex;
+        std::deque<EatEvent> s_keyQueue;
+        std::deque<EatEvent> s_mouseQueue;
+        HHOOK s_keyboardHook = nullptr;
+        HHOOK s_mouseHook = nullptr;
+        std::thread s_hookThread;
+        DWORD s_hookThreadId = 0;
+        std::mutex s_hookMutex;
+        std::condition_variable s_hookReady;
+        bool s_hookInitialized = false;
+
+        LRESULT CALLBACK KeyboardHookProc(int code, WPARAM wParam, LPARAM lParam)
+        {
+            if (code == HC_ACTION)
+            {
+                const auto *event = reinterpret_cast<const KBDLLHOOKSTRUCT *>(lParam);
+                const bool isKeyEvent = wParam == WM_KEYDOWN || wParam == WM_KEYUP ||
+                                        wParam == WM_SYSKEYDOWN || wParam == WM_SYSKEYUP;
+                if (isKeyEvent && event->vkCode < s_keyModes.size() &&
+                    (event->flags & LLKHF_INJECTED) == 0)
+                {
+                    const auto mode = s_keyModes[event->vkCode].load();
+                    if (mode == Input_t::EatMode::Pass || mode == Input_t::EatMode::Capture)
+                    {
+                        std::lock_guard lock(s_eatQueueMutex);
+                        s_keyQueue.push_back({event->vkCode,
+                                              wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN});
+                        if (mode == Input_t::EatMode::Capture)
+                            return 1;
+                    }
+                    if (mode == Input_t::EatMode::Block)
+                        return 1;
+                }
+            }
+            return ::CallNextHookEx(nullptr, code, wParam, lParam);
         }
-        return s_Mapper;
+
+        LRESULT CALLBACK MouseHookProc(int code, WPARAM wParam, LPARAM lParam)
+        {
+            if (code == HC_ACTION)
+            {
+                const auto *event = reinterpret_cast<const MSLLHOOKSTRUCT *>(lParam);
+                if ((event->flags & LLMHF_INJECTED) == 0)
+                {
+                    int button = -1;
+                    if (wParam == WM_LBUTTONDOWN || wParam == WM_LBUTTONUP)
+                        button = 0;
+                    else if (wParam == WM_RBUTTONDOWN || wParam == WM_RBUTTONUP)
+                        button = 1;
+                    else if (wParam == WM_MBUTTONDOWN || wParam == WM_MBUTTONUP)
+                        button = 2;
+                    if (button >= 0)
+                    {
+                        const auto mode = s_mouseModes[button].load();
+                        if (mode == Input_t::EatMode::Pass || mode == Input_t::EatMode::Capture)
+                        {
+                            std::lock_guard lock(s_eatQueueMutex);
+                            const uint32_t virtualButton = button == 0 ? VK_LBUTTON : button == 1 ? VK_RBUTTON
+                                                                                                  : VK_MBUTTON;
+                            s_mouseQueue.push_back({virtualButton,
+                                                    wParam == WM_LBUTTONDOWN ||
+                                                        wParam == WM_RBUTTONDOWN ||
+                                                        wParam == WM_MBUTTONDOWN});
+                            if (mode == Input_t::EatMode::Capture)
+                                return 1;
+                        }
+                        if (mode == Input_t::EatMode::Block)
+                            return 1;
+                    }
+                }
+            }
+            return ::CallNextHookEx(nullptr, code, wParam, lParam);
+        }
+
+        void HookThreadMain()
+        {
+            s_hookThreadId = ::GetCurrentThreadId();
+            MSG initialMessage{};
+            ::PeekMessageW(&initialMessage, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
+            HINSTANCE module = ::GetModuleHandleW(nullptr);
+            s_keyboardHook = ::SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardHookProc, module, 0);
+            s_mouseHook = ::SetWindowsHookExW(WH_MOUSE_LL, MouseHookProc, module, 0);
+
+            {
+                std::lock_guard lock(s_hookMutex);
+                s_hookInitialized = true;
+            }
+            s_hookReady.notify_all();
+
+            MSG message;
+            while (::GetMessageW(&message, nullptr, 0, 0) > 0)
+            {
+                ::TranslateMessage(&message);
+                ::DispatchMessageW(&message);
+            }
+
+            if (s_keyboardHook)
+                ::UnhookWindowsHookEx(s_keyboardHook);
+            if (s_mouseHook)
+                ::UnhookWindowsHookEx(s_mouseHook);
+        }
+
+        void StopHookThread();
+
+        bool EnsureHookThread()
+        {
+            std::unique_lock lock(s_hookMutex);
+            static std::once_flag cleanupFlag;
+            std::call_once(cleanupFlag, []
+                           { std::atexit(StopHookThread); });
+            if (!s_hookThread.joinable())
+            {
+                s_hookInitialized = false;
+                s_hookThread = std::thread(HookThreadMain);
+            }
+            s_hookReady.wait(lock, []
+                             { return s_hookInitialized; });
+            return s_keyboardHook != nullptr || s_mouseHook != nullptr;
+        }
+
+        void StopHookThread()
+        {
+            std::thread thread;
+            {
+                std::lock_guard lock(s_hookMutex);
+                if (!s_hookThread.joinable())
+                    return;
+                ::PostThreadMessageW(s_hookThreadId, WM_QUIT, 0, 0);
+                thread = std::move(s_hookThread);
+            }
+            thread.join();
+            std::lock_guard lock(s_hookMutex);
+            s_hookThreadId = 0;
+            s_hookInitialized = false;
+        }
     }
 
-    namespace InputMapping
-    {
+    // // ── 全局 KeyMapper 实例 ───────────────────────────
+    // static KeyMapper *s_Mapper = nullptr;
 
-        Input_t::KeyCode Translate(uint32_t platformKey)
-        {
-            auto *mapper = GetMapper();
-            return static_cast<Input_t::KeyCode>(mapper->PlatformToKey(platformKey));
-        }
+    // // 懒初始化（在首次 Translate 调用时创建）
+    // static KeyMapper *GetMapper()
+    // {
+    //     if (!s_Mapper)
+    //     {
+    //         s_Mapper = KeyMapperFactory::Create();
+    //     }
+    //     return s_Mapper;
+    // }
 
-        uint32_t TranslateKey(Input_t::KeyCode key)
-        {
-            auto *mapper = GetMapper();
-            return mapper->KeyToPlatform(static_cast<uint32_t>(key));
-        }
+    // namespace InputMapping
+    // {
 
-        Input_t::MouseCode TranslateMouse(uint32_t platformButton)
-        {
-            auto *mapper = GetMapper();
-            return static_cast<Input_t::MouseCode>(mapper->PlatformToMouse(platformButton));
-        }
+    //     Input_t::KeyCode Translate(uint32_t platformKey)
+    //     {
+    //         auto *mapper = GetMapper();
+    //         return static_cast<Input_t::KeyCode>(mapper->PlatformToKey(platformKey));
+    //     }
 
-        uint32_t TranslateMouseKey(Input_t::MouseCode button)
-        {
-            auto *mapper = GetMapper();
-            return mapper->MouseToPlatform(static_cast<uint32_t>(button));
-        }
+    //     uint32_t TranslateKey(Input_t::KeyCode key)
+    //     {
+    //         auto *mapper = GetMapper();
+    //         return mapper->KeyToPlatform(static_cast<uint32_t>(key));
+    //     }
 
-    } // namespace InputMapping
+    //     Input_t::MouseCode TranslateMouse(uint32_t platformButton)
+    //     {
+    //         auto *mapper = GetMapper();
+    //         return static_cast<Input_t::MouseCode>(mapper->PlatformToMouse(platformButton));
+    //     }
+
+    //     uint32_t TranslateMouseKey(Input_t::MouseCode button)
+    //     {
+    //         auto *mapper = GetMapper();
+    //         return mapper->MouseToPlatform(static_cast<uint32_t>(button));
+    //     }
+
+    // } // namespace InputMapping
 
     // ── Win32 平台的 KeyMapper 实现 ─────────────────────
 
@@ -224,6 +375,52 @@ namespace X_Y
             return (::GetAsyncKeyState((int)vk) & 0x8000) != 0;
         }
 
+        uint32_t GetKeyPressed() const override
+        {
+            for (uint32_t vk = 0; vk <= 0xFF; ++vk)
+            {
+                if (::GetKeyState((int)vk) & 0x8000)
+                {
+                    return PlatformToKey(vk);
+                }
+            }
+            return 0;
+        }
+
+        uint32_t GetMouseButtonPressed() const override
+        {
+            for (uint32_t vk : {VK_LBUTTON, VK_RBUTTON, VK_MBUTTON})
+            {
+                if (::GetKeyState((int)vk) & 0x8000)
+                {
+                    return PlatformToMouse(vk);
+                }
+            }
+            return 0;
+        }
+        uint32_t GetKeyDown() const override
+        {
+            for (uint32_t vk = 0; vk <= 0xFF; ++vk)
+            {
+                if (::GetAsyncKeyState((int)vk) & 0x8000)
+                {
+                    return PlatformToKey(vk);
+                }
+            }
+            return 0;
+        }
+        uint32_t GetMouseDown() const override
+        {
+            for (uint32_t vk : {VK_LBUTTON, VK_RBUTTON, VK_MBUTTON})
+            {
+                if (::GetAsyncKeyState((int)vk) & 0x8000)
+                {
+                    return PlatformToMouse(vk);
+                }
+            }
+            return 0;
+        }
+
         void GetMousePos(float &x, float &y) const override
         {
             POINT pt;
@@ -236,6 +433,158 @@ namespace X_Y
         {
             // 移动真实系统光标到全局屏幕坐标
             ::SetCursorPos((int)x, (int)y);
+        }
+
+        bool SimulateTypeText(const wchar_t *wstr, uint32_t charIntervalMs) override
+        {
+            if (!wstr)
+                return false;
+            while (*wstr)
+            {
+                wchar_t ch = *wstr++;
+                INPUT inp[2]{};
+                if (ch == L'\r' || ch == L'\n')
+                {
+                    if (ch == L'\r' && *wstr == L'\n')
+                        ++wstr;
+                    inp[0].type = INPUT_KEYBOARD;
+                    inp[0].ki.wVk = VK_RETURN;
+                    inp[0].ki.dwFlags = 0;
+                    inp[1].type = INPUT_KEYBOARD;
+                    inp[1].ki.wVk = VK_RETURN;
+                    inp[1].ki.dwFlags = KEYEVENTF_KEYUP;
+                }
+                else
+                {
+                    inp[0].type = INPUT_KEYBOARD;
+                    inp[0].ki.wVk = 0;
+                    inp[0].ki.wScan = ch;
+                    inp[0].ki.dwFlags = KEYEVENTF_UNICODE;
+                    inp[1].type = INPUT_KEYBOARD;
+                    inp[1].ki.wVk = 0;
+                    inp[1].ki.wScan = ch;
+                    inp[1].ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+                }
+                if (::SendInput(2, inp, sizeof(INPUT)) != 2)
+                    return false;
+                if (charIntervalMs > 0 && *wstr != L'\0')
+                    ::Sleep(charIntervalMs);
+            }
+            return true;
+        }
+        bool SimulateKey(uint32_t keyCode, bool pressed) override
+        {
+            const uint32_t vk = KeyToPlatform(keyCode);
+            if (vk == 0)
+                return false;
+            INPUT inp{};
+            inp.type = INPUT_KEYBOARD;
+            inp.ki.wVk = (WORD)vk;
+            inp.ki.dwFlags = pressed ? 0 : KEYEVENTF_KEYUP;
+            return ::SendInput(1, &inp, sizeof(INPUT)) == 1;
+        }
+        bool SimulateMouse(uint32_t mouseCode, bool pressed) override
+        {
+            uint32_t vk = MouseToPlatform(mouseCode);
+            INPUT inp{};
+            inp.type = INPUT_MOUSE;
+            if (vk == VK_LBUTTON)
+            {
+                inp.mi.dwFlags = pressed ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_LEFTUP;
+            }
+            else if (vk == VK_RBUTTON)
+            {
+                inp.mi.dwFlags = pressed ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_RIGHTUP;
+            }
+            else if (vk == VK_MBUTTON)
+            {
+                inp.mi.dwFlags = pressed ? MOUSEEVENTF_MIDDLEDOWN : MOUSEEVENTF_MIDDLEUP;
+            }
+            else
+            {
+                return false; // 未知鼠标键
+            }
+            return ::SendInput(1, &inp, sizeof(INPUT)) == 1;
+        }
+        bool SimulateMouseWheel(float delta) override
+        {
+            INPUT inp{};
+            inp.type = INPUT_MOUSE;
+            inp.mi.dwFlags = MOUSEEVENTF_WHEEL;
+            inp.mi.mouseData = (DWORD)(delta * WHEEL_DELTA); // Windows标准滚轮单位
+            return ::SendInput(1, &inp, sizeof(INPUT)) == 1;
+        }
+
+        bool EatKey(uint32_t keyCode, Input_t::EatMode mode) override
+        {
+            const uint32_t vk = KeyToPlatform(keyCode);
+            if (vk == 0 || vk >= s_keyModes.size())
+                return false;
+            if (mode != Input_t::EatMode::Pass && !EnsureHookThread())
+                return false;
+            s_keyModes[vk].store(mode);
+            return true;
+        }
+
+        bool EatMouse(uint32_t mouseCode, Input_t::EatMode mode) override
+        {
+            if (mouseCode > Input_t::Mouse::ButtonMiddle)
+                return false;
+            if (mode != Input_t::EatMode::Pass && !EnsureHookThread())
+                return false;
+            s_mouseModes[mouseCode].store(mode);
+            return true;
+        }
+
+        bool TryGetEatKey(uint32_t &keyCode, bool &pressed) override
+        {
+            std::lock_guard lock(s_eatQueueMutex);
+            if (s_keyQueue.empty())
+                return false;
+            keyCode = s_keyQueue.front().code;
+            pressed = s_keyQueue.front().pressed;
+            s_keyQueue.pop_front();
+            return true;
+        }
+
+        bool TryGetEatMouse(uint32_t &mouseCode, bool &pressed) override
+        {
+            std::lock_guard lock(s_eatQueueMutex);
+            if (s_mouseQueue.empty())
+                return false;
+            mouseCode = s_mouseQueue.front().code;
+            pressed = s_mouseQueue.front().pressed;
+            s_mouseQueue.pop_front();
+            return true;
+        }
+
+        void ClearEatKeyQueue() override
+        {
+            std::lock_guard lock(s_eatQueueMutex);
+            s_keyQueue.clear();
+        }
+
+        void ClearEatMouseQueue() override
+        {
+            std::lock_guard lock(s_eatQueueMutex);
+            s_mouseQueue.clear();
+        }
+
+        void ResetEatState() override
+        {
+            for (auto &mode : s_keyModes)
+                mode.store(Input_t::EatMode::Pass);
+            for (auto &mode : s_mouseModes)
+                mode.store(Input_t::EatMode::Pass);
+
+            std::lock_guard lock(s_eatQueueMutex);
+            s_keyQueue.clear();
+            s_mouseQueue.clear();
+        }
+
+        void StopHooks() override
+        {
+            StopHookThread();
         }
     };
 

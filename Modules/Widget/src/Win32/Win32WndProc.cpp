@@ -8,11 +8,10 @@
 #include "Movement/MouseMovement.h"
 #include "Canvas.h"
 #include "Dpi.h"
-#include "XCore/Input/MapCode.h"
 
 namespace X_Y::Win32
 {
-
+    using InputMapping = Input_t::Input;
     LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         using BaseWin = X_Y::BaseWin;

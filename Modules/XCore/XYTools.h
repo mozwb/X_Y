@@ -107,5 +107,25 @@ inline std::optional<std::string> gbk_to_utf8(const std::string &gbk_str)
 {
 	return gbk_to_utf8(gbk_str.c_str());
 }
+// UTF‑8 char* → std::wstring(UTF‑16)
+inline std::optional<std::wstring> utf8_to_wstring(const char *utf8)
+{
+	if (!utf8 || *utf8 == '\0')
+		return std::wstring{};
 
+	int wlen = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, nullptr, 0);
+	if (wlen <= 0)
+	{
+		return std::nullopt;
+	}
+	std::wstring wstr(wlen, 0);
+	MultiByteToWideChar(CP_UTF8, 0, utf8, -1, wstr.data(), wlen);
+	return wstr;
+}
+
+// 重载 std::string
+inline std::optional<std::wstring> utf8_to_wstring(const std::string &utf8_str)
+{
+	return utf8_to_wstring(utf8_str.c_str());
+}
 #endif

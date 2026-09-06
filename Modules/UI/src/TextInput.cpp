@@ -1,5 +1,5 @@
 #include "Component/TextInput.h"
-#include "XCore/Input/MapCode.h"
+#include "XCore/Input/Input.h"
 #include "Widget/FontLibrary.h"
 
 namespace X_Y
