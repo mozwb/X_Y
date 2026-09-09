@@ -358,6 +358,7 @@ namespace X_Y
         {
             if (me->action == MouseAction::Press)
             {
+                m_MouseCaptureDock = nullptr;
                 // 按下：命中分割线 → 进入拖拽（拦截，不下传）
                 for (Dock *dock : m_Docks)
                 {
@@ -375,6 +376,18 @@ namespace X_Y
                     }
                 }
                 m_DraggingBoundary = InvalidBoundary;
+
+                for (Dock *dock : m_Docks)
+                {
+                    if (!dock)
+                        continue;
+                    if (e.x >= dock->GetX() && e.x < dock->GetX() + dock->GetWidth() &&
+                        e.y >= dock->GetY() && e.y < dock->GetY() + dock->GetHeight())
+                    {
+                        m_MouseCaptureDock = dock;
+                        break;
+                    }
+                }
             }
             else if (me->action == MouseAction::Move)
             {
@@ -434,6 +447,20 @@ namespace X_Y
         }
 
         // 非拖拽（或键盘）：下传给命中的 Dock（平移坐标）
+        Dock *targetDock = m_MouseCaptureDock;
+        if (targetDock)
+        {
+            const int dx = targetDock->GetX(), dy = targetDock->GetY();
+            e.x -= dx;
+            e.y -= dy;
+            targetDock->RouteInput(e);
+            e.x += dx;
+            e.y += dy;
+            if (me && me->action == MouseAction::Release)
+                m_MouseCaptureDock = nullptr;
+            return;
+        }
+
         for (Dock *dock : m_Docks)
         {
             if (!dock)

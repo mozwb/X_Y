@@ -72,11 +72,15 @@ namespace X_Y
 
     void Panel::SetFocusedComponent(Component *comp)
     {
+        if (m_FocusedComponent == comp)
+            return;
+
         if (m_FocusedComponent)
             m_FocusedComponent->SetFocused(false);
         m_FocusedComponent = comp;
         if (m_FocusedComponent)
             m_FocusedComponent->SetFocused(true);
+        RequestRepaint();
     }
 
     // ── 输入命中路由：把事件对象下传给命中的组件（z 序），支持 Handled 冒泡 ──

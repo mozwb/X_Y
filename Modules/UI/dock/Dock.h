@@ -158,6 +158,7 @@ namespace X_Y
 
     protected:
         void ShowActivePanel();
+        void UpdatePanelRects();
         // 内部：移除面板但不触发合并（Split 时需要把活跃面板切给新 Dock）
         void RemovePanelInternal(Panel *panel);
 
@@ -178,6 +179,7 @@ namespace X_Y
         bool m_Splittable = true; // 是否允许切分自己
 
         DockBoundary m_Boundary; // 我引用的 4 条边界
+        Panel *m_MouseCapturePanel = nullptr;
 
         std::function<void()> m_HostRepaint;
         void RequestRepaint()

@@ -24,13 +24,25 @@ namespace X_Y
             m_PanelW = m_W;
             m_PanelH = std::max(0, m_H - m_MenuBarHeight);
         }
-        ShowActivePanel(); // 重排后同步激活 Panel 的布局矩形
+        UpdatePanelRects(); // 重排后同步所有 Panel 的布局矩形
     }
 
     void Dock::RecalcRect()
     {
         if (!m_Layout)
             return;
+
+        if (m_Boundary.top == InvalidBoundary &&
+            m_Boundary.bottom == InvalidBoundary &&
+            m_Boundary.left == InvalidBoundary &&
+            m_Boundary.right == InvalidBoundary)
+        {
+            m_X = 0;
+            m_Y = 0;
+            m_W = std::max(0, m_LayoutW);
+            m_H = std::max(0, m_LayoutH);
+            return;
+        }
 
         auto halfGap = [&](BoundaryId id) -> int
         {
@@ -56,6 +68,13 @@ namespace X_Y
             m_Y = top;
             m_W = right - left;
             m_H = bottom - top;
+        }
+        else
+        {
+            m_X = left;
+            m_Y = top;
+            m_W = 0;
+            m_H = 0;
         }
     }
 
@@ -146,6 +165,9 @@ namespace X_Y
         // e.x/e.y 为 dock 内坐标（0,0 = dock 左上，由 DockLayout 平移好）
         if (auto *me = dynamic_cast<UIMouseEvent *>(&e))
         {
+            if (me->action == MouseAction::Press)
+                m_MouseCapturePanel = nullptr;
+
             if (me->action == MouseAction::Press && e.y >= 0 && e.y < m_MenuBarHeight)
             {
                 const int tabW = 120;
@@ -174,9 +196,16 @@ namespace X_Y
             return;
         }
 
-        Panel *p = HitTestPanel(e.x, e.y);
+        Panel *p = m_MouseCapturePanel;
+        if (!p)
+            p = HitTestPanel(e.x, e.y);
+
         if (p)
         {
+            if (auto *me = dynamic_cast<UIMouseEvent *>(&e);
+                me && me->action == MouseAction::Press)
+                m_MouseCapturePanel = p;
+
             const int px0 = p->GetX() - m_X; // panel 相对 dock 的偏移
             const int py0 = p->GetY() - m_Y;
             e.x -= px0;
@@ -185,6 +214,10 @@ namespace X_Y
             e.x += px0;
             e.y += py0;
         }
+
+        if (auto *me = dynamic_cast<UIMouseEvent *>(&e);
+            me && me->action == MouseAction::Release)
+            m_MouseCapturePanel = nullptr;
     }
 
     // ── 面板管理 ──
@@ -293,12 +326,21 @@ namespace X_Y
 
     void Dock::ShowActivePanel()
     {
-        // Panel 矩形使用 Dock 内局部坐标，避免 Tab 栏和内容区的坐标约定分裂。
-        Panel *active = GetActivePanel();
-        if (active)
-            active->SetLayoutRect(m_X + m_PanelX, m_Y + m_PanelY,
-                                  m_PanelW, m_PanelH);
+        UpdatePanelRects();
         RequestRepaint();
+    }
+
+    void Dock::UpdatePanelRects()
+    {
+        Panel *active = GetActivePanel();
+        if (!active)
+            return;
+
+        const int panelX = std::clamp(m_PanelX, 0, m_W);
+        const int panelY = std::clamp(m_PanelY, 0, m_H);
+        const int panelW = std::min(m_PanelW, m_W - panelX);
+        const int panelH = std::min(m_PanelH, m_H - panelY);
+        active->SetLayoutRect(m_X + panelX, m_Y + panelY, panelW, panelH);
     }
 
     // ── 绘制：tab 栏 + 激活 Panel 内容 ──

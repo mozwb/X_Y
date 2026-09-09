@@ -370,7 +370,7 @@ namespace X_Y
         RebuildAll();
     }
 
-    int LogViewer::MeasureTags(Canvas &canvas)
+    int LogViewer::MeasureTags()
     {
         m_TagRects.clear();
         m_TagCloseRects.clear();
@@ -405,7 +405,6 @@ namespace X_Y
             x += tagWidth + m_TagGap;
         }
 
-        (void)canvas;
         return rows * rowHeight + (rows - 1) * m_TagGap + 4;
     }
 
@@ -456,9 +455,15 @@ namespace X_Y
 
     void LogViewer::OnPaint(Canvas &canvas)
     {
-        MeasureTags(canvas);
+        MeasureTags();
+        OnLayout();
 
         canvas.FillRect(GetX(), GetY(), GetWidth(), GetHeight(), 0xFF1E1E1E);
+        canvas.FillRect(GetX() + m_ScrollArea->GetX(),
+                        GetY() + m_ScrollArea->GetY(),
+                        m_ScrollArea->GetWidth(),
+                        m_ScrollArea->GetHeight(),
+                        0xFF000000);
 
         // 共享锁：保护 m_LogStripe（Ticker 线程可能正增量写）以及绘制
         {
@@ -478,6 +483,8 @@ namespace X_Y
         if (w <= 0 || h <= 0)
             return;
 
+        MeasureTags();
+
         // 输入框：筛选标签条之下
         // 这里的w应该预留出来m_ScrollArea滑块的宽度
         const int tagHeight = m_TagRects.empty() ? 0 : m_TagRects.back().y + m_TagRects.back().h + 2;
@@ -488,9 +495,8 @@ namespace X_Y
 
         // 日志区：占满剩余
         int panelY = inputY + inputH + gap;
-        int panelH = h - panelY;
-        if (panelH > 0)
-            m_ScrollArea->SetRect(0, panelY, w, panelH);
+        int panelH = std::max(0, h - panelY);
+        m_ScrollArea->SetRect(0, panelY, w, panelH);
 
         w = m_ScrollArea->GetViewWidth();
         m_KeywordInput->SetRect(0, inputY, w, inputH);

@@ -41,9 +41,9 @@ endif()
 
 # ── 输出目录：dist/lib/<toolset> ─────────────────
 if(MSVC)
-    set(XY_LIB_DIR "${CMAKE_SOURCE_DIR}/dist/lib/msvc")
+    set(XY_LIB_DIR "${PROJECT_SOURCE_DIR}/dist/lib/msvc")
 else()
-    set(XY_LIB_DIR "${CMAKE_SOURCE_DIR}/dist/lib/mingw")
+    set(XY_LIB_DIR "${PROJECT_SOURCE_DIR}/dist/lib/mingw")
 endif()
 
 # ══════════════════════════════════════════════════════
@@ -51,7 +51,7 @@ endif()
 #   xy_module(NAME)   → 用 Modules/NAME 下的 include + src
 # ══════════════════════════════════════════════════════
 function(xy_module NAME)
-    set(_src_dir "${CMAKE_SOURCE_DIR}/Modules/${NAME}")
+    set(_src_dir "${PROJECT_SOURCE_DIR}/Modules/${NAME}")
     file(GLOB_RECURSE _src
         "${_src_dir}/src/*.cpp"
         "${_src_dir}/src/*.h"
@@ -61,8 +61,8 @@ function(xy_module NAME)
 
     target_include_directories(${NAME} PUBLIC
         "${_src_dir}"                        # 本模块根：内部 #include "Canvas.h"
-        "${CMAKE_SOURCE_DIR}/Modules"       # 跨模块：#include "Widget/Canvas.h"
-        "${CMAKE_SOURCE_DIR}")              # vendor/... 从 X_Y 根解析
+        "${PROJECT_SOURCE_DIR}/Modules"       # 跨模块：#include "Widget/Canvas.h"
+        "${PROJECT_SOURCE_DIR}")              # vendor/... 从 X_Y 根解析
 
     set_target_properties(${NAME} PROPERTIES
         ARCHIVE_OUTPUT_DIRECTORY "${XY_LIB_DIR}")
@@ -71,9 +71,9 @@ endfunction()
 # ══════════════════════════════════════════════════════
 # vendor：glad(静态库) / glm(header-only，提供 include) / imgui(并入需要它的模块)
 # ══════════════════════════════════════════════════════
-add_library(glad STATIC "vendor/glad/src/glad.c")
+add_library(glad STATIC "${PROJECT_SOURCE_DIR}/vendor/glad/src/glad.c")
 target_include_directories(glad PUBLIC
-    "${CMAKE_SOURCE_DIR}/vendor/glad/include")
+    "${PROJECT_SOURCE_DIR}/vendor/glad/include")
 set_target_properties(glad PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${XY_LIB_DIR}")
 
@@ -82,7 +82,7 @@ set_target_properties(glad PROPERTIES
 # ── Core 底层 ──
 xy_module(XCore)
 target_include_directories(XCore PUBLIC
-    "${CMAKE_SOURCE_DIR}/vendor"
+    "${PROJECT_SOURCE_DIR}/vendor"
     )
 xy_module(Middle)
 
@@ -141,11 +141,11 @@ if(WIN32)
     target_link_libraries(UI PUBLIC opengl32)
 endif()
 # imgui 源码并入 UI 模块
-file(GLOB IMGUI_SRC "vendor/imgui/*.cpp" "vendor/imgui/backends/*.cpp")
+file(GLOB IMGUI_SRC "${PROJECT_SOURCE_DIR}/vendor/imgui/*.cpp" "${PROJECT_SOURCE_DIR}/vendor/imgui/backends/*.cpp")
 target_sources(UI PRIVATE ${IMGUI_SRC})
 target_include_directories(UI PUBLIC
-    "${CMAKE_SOURCE_DIR}/vendor/imgui"
-    "${CMAKE_SOURCE_DIR}/vendor/imgui/backends")
+    "${PROJECT_SOURCE_DIR}/vendor/imgui"
+    "${PROJECT_SOURCE_DIR}/vendor/imgui/backends")
 
 # ══════════════════════════════════════════════════════
 # ── Render 层 ──
@@ -165,7 +165,7 @@ target_link_libraries(Physics PUBLIC XCore)
 #   或  cmake --install build --config Debug --prefix "D:/workbench/X_Y/dist"
 # install(DIRECTORY) 自带递归，子目录里的 .h/.hpp 也会一并装进去
 # ══════════════════════════════════════════════════════
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/Modules/"
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/Modules/"
         DESTINATION "include"
         FILES_MATCHING
         PATTERN "*.h"

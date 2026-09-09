@@ -54,7 +54,7 @@ namespace X_Y
         void OnEnterKeyword();
         // 某个 tag 被点击 × 删除
         void OnTagRemoved(const std::string &tag);
-        int MeasureTags(Canvas &canvas);
+        int MeasureTags();
         void PaintTags(Canvas &canvas);
         int HitTestTag(int x, int y) const;
         bool IsInTagClose(int index, int x, int y) const;

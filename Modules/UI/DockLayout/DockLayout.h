@@ -97,6 +97,7 @@ namespace X_Y
 
         BoundaryId m_DraggingBoundary = InvalidBoundary;
         int m_LastDragX = 0, m_LastDragY = 0;
+        Dock *m_MouseCaptureDock = nullptr;
         Panel *m_FileDropPanel = nullptr;
 
         std::function<void()> m_HostRepaint;
