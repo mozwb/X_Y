@@ -78,6 +78,40 @@ namespace X_Y
         }
     }
 
+    bool Dock::IsBoundaryPositionValid(BoundaryId id, float line) const
+    {
+        if (!m_Layout)
+            return true;
+
+        auto boundaryLine = [this](BoundaryId boundaryId) -> const float *
+        {
+            const Boundary *boundary = m_Layout->GetBoundary(boundaryId);
+            return boundary ? &boundary->line : nullptr;
+        };
+
+        if (id == m_Boundary.left)
+        {
+            const float *right = boundaryLine(m_Boundary.right);
+            return line + m_MinWidth <= (right ? *right : 1.0f);
+        }
+        if (id == m_Boundary.right)
+        {
+            const float *left = boundaryLine(m_Boundary.left);
+            return (left ? *left : 0.0f) + m_MinWidth <= line;
+        }
+        if (id == m_Boundary.top)
+        {
+            const float *bottom = boundaryLine(m_Boundary.bottom);
+            return line + m_MinHeight <= (bottom ? *bottom : 1.0f);
+        }
+        if (id == m_Boundary.bottom)
+        {
+            const float *top = boundaryLine(m_Boundary.top);
+            return (top ? *top : 0.0f) + m_MinHeight <= line;
+        }
+        return true;
+    }
+
     void Dock::SetPanelArea(int x, int y, int w, int h)
     {
         m_PanelX = x;

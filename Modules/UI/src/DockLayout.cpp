@@ -76,8 +76,16 @@ namespace X_Y
     {
         if (!IsValidBoundary(id))
             return false;
-        const auto &b = m_Boundaries[id];
-        m_Boundaries[id].line = std::clamp(line, b.min, b.max);
+
+        const Boundary &boundary = m_Boundaries[id];
+        line = std::clamp(line, boundary.min, boundary.max);
+        for (Dock *dock : m_Docks)
+        {
+            if (dock && !dock->IsBoundaryPositionValid(id, line))
+                return false;
+        }
+
+        m_Boundaries[id].line = line;
         RecalcLayout();
         RequestRepaint();
         return true;
@@ -412,9 +420,8 @@ namespace X_Y
                                                    ? m_LayoutW
                                                    : m_LayoutH;
                             if (extent > 0)
-                                bd.line = std::clamp(bd.line + static_cast<float>(delta) / extent,
-                                                     bd.min, bd.max);
-                            RecalcLayout();
+                                SetBoundaryLine(m_DraggingBoundary,
+                                                bd.line + static_cast<float>(delta) / extent);
                         }
                         m_LastDragX = e.x;
                         m_LastDragY = e.y;

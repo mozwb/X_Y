@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Panel/Panel.h"
+#include <algorithm>
 #include <string>
 #include <vector>
 #include <functional>
@@ -101,6 +102,11 @@ namespace X_Y
         int GetY() const { return m_Y; }
         int GetWidth() const { return m_W; }
         int GetHeight() const { return m_H; }
+        bool IsBoundaryPositionValid(BoundaryId id, float line) const;
+        void SetMinimumWidth(float width) { m_MinWidth = width; }
+        void SetMinimumHeight(float height) { m_MinHeight = height; }
+        float GetMinimumWidth() const { return m_MinWidth; }
+        float GetMinimumHeight() const { return m_MinHeight; }
 
         // ── 面板显示区域 ──
         // 坐标相对 Dock 左上角；默认区域为整个 Dock（菜单栏由 Dock 自动避让）。
@@ -168,6 +174,8 @@ namespace X_Y
         int m_PanelW = 100, m_PanelH = 76;
         int m_MenuBarHeight = 0;
         bool m_PanelAreaCustomized = false;
+        float m_MinWidth = 0.05f;
+        float m_MinHeight = 0.05f;
         int m_MaxPanelCount = -1; // 最大面板数，为负数表示不限制
         std::vector<Panel *> m_Panels;
         std::vector<std::string> m_Titles;

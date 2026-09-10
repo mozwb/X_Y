@@ -28,7 +28,13 @@ namespace X_Y
         virtual ~DockLayout();
 
         // ── 宿主注入 ──
-        void SetHostRepaint(std::function<void()> cb) { m_HostRepaint = std::move(cb); }
+        void SetHostRepaint(std::function<void()> cb)
+        {
+            m_HostRepaint = std::move(cb);
+            for (Dock *dock : m_Docks)
+                if (dock)
+                    dock->SetHostRepaint(m_HostRepaint);
+        }
         std::function<void()> GetHostRepaint() const { return m_HostRepaint; }
         void SetActiveSize(int w, int h); // 壳的布局区域尺寸
 
