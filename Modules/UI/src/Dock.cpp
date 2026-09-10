@@ -163,9 +163,14 @@ namespace X_Y
             if (std::abs(coord - pos) > hitT)
                 return false;
             // 跨度沿另一维度
-            const int extent = vertical ? m_LayoutH : m_LayoutW;
-            const int spanLo = static_cast<int>(b->start * extent);
-            const int spanHi = static_cast<int>(b->end * extent);
+            float start = 0.0f;
+            float end = 1.0f;
+            if (!m_Layout->GetBoundarySize(id, start, end))
+                return false;
+            const int extent = vertical ? m_Layout->GetLayoutHeight()
+                                        : m_Layout->GetLayoutWidth();
+            const int spanLo = static_cast<int>(start * extent);
+            const int spanHi = static_cast<int>(end * extent);
             const int spanCoord = vertical ? y : x;
             return spanCoord >= spanLo && spanCoord <= spanHi;
         };

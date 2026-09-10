@@ -46,9 +46,14 @@ namespace X_Y
                                BoundaryStatus status = BoundaryStatus::Movable);
         bool SetBoundaryColor(BoundaryId id, uint32_t color);
         bool SetBoundaryLine(BoundaryId id, float line);
-        bool SetBoundarySize(BoundaryId id, float min, float max);
+        // 设置边界可移动范围。
+        bool SetBoundaryRange(BoundaryId id, float min, float max);
         bool SetBoundaryWidth(BoundaryId id, int width);
-        bool SetBoundaryRange(BoundaryId id, float start, float end);
+        // 设置边界绘制跨度。
+        bool SetBoundarySize(BoundaryId id, BoundaryId startBoundary,
+                             BoundaryId endBoundary);
+        bool GetBoundarySize(BoundaryId id, float &start, float &end) const;
+
         bool MoveBoundary(BoundaryId id, int delta);
         bool RemoveBoundary(BoundaryId id);
 

@@ -100,7 +100,7 @@ namespace X_Y
         return true;
     }
 
-    bool DockLayout::SetBoundarySize(BoundaryId id, float min, float max)
+    bool DockLayout::SetBoundaryRange(BoundaryId id, float min, float max)
     {
         if (!IsValidBoundary(id))
             return false;
@@ -119,18 +119,49 @@ namespace X_Y
         return true;
     }
 
-    bool DockLayout::SetBoundaryRange(BoundaryId id, float start, float end)
+    bool DockLayout::SetBoundarySize(BoundaryId id, BoundaryId startBoundary,
+                                     BoundaryId endBoundary)
     {
         if (!IsValidBoundary(id))
             return false;
-        m_Boundaries[id].start = ClampT(start);
-        m_Boundaries[id].end = ClampT(end);
-        if (m_Boundaries[id].start >= m_Boundaries[id].end)
-        {
-            m_Boundaries[id].start = 0.0f;
-            m_Boundaries[id].end = 1.0f;
-        }
+        if (startBoundary != InvalidBoundary && !IsValidBoundary(startBoundary))
+            return false;
+        if (endBoundary != InvalidBoundary && !IsValidBoundary(endBoundary))
+            return false;
+
+        m_Boundaries[id].startBoundary = startBoundary;
+        m_Boundaries[id].endBoundary = endBoundary;
         RequestRepaint();
+        return true;
+    }
+
+    bool DockLayout::GetBoundarySize(BoundaryId id, float &start, float &end) const
+    {
+        if (!IsValidBoundary(id))
+            return false;
+
+        const Boundary &boundary = m_Boundaries[id];
+        const bool vertical = boundary.orientation == BoundaryOrientation::Vertical;
+        const int extent = vertical ? m_LayoutH : m_LayoutW;
+        auto resolve = [this, extent](BoundaryId rangeBoundary, float fallback) -> float
+        {
+            if (rangeBoundary == InvalidBoundary)
+                return fallback;
+            const Boundary *boundary = GetBoundary(rangeBoundary);
+            if (!boundary)
+                return fallback;
+            const int boundaryExtent = boundary->orientation == BoundaryOrientation::Vertical
+                                           ? m_LayoutW
+                                           : m_LayoutH;
+            if (boundaryExtent <= 0 || extent <= 0)
+                return fallback;
+            return static_cast<float>(BoundaryPosition(rangeBoundary)) / extent;
+        };
+
+        start = ClampT(resolve(boundary.startBoundary, 0.0f));
+        end = ClampT(resolve(boundary.endBoundary, 1.0f));
+        if (start > end)
+            std::swap(start, end);
         return true;
     }
 
@@ -348,9 +379,14 @@ namespace X_Y
             if (b.removed || b.status != BoundaryStatus::Movable)
                 continue;
             const int pos = BoundaryPosition(id);
+            float start = 0.0f;
+            float end = 1.0f;
+            GetBoundarySize(id, start, end);
             const bool hit = b.orientation == BoundaryOrientation::Vertical
-                                 ? std::abs(x - pos) <= thickness
-                                 : std::abs(y - pos) <= thickness;
+                                 ? (std::abs(x - pos) <= thickness &&
+                                    y >= start * m_LayoutH && y <= end * m_LayoutH)
+                                 : (std::abs(y - pos) <= thickness &&
+                                    x >= start * m_LayoutW && x <= end * m_LayoutW);
             if (hit)
                 return id;
         }
@@ -517,17 +553,20 @@ namespace X_Y
             if (b.removed)
                 continue;
             const int pos = BoundaryPosition(id);
+            float start = 0.0f;
+            float end = 1.0f;
+            GetBoundarySize(id, start, end);
             const uint32_t color = id == m_DraggingBoundary ? b.dragcolor : b.color;
             if (b.orientation == BoundaryOrientation::Vertical)
             {
-                const int s = static_cast<int>(b.start * m_LayoutH);
-                const int e = static_cast<int>(b.end * m_LayoutH);
+                const int s = static_cast<int>(start * m_LayoutH);
+                const int e = static_cast<int>(end * m_LayoutH);
                 canvas.FillRect(pos - thickness / 2, s, thickness, std::max(1, e - s), color);
             }
             else
             {
-                const int s = static_cast<int>(b.start * m_LayoutW);
-                const int e = static_cast<int>(b.end * m_LayoutW);
+                const int s = static_cast<int>(start * m_LayoutW);
+                const int e = static_cast<int>(end * m_LayoutW);
                 canvas.FillRect(s, pos - thickness / 2, std::max(1, e - s), thickness, color);
             }
         }

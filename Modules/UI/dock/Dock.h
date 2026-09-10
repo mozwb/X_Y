@@ -42,8 +42,8 @@ namespace X_Y
         float min = 0.05f;
         float max = 0.95f;
         int width = 4; // 缝隙总宽（两侧各露 width/2）
-        float start = 0.0f;
-        float end = 1.0f;
+        BoundaryId startBoundary = InvalidBoundary;
+        BoundaryId endBoundary = InvalidBoundary;
         bool removed = false; // 墓碑
     };
 

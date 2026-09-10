@@ -1,5 +1,15 @@
 # DEVLOG
 
+
+## 2026-9-10
+
+> Input层补充了和模拟操作相关的是实现
+> Docklayout基本完工
+
+
+
+
+
 > 📌 下一个会话接手 UI 重构任务前，先读 `_notes/arch/UI_REWORK_HANDOFF.md`（新架构 + 任务 A【迁移 LogViewer/HexViewer】 + 任务 B【拖入拖出 DetachPanel/TakePanel】的完整说明）。
 
 ## 2026-08-25（收工）— UI 事件：泛型 HitTest 路由 + 事件对象化全链路（砚台决策）
@@ -236,7 +246,7 @@ Panel （纯逻辑，无 HWND，不认宿主）
 - `Boundary` 加 `float start=0, end=1`：沿边界自身的跨度（相对比例）。
   - 水平线 → x 从 start×宽 到 end×宽；垂直线 → y 从 start×高 到 end×高。
   - 默认 [0,1] 贯穿，行为不变。
-- `DockLayout::SetBoundaryRange(id, start, end)`：设置跨度，clamp 到 0~1，start>=end 时恢复默认贯穿。
+- `DockLayout::SetBoundarySize(id, startBoundary, endBoundary)`：设置跟随边界的绘制跨度。
 - `DockLayout::OnPaint`：画线只画该边界实际跨度段（`FillRect` 用 `start/end`×尺寸）。
 - `Dock::HitTestEdge`：命中额外要求坐标落在跨度内（分段边界只那段可拖）。
 
@@ -459,12 +469,12 @@ X_Y::Physics::Test(a, b, [](Body& x, Body& y){ /*碰撞处理*/ });
 
 **今日 LogViewer 全部完成并通过砚台验收。**（拆行与 WM_CHAR 见前两条日志。）
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 改 | APP/UI/src/Composite/LogViewer.cpp | 筛选支持 AND：tag 内用 && 分隔（error && info = 同时含二者），tag 之间仍 OR；新增 SplitAndParts |
-| 改 | APP/UI/src/TagBar.cpp | TagBar 空态折叠：无 tag 时高度压 0，不占顶部空间 |
-| 改 | APP/UI/src/Container.cpp | 鼠标按下 CaptureMouse / 松手 ReleaseMouseCapture：修复拖滑块移出窗口后松手不触发（SetCapture 标准做法） |
-| 改 | APP/UI/src/Container.cpp | 鼠标按下后 RequestRepaint：点击输入框光标立即出现 |
+| 操作 | 文件                               | 说明                                                                                                    |
+| ---- | ---------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 改   | APP/UI/src/Composite/LogViewer.cpp | 筛选支持 AND：tag 内用 && 分隔（error && info = 同时含二者），tag 之间仍 OR；新增 SplitAndParts         |
+| 改   | APP/UI/src/TagBar.cpp              | TagBar 空态折叠：无 tag 时高度压 0，不占顶部空间                                                        |
+| 改   | APP/UI/src/Container.cpp           | 鼠标按下 CaptureMouse / 松手 ReleaseMouseCapture：修复拖滑块移出窗口后松手不触发（SetCapture 标准做法） |
+| 改   | APP/UI/src/Container.cpp           | 鼠标按下后 RequestRepaint：点击输入框光标立即出现                                                       |
 
 **今日全部提交（main）：** 3aa5544 折行 → e62ea2b WM_CHAR → e77124e 区分大小写 → 15324ca TagBar多关键词 → 102d2ef 右上角删除+debug → d0dc733 移debug → 56fab36 AND逻辑 → 95d5070 TagBar空态折叠 → de32f2b 焦点光标 → b454f3f 鼠标捕获 → 34fbad3 ListBox空行
 
@@ -478,12 +488,12 @@ X_Y::Physics::Test(a, b, [](Body& x, Body& y){ /*碰撞处理*/ });
 
 **背景：** 砚台要 LogViewer 支持多关键词筛选：输入框加占位提示；输入关键词回车添加到顶部标签条（LeetCode 式 filter chips），满足任一关键词（OR）即筛出，每条可删除。
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 新 | APP/UI/include/Component/TagBar.h + src/TagBar.cpp | 横向筛选标签条：自动换行、圆角矩形(FillRoundRect)、左上角 × 删除按钮、hover 高亮、点击×回调 OnTagRemove、Measure()量高供宿主布局 |
-| 改 | APP/Widget/include/Canvas.h / CanvasImpl.h / src/Win32/CanvasImplWin32.cpp | 新增 FillRoundRect（圆角矩形填充，Win32 CreateRoundRectRgn+FillRgn） |
-| 改 | APP/UI/include/Component/TextInput.h + src/TextInput.cpp | 加 OnEnter 回调（OnKeyDown 命中 Key::Enter 触发） |
-| 改 | APP/UI/include/Composite/LogViewer.h + src/Composite/LogViewer.cpp | m_Keywords 多关键词（OR：任一命中即通过）；回车从输入框取词加 tag + 清空输入；OnTagRemoved 删词重筛；布局顶栏 TagBar 量高 + 输入框 + 日志区 |
+| 操作 | 文件                                                                       | 说明                                                                                                                                        |
+| ---- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 新   | APP/UI/include/Component/TagBar.h + src/TagBar.cpp                         | 横向筛选标签条：自动换行、圆角矩形(FillRoundRect)、左上角 × 删除按钮、hover 高亮、点击×回调 OnTagRemove、Measure()量高供宿主布局            |
+| 改   | APP/Widget/include/Canvas.h / CanvasImpl.h / src/Win32/CanvasImplWin32.cpp | 新增 FillRoundRect（圆角矩形填充，Win32 CreateRoundRectRgn+FillRgn）                                                                        |
+| 改   | APP/UI/include/Component/TextInput.h + src/TextInput.cpp                   | 加 OnEnter 回调（OnKeyDown 命中 Key::Enter 触发）                                                                                           |
+| 改   | APP/UI/include/Composite/LogViewer.h + src/Composite/LogViewer.cpp         | m_Keywords 多关键词（OR：任一命中即通过）；回车从输入框取词加 tag + 清空输入；OnTagRemoved 删词重筛；布局顶栏 TagBar 量高 + 输入框 + 日志区 |
 
 **设计要点（与砚台讨论确定）：**
 - 匹配 OR（任一关键词为正文子串，区分大小写）
@@ -497,9 +507,9 @@ X_Y::Physics::Test(a, b, [](Body& x, Body& y){ /*碰撞处理*/ });
 
 **背景：** 砚台希望筛选区分大小写（搜 Error 只匹配 Error，不匹配 error）。原实现两遍 tolower（不区分大小写）不满足。
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 改 | APP/UI/src/Composite/LogViewer.cpp | 删 ToLower 工具；MatchesKeyword 改 e.text.find(m_Keyword) 严格子串匹配；OnKeywordChanged 不再 tolower 保留关键词原样；清理冗余 include |
+| 操作 | 文件                               | 说明                                                                                                                                   |
+| ---- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 改   | APP/UI/src/Composite/LogViewer.cpp | 删 ToLower 工具；MatchesKeyword 改 e.text.find(m_Keyword) 严格子串匹配；OnKeywordChanged 不再 tolower 保留关键词原样；清理冗余 include |
 
 **决策：** 关键词保留原样做严格 find，大小写敏感。已提交 e77124e。
 
@@ -507,11 +517,11 @@ X_Y::Physics::Test(a, b, [](Body& x, Body& y){ /*碰撞处理*/ });
 
 背景：LogViewer 关键词输入框打字无任何反应。诊断出根因：Win32 消息层从未产生 KeyTyped（缺 WM_CHAR），且 TextInput::OnChar 只收 ASCII 宽字符强转单字节。
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 改 | APP/Widget/src/Win32/Win32WndProc.cpp | 补 case WM_CHAR：产生 KeyTyped 推入事件队列（字符码原样传，不做按键映射）；过滤控制字符(>=32 且非 DEL)；文本从 VM_CHAR 直通，字符本身即最终结果 |
-| 改 | APP/UI/include/Component/TextInput.h | m_CursorPos 语义改为 UTF-8 字节偏移；加 Utf8FromWide 声明 |
-| 改 | APP/UI/src/TextInput.cpp | OnChar 接受所有可见 Unicode（含中文）按 UTF-8 编码插入 + RequestRepaint；OnKeyDown Left/Right/Backspace/Delete 按 UTF-8 字符边界步进（不劈多字节）；光标用 canvas.MeasureText（中文宽度不同，不再硬编码 *8） |
+| 操作 | 文件                                  | 说明                                                                                                                                                                                                         |
+| ---- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 改   | APP/Widget/src/Win32/Win32WndProc.cpp | 补 case WM_CHAR：产生 KeyTyped 推入事件队列（字符码原样传，不做按键映射）；过滤控制字符(>=32 且非 DEL)；文本从 VM_CHAR 直通，字符本身即最终结果                                                              |
+| 改   | APP/UI/include/Component/TextInput.h  | m_CursorPos 语义改为 UTF-8 字节偏移；加 Utf8FromWide 声明                                                                                                                                                    |
+| 改   | APP/UI/src/TextInput.cpp              | OnChar 接受所有可见 Unicode（含中文）按 UTF-8 编码插入 + RequestRepaint；OnKeyDown Left/Right/Backspace/Delete 按 UTF-8 字符边界步进（不劈多字节）；光标用 canvas.MeasureText（中文宽度不同，不再硬编码 *8） |
 
 设计决策（与砚台讨论确定）：
 - WM_CHAR 是“输入了什么字符”（Unicode 字符码=最终结果），不做按键映射（Translate 只适用 WM_KEYDOWN 的“哪个键被按”）；KeyCode=unsigned int 装得下任意字符
@@ -522,13 +532,13 @@ X_Y::Physics::Test(a, b, [](Body& x, Body& y){ /*碰撞处理*/ });
 
 **背景：** LogViewer 长日志行超出可视宽被 SetClip 硬切，不随窗口重折。目标：终端式自动折行——长行按可用宽切多物理行全部输出，窗口过窄连一个字符都放不下则该行整体不显示。
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 🏗️ 新 | APP/Widget/include/CanvasImpl.h | 加 MeasureText(const wchar_t*)/(const char*) 纯虚（返回逻辑像素宽） |
-| 🏗️ 新 | APP/Widget/src/Win32/CanvasImplWin32.cpp | 实现 MeasureText：GetTextExtentPoint32W 测宽，物理→逻辑 ÷scale |
-| 🔧 改 | APP/Widget/include/Canvas.h | 暴露 MeasureText 两个重载（UTF-8 窄版 + 宽版） |
-| 🔧 改 | APP/UI/include/Component/ListBox.h | 不定高折行核心改造：WrapMode(Wrap/NoWrap) 枚举、折行段缓存 m_Fold、物理行前缀和 m_LineStartIndex、m_TotalLines、惰性折叠游标 m_FoldedCount |
-| 🔧 改 | APP/UI/src/ListBox.cpp | 重写：FoldItem 逐 UTF-8 完整字符测宽贪婪切段（中文不劈半）；EnsureFold OnPaint 惰性折叠（宽变全量重折/增补只折新增）；OnPaint 按物理行可视裁剪 + 整 item 画所有段；GetRowFromMouseY 物理行二分→逻辑 item |
+| 操作 | 文件                                     | 说明                                                                                                                                                                                                     |
+| ---- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🏗️ 新 | APP/Widget/include/CanvasImpl.h          | 加 MeasureText(const wchar_t*)/(const char*) 纯虚（返回逻辑像素宽）                                                                                                                                      |
+| 🏗️ 新 | APP/Widget/src/Win32/CanvasImplWin32.cpp | 实现 MeasureText：GetTextExtentPoint32W 测宽，物理→逻辑 ÷scale                                                                                                                                           |
+| 🔧 改 | APP/Widget/include/Canvas.h              | 暴露 MeasureText 两个重载（UTF-8 窄版 + 宽版）                                                                                                                                                           |
+| 🔧 改 | APP/UI/include/Component/ListBox.h       | 不定高折行核心改造：WrapMode(Wrap/NoWrap) 枚举、折行段缓存 m_Fold、物理行前缀和 m_LineStartIndex、m_TotalLines、惰性折叠游标 m_FoldedCount                                                               |
+| 🔧 改 | APP/UI/src/ListBox.cpp                   | 重写：FoldItem 逐 UTF-8 完整字符测宽贪婪切段（中文不劈半）；EnsureFold OnPaint 惰性折叠（宽变全量重折/增补只折新增）；OnPaint 按物理行可视裁剪 + 整 item 画所有段；GetRowFromMouseY 物理行二分→逻辑 item |
 
 **设计决策（与砚台讨论确定）：**
 - 折行宽度由 ScrollArea 传（它 SetRect viewW 给内容），LogViewer 不碰宽度，职责清晰
@@ -543,25 +553,25 @@ X_Y::Physics::Test(a, b, [](Body& x, Body& y){ /*碰撞处理*/ });
 
 **背景：** 砚台 150% 屏。接入微软雅黑 ClearType 后字体仍糊(油画感)，诊断双原因：ClearType 透明背景退化(次因) + 无 DPI-aware 声明位图拉伸(主因)。
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 🏗️ 新 | `APP/Widget/include/Canvas.h` | 组合拳 `FillText(bgX,bgY,bgW,bgH, tx,ty, text,color,bgColor, font=nullptr)`：铺背景+同背景色写字(供ClearType亚像素)，函数尾恢复TRANSPARENT；附场景理念注释 |
-| 🔧 改 | `APP/Widget/include/CanvasImpl.h` | 加 FillText 纯虚(窄/宽两版，带 tx,ty 文字起点) |
-| 🔧 改 | `APP/Widget/src/Win32/CanvasImplWin32.cpp` | 实现 FillText：FillRect→OPAQUE+SetBkColor(bgColor)→TextOut→恢复TRANSPARENT；窄版UTF-8转宽 |
-| 🔧 改 | `APP/UI/src/ListBox.cpp` | 行画改用 FillText；descender修复：行高18→20，新增 m_LineSpacing=4 行距，行间留白隔离，避免下一行背景盖掉上一行文字底部(q/y/g) |
-| 🔧 改 | `premake5.lua` | 全局 `buildoptions "/utf-8"`，强制源码+窄字面量 UTF-8 |
-| 🔧 改 | `APP/Widget/src/Win32/CanvasImplWin32.cpp` | 窄 DrawText 改 UTF-8→Wide+TextOutW(不再 TextOutA)；加 Utf8ToWide 辅助 |
-| 🔧 改 | `APP/Widget/src/Win32/WindowImplWin32.cpp` | 窗口标题 CP_ACP→CP_UTF8 |
-| 🗑️ 删 | `Test/DataStore/*.log` | 旧 GBK 日志文件删除(已无用) |
-| 🏗️ 新 | `APP/Widget/include/Dpi.h` + `src/Win32/Dpi.cpp` | DPI 工具：DeclareAware(消除位图拉伸)+GetDpi/GetScale(运行时自动读系统DPI,用户改缩放实时更新) |
-| 🔧 改 | `APP/Widget/src/Entry.cpp` | WinMain 开头 Dpi::DeclareAware() |
-| 🔧 改 | `APP/Widget/src/Win32/WindowImplWin32.cpp` | 窗口创建尺寸 逻辑→物理 ×scale |
-| 🔧 改 | `APP/Widget/src/Win32/FontWin32.cpp` | 逻辑字号→物理 ×scale |
-| 🔧 改 | `APP/Widget/src/Win32/CanvasImplWin32.cpp` | **DPI核心**：Canvas 逻辑坐标空间，位图=物理，绘制方法内部×scale，GetWidth/Height返回逻辑，默认字号×scale |
-| 🔧 改 | `APP/Widget/src/Win32/Win32WndProc.cpp` | WM_NCCREATE/WM_SIZE 物理→逻辑(存XWidget) |
-| 🔧 改 | `APP/Widget/include/WindowImpl.h` + `include/BaseWIn.h` | **双坐标系接口**：默认逻辑(ScreenToClient/GetClientRect/宽高) + Physical后缀(真实像素)；注释写全 |
-| 🔧 改 | `APP/UI/src/Container.cpp` | 命中测试用逻辑(ScreenToClient自带逻辑，删手动÷scale) |
-| 🔧 改 | `APP/UI/src/DockLayer.cpp` | 停靠判定统一逻辑坐标(与Docker内部停靠区/预览/Canvas一致) |
+| 操作 | 文件                                                    | 说明                                                                                                                                                       |
+| ---- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🏗️ 新 | `APP/Widget/include/Canvas.h`                           | 组合拳 `FillText(bgX,bgY,bgW,bgH, tx,ty, text,color,bgColor, font=nullptr)`：铺背景+同背景色写字(供ClearType亚像素)，函数尾恢复TRANSPARENT；附场景理念注释 |
+| 🔧 改 | `APP/Widget/include/CanvasImpl.h`                       | 加 FillText 纯虚(窄/宽两版，带 tx,ty 文字起点)                                                                                                             |
+| 🔧 改 | `APP/Widget/src/Win32/CanvasImplWin32.cpp`              | 实现 FillText：FillRect→OPAQUE+SetBkColor(bgColor)→TextOut→恢复TRANSPARENT；窄版UTF-8转宽                                                                  |
+| 🔧 改 | `APP/UI/src/ListBox.cpp`                                | 行画改用 FillText；descender修复：行高18→20，新增 m_LineSpacing=4 行距，行间留白隔离，避免下一行背景盖掉上一行文字底部(q/y/g)                              |
+| 🔧 改 | `premake5.lua`                                          | 全局 `buildoptions "/utf-8"`，强制源码+窄字面量 UTF-8                                                                                                      |
+| 🔧 改 | `APP/Widget/src/Win32/CanvasImplWin32.cpp`              | 窄 DrawText 改 UTF-8→Wide+TextOutW(不再 TextOutA)；加 Utf8ToWide 辅助                                                                                      |
+| 🔧 改 | `APP/Widget/src/Win32/WindowImplWin32.cpp`              | 窗口标题 CP_ACP→CP_UTF8                                                                                                                                    |
+| 🗑️ 删 | `Test/DataStore/*.log`                                  | 旧 GBK 日志文件删除(已无用)                                                                                                                                |
+| 🏗️ 新 | `APP/Widget/include/Dpi.h` + `src/Win32/Dpi.cpp`        | DPI 工具：DeclareAware(消除位图拉伸)+GetDpi/GetScale(运行时自动读系统DPI,用户改缩放实时更新)                                                               |
+| 🔧 改 | `APP/Widget/src/Entry.cpp`                              | WinMain 开头 Dpi::DeclareAware()                                                                                                                           |
+| 🔧 改 | `APP/Widget/src/Win32/WindowImplWin32.cpp`              | 窗口创建尺寸 逻辑→物理 ×scale                                                                                                                              |
+| 🔧 改 | `APP/Widget/src/Win32/FontWin32.cpp`                    | 逻辑字号→物理 ×scale                                                                                                                                       |
+| 🔧 改 | `APP/Widget/src/Win32/CanvasImplWin32.cpp`              | **DPI核心**：Canvas 逻辑坐标空间，位图=物理，绘制方法内部×scale，GetWidth/Height返回逻辑，默认字号×scale                                                   |
+| 🔧 改 | `APP/Widget/src/Win32/Win32WndProc.cpp`                 | WM_NCCREATE/WM_SIZE 物理→逻辑(存XWidget)                                                                                                                   |
+| 🔧 改 | `APP/Widget/include/WindowImpl.h` + `include/BaseWIn.h` | **双坐标系接口**：默认逻辑(ScreenToClient/GetClientRect/宽高) + Physical后缀(真实像素)；注释写全                                                           |
+| 🔧 改 | `APP/UI/src/Container.cpp`                              | 命中测试用逻辑(ScreenToClient自带逻辑，删手动÷scale)                                                                                                       |
+| 🔧 改 | `APP/UI/src/DockLayer.cpp`                              | 停靠判定统一逻辑坐标(与Docker内部停靠区/预览/Canvas一致)                                                                                                   |
 
 **设计决策（与砚台讨论确定）：**
 - 底层 Canvas 收口逻辑→物理转换，上层UI全逻辑零改动；输入(命中/滚轮)也收口物理→逻辑
@@ -575,11 +585,11 @@ X_Y::Physics::Test(a, b, [](Body& x, Body& y){ /*碰撞处理*/ });
 
 ## 2026-08-02 — LoopQueue 环形队列 + LogViewer 底部替换（第1步）
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 🏗️ 新 | `Core/Memory/include/LoopQueue.h` | 通用固定容量循环队列模板 `LoopQueue<T, N>`：FIFO 满则覆盖最旧；std::array 连续内存；接口贴 STL（Push/operator[]/Size/Empty/Clear/begin-end 范围 for）；At(globalSeq) 增量访问；TotalPushed 单调序号；含 const/非const迭代器，正确处理环形绕回 |
-| 🔧 改 | `APP/UI/include/Composite/LogViewer.h` | `m_AllEntries`：std::deque → `LoopQueue<LogEntry, MAX_ENTRIES>`；include 改 Memory/include/LoopQueue.h |
-| 🔧 改 | `APP/UI/src/Composite/LogViewer.cpp` | 适配：clear→Clear()；删掉 pop_front 手动限长（Push 满自动覆盖最旧）；push_back→Push()；ApplyFilter 遍历兼容新迭代器 |
+| 操作 | 文件                                   | 说明                                                                                                                                                                                                                                          |
+| ---- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🏗️ 新 | `Core/Memory/include/LoopQueue.h`      | 通用固定容量循环队列模板 `LoopQueue<T, N>`：FIFO 满则覆盖最旧；std::array 连续内存；接口贴 STL（Push/operator[]/Size/Empty/Clear/begin-end 范围 for）；At(globalSeq) 增量访问；TotalPushed 单调序号；含 const/非const迭代器，正确处理环形绕回 |
+| 🔧 改 | `APP/UI/include/Composite/LogViewer.h` | `m_AllEntries`：std::deque → `LoopQueue<LogEntry, MAX_ENTRIES>`；include 改 Memory/include/LoopQueue.h                                                                                                                                        |
+| 🔧 改 | `APP/UI/src/Composite/LogViewer.cpp`   | 适配：clear→Clear()；删掉 pop_front 手动限长（Push 满自动覆盖最旧）；push_back→Push()；ApplyFilter 遍历兼容新迭代器                                                                                                                           |
 
 **结构决策（与砚台确认）：**
 - STL 无现成循环队列 → 基于 std::array 封装通用模板 `LoopQueue<T,N>`，放 Core/Memory（premake 通配符自动收录，无需改 lua）
@@ -596,13 +606,13 @@ X_Y::Physics::Test(a, b, [](Body& x, Body& y){ /*碰撞处理*/ });
 
 ## 2026-08-02 — 字体抗锯齿 + 可扩展字体选择（Font 抽象）
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 🏗️ 新 | `APP/Widget/include/Font.h` | FontDesc（族名/字号/粗体/quality + 可选 filePath 自定义字体）+ FontImpl 纯虚 + Font 包装（RAII，GetNativeHandle/GetHeight/GetAscent/GetAvgCharWidth 度量） |
-| 🏗️ 新 | `APP/Widget/src/Win32/FontWin32.cpp` | Win32 实现：CreateFontIndirectW + 质量映射；filePath 非空时 AddFontResourceEx(FR_PRIVATE) 私有加载自定义字体，析构 RemoveFontResourceEx；UTF8→Wide 族名转换（支持中文“微软雅黑”） |
-| 🔧 改 | `APP/Widget/include/CanvasImpl.h` | 加纯虚 `SetFont(const Font&)` |
-| 🔧 改 | `APP/Widget/include/Canvas.h` | 加 SetFont（复制 desc 重建 Font 存 m_DefaultFont）+ 默认字体 |
-| 🔧 改 | `APP/Widget/src/Win32/CanvasImplWin32.cpp` | ApplyDefaultFont（微软雅黑 14px CLEARTYPE，CreateFontIndirect）+ SetFont 实现（SelectObject HFONT）+ 析构释放默认字体 |
+| 操作 | 文件                                       | 说明                                                                                                                                                                              |
+| ---- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🏗️ 新 | `APP/Widget/include/Font.h`                | FontDesc（族名/字号/粗体/quality + 可选 filePath 自定义字体）+ FontImpl 纯虚 + Font 包装（RAII，GetNativeHandle/GetHeight/GetAscent/GetAvgCharWidth 度量）                        |
+| 🏗️ 新 | `APP/Widget/src/Win32/FontWin32.cpp`       | Win32 实现：CreateFontIndirectW + 质量映射；filePath 非空时 AddFontResourceEx(FR_PRIVATE) 私有加载自定义字体，析构 RemoveFontResourceEx；UTF8→Wide 族名转换（支持中文“微软雅黑”） |
+| 🔧 改 | `APP/Widget/include/CanvasImpl.h`          | 加纯虚 `SetFont(const Font&)`                                                                                                                                                     |
+| 🔧 改 | `APP/Widget/include/Canvas.h`              | 加 SetFont（复制 desc 重建 Font 存 m_DefaultFont）+ 默认字体                                                                                                                      |
+| 🔧 改 | `APP/Widget/src/Win32/CanvasImplWin32.cpp` | ApplyDefaultFont（微软雅黑 14px CLEARTYPE，CreateFontIndirect）+ SetFont 实现（SelectObject HFONT）+ 析构释放默认字体                                                             |
 
 **设计（与砚台确认）：**
 - 放 Widget 层（跟 Canvas 一起），走纯虚+工厂+Win32 模式
@@ -619,12 +629,12 @@ X_Y::Physics::Test(a, b, [](Body& x, Body& y){ /*碰撞处理*/ });
 
 ## 2026-08-02 — ListBox 可视裁剪（第3步）
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 🏗️ 改 | `APP/UI/include/Component/Component.h` | 基类加通用虚方法 `SetViewport(int scrollOffset, int viewHeight)`，默认空实现（内容被滚动时通知可视范围，可按行裁剪的内容 override） |
-| 🏗️ 改 | `APP/UI/include/Component/ListBox.h` | override SetViewport，存 m_ViewOffset/m_ViewHeight |
-| 🏗️ 改 | `APP/UI/src/ListBox.cpp` | OnPaint 可视裁剪：m_ViewHeight>0 时只画 [rowFirst,rowLast) 行（rowFirst=offset/行高，rowLast=(offset+viewH)/行高+1）；未在 ScrollArea 时回退画全部 |
-| 🏗️ 改 | `APP/UI/src/ScrollArea.cpp` | OnPaint 画内容前调 `m_Content->SetViewport(m_ScrollOffset, h)` |
+| 操作 | 文件                                   | 说明                                                                                                                                               |
+| ---- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🏗️ 改 | `APP/UI/include/Component/Component.h` | 基类加通用虚方法 `SetViewport(int scrollOffset, int viewHeight)`，默认空实现（内容被滚动时通知可视范围，可按行裁剪的内容 override）                |
+| 🏗️ 改 | `APP/UI/include/Component/ListBox.h`   | override SetViewport，存 m_ViewOffset/m_ViewHeight                                                                                                 |
+| 🏗️ 改 | `APP/UI/src/ListBox.cpp`               | OnPaint 可视裁剪：m_ViewHeight>0 时只画 [rowFirst,rowLast) 行（rowFirst=offset/行高，rowLast=(offset+viewH)/行高+1）；未在 ScrollArea 时回退画全部 |
+| 🏗️ 改 | `APP/UI/src/ScrollArea.cpp`            | OnPaint 画内容前调 `m_Content->SetViewport(m_ScrollOffset, h)`                                                                                     |
 
 **设计（与砚台确认）：**
 - 保留 ScrollArea 现有“SetRect 挪内容”机制，只加一行 SetViewport 通知，风险最小
@@ -648,10 +658,10 @@ X_Y::Physics::Test(a, b, [](Body& x, Body& y){ /*碰撞处理*/ });
 
 ## 2026-08-02 — LogViewer 增量筛选（第2步）
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 🔧 改 | `APP/UI/include/Composite/LogViewer.h` | 私有方法：`MatchesKeyword`（单条命中判断）/ `RebuildAll`（全量重建）/ `IncrementalAppend(fromSeq,toSeq)`（增量喂入）；成员 `m_RenderedSeq`（已喂入 stripe 的全局序号） |
-| 🔧 改 | `APP/UI/src/Composite/LogViewer.cpp` | 增量架构：OnPaint 不再全量 ApplyFilter，只布局+渲染 stripe；Ticker 入队后按 [before,after) 全局序号 IncrementalAppend；关键词变→OnKeywordChanged 唯一一次 RebuildAll；数据重置/换key 也 RebuildAll/清 stripe |
+| 操作 | 文件                                   | 说明                                                                                                                                                                                                         |
+| ---- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 🔧 改 | `APP/UI/include/Composite/LogViewer.h` | 私有方法：`MatchesKeyword`（单条命中判断）/ `RebuildAll`（全量重建）/ `IncrementalAppend(fromSeq,toSeq)`（增量喂入）；成员 `m_RenderedSeq`（已喂入 stripe 的全局序号）                                       |
+| 🔧 改 | `APP/UI/src/Composite/LogViewer.cpp`   | 增量架构：OnPaint 不再全量 ApplyFilter，只布局+渲染 stripe；Ticker 入队后按 [before,after) 全局序号 IncrementalAppend；关键词变→OnKeywordChanged 唯一一次 RebuildAll；数据重置/换key 也 RebuildAll/清 stripe |
 
 **增量逻辑（方案甲，与砚台确认）：**
 - Ticker 每帧只把新增全局序号段 [before,after) 喂给 m_LogStripe（无关键词直接 AddItem；有关键词逐个 filter）
@@ -666,13 +676,13 @@ X_Y::Physics::Test(a, b, [](Body& x, Body& y){ /*碰撞处理*/ });
 
 ## 2026-08-02 — Canvas 双缓冲 + 消除滚动白屏闪烁
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 🏗️ 改 | `APP/Widget/include/CanvasImpl.h` | 加纯虚 `Flush()`（内存帧一次性上屏） |
-| 🏗️ 改 | `APP/Widget/include/Canvas.h` | 加 `Flush()` 转发到 m_Impl |
+| 操作 | 文件                                       | 说明                                                                                                                                                |
+| ---- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🏗️ 改 | `APP/Widget/include/CanvasImpl.h`          | 加纯虚 `Flush()`（内存帧一次性上屏）                                                                                                                |
+| 🏗️ 改 | `APP/Widget/include/Canvas.h`              | 加 `Flush()` 转发到 m_Impl                                                                                                                          |
 | 🏗️ 改 | `APP/Widget/src/Win32/CanvasImplWin32.cpp` | 双缓冲核心：构造 CreateCompatibleDC+Bitmap+SelectObject；FillRect/DrawText/SetClip 改绘 memDC；Flush() BitBlt 上屏；析构先选回旧对象再删防 GDI 泄漏 |
-| 🏗️ 改 | `APP/Widget/src/Win32/Win32WndProc.cpp` | WM_PAINT EndPaint 前调 `canvas.Flush()`；**拦截 WM_ERASEBKGND 返回 1**（禁用系统白刷擦底） |
-| 🏗️ 改 | `APP/Widget/src/Win32/WindowImplWin32.cpp` | PaintDirect 补 Flush；RequestRepaint 的 InvalidateRect 第三参 TRUE→FALSE（不擦背景） |
+| 🏗️ 改 | `APP/Widget/src/Win32/Win32WndProc.cpp`    | WM_PAINT EndPaint 前调 `canvas.Flush()`；**拦截 WM_ERASEBKGND 返回 1**（禁用系统白刷擦底）                                                          |
+| 🏗️ 改 | `APP/Widget/src/Win32/WindowImplWin32.cpp` | PaintDirect 补 Flush；RequestRepaint 的 InvalidateRect 第三参 TRUE→FALSE（不擦背景）                                                                |
 
 **验证反馈（砚台）：** 双缓冲后 LogViewer 刷新不再闪烁，但滚动时有一闪而过的**纯白**全屏。
 
@@ -694,16 +704,16 @@ X_Y::Physics::Test(a, b, [](Body& x, Body& y){ /*碰撞处理*/ });
 
 ## 2026-08-01 — LogViewer 颜色解析修复 + SCrollArea 滚轮/滑块
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 🐛 修 | `APP/UI/src/Composite/LogViewer.cpp` | `ParseLine` 重写为 ANSI 解析器：剥 \x1B[38;2;R;G;Bm → 前景ARGB；`\x1B[0m` 只作收尾不覆盖行色（每行结构 <颜色>正文<重置>） |
-| 🏗️ 新 | `APP/UI/include/Component/Component.h` | 加 `virtual OnScroll(float yDelta)`（滚轮输入）+ `GetScrollStep()` + `OnMousePressed/Moved/Released`（鼠标交互，默认空）—— 内容自治度量接口 |
-| 🏗️ 新 | `APP/UI/include/Component/ListBox.h` | override `GetScrollStep()` 返回 `m_LineHeight`（列表滚一格=一行） |
-| 🏗️ 新 | `APP/UI/include/Component/ScrollArea.h` | 加滑块常量/`OnScroll`/`GetViewWidth`/`GetScrollStep`/滑块绘制/拖拽状态声明 |
-| 🏗️ 新 | `APP/UI/src/ScrollArea.cpp` | `OnScroll` 滚轮；`DrawScrollbar` 右侧滑块（比例高度+按offset定位）；内容宽扣滑块位；滑块拖动+点击轨道翻页；`SetScrollOffset` 主动 `RequestRepaint()` |
-| 🏗️ 新 | `APP/UI/include/Component/Component.h` | 加 `m_RepaintCallback` + `RequestRepaint()`/`SetRepaintCallback()`（组件请求所属窗口重绘的同步回调通道） |
-| 🏗️ 新 | `APP/UI/src/Container.cpp` | `Connect(MouseScrolled)` → HitTest → 转发 `OnScroll`；鼠标按下/移动/抬起转发给组件（`m_DragTarget` 跟踪拖拽目标）；`AddComponent` 注入重绘回调 |
-| 🏗️ 新 | `APP/UI/include/Container/Container.h` | 加 `m_DragTarget`/拖拽起点成员 |
+| 操作 | 文件                                    | 说明                                                                                                                                                 |
+| ---- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🐛 修 | `APP/UI/src/Composite/LogViewer.cpp`    | `ParseLine` 重写为 ANSI 解析器：剥 \x1B[38;2;R;G;Bm → 前景ARGB；`\x1B[0m` 只作收尾不覆盖行色（每行结构 <颜色>正文<重置>）                            |
+| 🏗️ 新 | `APP/UI/include/Component/Component.h`  | 加 `virtual OnScroll(float yDelta)`（滚轮输入）+ `GetScrollStep()` + `OnMousePressed/Moved/Released`（鼠标交互，默认空）—— 内容自治度量接口          |
+| 🏗️ 新 | `APP/UI/include/Component/ListBox.h`    | override `GetScrollStep()` 返回 `m_LineHeight`（列表滚一格=一行）                                                                                    |
+| 🏗️ 新 | `APP/UI/include/Component/ScrollArea.h` | 加滑块常量/`OnScroll`/`GetViewWidth`/`GetScrollStep`/滑块绘制/拖拽状态声明                                                                           |
+| 🏗️ 新 | `APP/UI/src/ScrollArea.cpp`             | `OnScroll` 滚轮；`DrawScrollbar` 右侧滑块（比例高度+按offset定位）；内容宽扣滑块位；滑块拖动+点击轨道翻页；`SetScrollOffset` 主动 `RequestRepaint()` |
+| 🏗️ 新 | `APP/UI/include/Component/Component.h`  | 加 `m_RepaintCallback` + `RequestRepaint()`/`SetRepaintCallback()`（组件请求所属窗口重绘的同步回调通道）                                             |
+| 🏗️ 新 | `APP/UI/src/Container.cpp`              | `Connect(MouseScrolled)` → HitTest → 转发 `OnScroll`；鼠标按下/移动/抬起转发给组件（`m_DragTarget` 跟踪拖拽目标）；`AddComponent` 注入重绘回调       |
+| 🏗️ 新 | `APP/UI/include/Container/Container.h`  | 加 `m_DragTarget`/拖拽起点成员                                                                                                                       |
 
 **讨论纪要：**
 - 颜色根因：Log 写入前 replaceColor 已把 %r:g:b% 转 ANSI；旧 ParseLine 按 %...% 解析永远走 else 原样显示。且第一版把结尾 \x1B[0m 当重置抹黑整行 → 再加 hasColor/忽略重置 修复
@@ -720,26 +730,26 @@ X_Y::Physics::Test(a, b, [](Body& x, Body& y){ /*碰撞处理*/ });
 
 ## 2026-07-30 — LogViewer 独立线程自绘 + 多项 Bug 修复
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 🏗️ 新 | `APP/Widget/src/Canvas.cpp` | ~~Canvas XWnd 构造+自管理HDC（已撤销）~~ |
-| 🏗️ 新 | `APP/Widget/include/WindowImpl.h` | 加 `PaintDirect` 纯虚接口 |
-| 🏗️ 新 | `APP/Widget/src/Win32/WindowImplWin32.cpp` | 实现 `PaintDirect(GetDC+Canvas+ReleaseDC)` + `ValidateWindow` |
-| 🔧 改 | `APP/Widget/include/BaseWin.h` | 加 `ValidateWindow()`/`PaintDirect()`/`m_SkipMainThreadPaint`；`GetNativeHandle` 委托 `m_Impl` |
-| 🔧 改 | `APP/Widget/src/BaseWin.cpp` | 加 `ValidateWindow`/`PaintDirect` 委托；`Destroy()` 加 `m_Impl.reset()` 防重入 |
-| 🔧 改 | `APP/Widget/src/Win32/WindowImplWin32.cpp` | `Destroy()` 先置空 `m_Hwnd` 再 `DestroyWindow` 防 double destroy |
-| 🔧 改 | `APP/Widget/src/Win32/Win32WndProc.cpp` | WM_PAINT 判断 `m_SkipMainThreadPaint` 跳过；去掉 `SetNativeHandle` |
-| 🔧 改 | `APP/UI/include/Composite/LogViewer.h` | 精简接口：删 `OnIncrementalData`/`LayoutChildren`，加 `ApplyFilter` const |
-| 🔧 改 | `APP/UI/src/Composite/LogViewer.cpp` | 主线程 OnPaint+shared_mutex 保护 m_AllEntries，Ticker 只读 DataStore |
-| 🔧 改 | `APP/UI/src/Container.cpp` | 析构加 `disConnect(this)` 防止事件回调 dangling |
-| 🔧 改 | `APP/Widget/src/XWidget.cpp` | `~XWidget()` 改为 `disConnect(this)` 不再调 `destroy()`；`destroy()` 中 `delete this` |
-| 🔧 改 | `APP/UI/premake5.lua` | links 加 `DataStore`、`Timer` |
-| 🔧 改 | `Core/Log/include/DataStoreDevice.h` | 析构不再调 `DataStore::Instance()`（解决析构顺序问题） |
-| 🔧 改 | `Core/DataStore/src/DataStore.cpp` | `Instance()` 改为 leaky singleton（`new`）；加 `ClearAll()` |
-| 🔧 改 | `Core/DataStore/include/DataStore.h` | 加 `ClearAll()` 声明 |
-| ✅ 新 | `Core/Log/include/DataStoreDevice.h` | 析构 flush 已恢复（main 中 logger.clear() 保证 DataStore 先于 logger 析构） |
-| 🐛 修 | `APP/Widget/src/Win32/WindowImplWin32.cpp` | `Destroy()` 先置 null 再 DestroyWindow，防 `~WindowImplWin32` 二次调用 |
-| 🔧 改 | `Test/src/main.cpp` | 集成 LogViewer 测试 |
+| 操作 | 文件                                       | 说明                                                                                           |
+| ---- | ------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| 🏗️ 新 | `APP/Widget/src/Canvas.cpp`                | ~~Canvas XWnd 构造+自管理HDC（已撤销）~~                                                       |
+| 🏗️ 新 | `APP/Widget/include/WindowImpl.h`          | 加 `PaintDirect` 纯虚接口                                                                      |
+| 🏗️ 新 | `APP/Widget/src/Win32/WindowImplWin32.cpp` | 实现 `PaintDirect(GetDC+Canvas+ReleaseDC)` + `ValidateWindow`                                  |
+| 🔧 改 | `APP/Widget/include/BaseWin.h`             | 加 `ValidateWindow()`/`PaintDirect()`/`m_SkipMainThreadPaint`；`GetNativeHandle` 委托 `m_Impl` |
+| 🔧 改 | `APP/Widget/src/BaseWin.cpp`               | 加 `ValidateWindow`/`PaintDirect` 委托；`Destroy()` 加 `m_Impl.reset()` 防重入                 |
+| 🔧 改 | `APP/Widget/src/Win32/WindowImplWin32.cpp` | `Destroy()` 先置空 `m_Hwnd` 再 `DestroyWindow` 防 double destroy                               |
+| 🔧 改 | `APP/Widget/src/Win32/Win32WndProc.cpp`    | WM_PAINT 判断 `m_SkipMainThreadPaint` 跳过；去掉 `SetNativeHandle`                             |
+| 🔧 改 | `APP/UI/include/Composite/LogViewer.h`     | 精简接口：删 `OnIncrementalData`/`LayoutChildren`，加 `ApplyFilter` const                      |
+| 🔧 改 | `APP/UI/src/Composite/LogViewer.cpp`       | 主线程 OnPaint+shared_mutex 保护 m_AllEntries，Ticker 只读 DataStore                           |
+| 🔧 改 | `APP/UI/src/Container.cpp`                 | 析构加 `disConnect(this)` 防止事件回调 dangling                                                |
+| 🔧 改 | `APP/Widget/src/XWidget.cpp`               | `~XWidget()` 改为 `disConnect(this)` 不再调 `destroy()`；`destroy()` 中 `delete this`          |
+| 🔧 改 | `APP/UI/premake5.lua`                      | links 加 `DataStore`、`Timer`                                                                  |
+| 🔧 改 | `Core/Log/include/DataStoreDevice.h`       | 析构不再调 `DataStore::Instance()`（解决析构顺序问题）                                         |
+| 🔧 改 | `Core/DataStore/src/DataStore.cpp`         | `Instance()` 改为 leaky singleton（`new`）；加 `ClearAll()`                                    |
+| 🔧 改 | `Core/DataStore/include/DataStore.h`       | 加 `ClearAll()` 声明                                                                           |
+| ✅ 新 | `Core/Log/include/DataStoreDevice.h`       | 析构 flush 已恢复（main 中 logger.clear() 保证 DataStore 先于 logger 析构）                    |
+| 🐛 修 | `APP/Widget/src/Win32/WindowImplWin32.cpp` | `Destroy()` 先置 null 再 DestroyWindow，防 `~WindowImplWin32` 二次调用                         |
+| 🔧 改 | `Test/src/main.cpp`                        | 集成 LogViewer 测试                                                                            |
 
 **讨论纪要：**
 - 独立线程自绘方案被否（GDI 跨线程竞态），改回 shared_mutex + 主线程绘制
@@ -751,56 +761,56 @@ X_Y::Physics::Test(a, b, [](Body& x, Body& y){ /*碰撞处理*/ });
 
 ## 2026-07-29 — LogViewer Composite 日志查看组件（建材阶段）
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 🏗️ 新 | `APP/UI/include/Composite/LogViewer.h` | LogViewer Composite：关键字输入 + 颜色日志列表 |
-| 🏗️ 新 | `APP/UI/src/Composite/LogViewer.cpp` | Ticker 增量轮询、颜色解析、关键字筛选、deque 5000 行缓存 |
-| 🏗️ 新 | `APP/UI/include/Composite/LogStripe.h` | LogStripe 纯展示层包装 ListBox |
-| 🏗️ 新 | `APP/UI/src/Composite/LogStripe.cpp` | SetEntries 批量填充 |
-| 🔧 改 | `APP/UI/include/Component/TextInput.h` | 加 `OnTextChange` 回调 |
-| 🔧 改 | `APP/UI/src/TextInput.cpp` | `NotifyTextChange()` 在 SetText/OnChar/OnKeyDown 时触发 |
-| 🔧 改 | `APP/UI/src/Container.cpp` | 鼠标点击 hit-test + 焦点转移（ScreenToClient + GetMouseScreenPos） |
+| 操作 | 文件                                   | 说明                                                               |
+| ---- | -------------------------------------- | ------------------------------------------------------------------ |
+| 🏗️ 新 | `APP/UI/include/Composite/LogViewer.h` | LogViewer Composite：关键字输入 + 颜色日志列表                     |
+| 🏗️ 新 | `APP/UI/src/Composite/LogViewer.cpp`   | Ticker 增量轮询、颜色解析、关键字筛选、deque 5000 行缓存           |
+| 🏗️ 新 | `APP/UI/include/Composite/LogStripe.h` | LogStripe 纯展示层包装 ListBox                                     |
+| 🏗️ 新 | `APP/UI/src/Composite/LogStripe.cpp`   | SetEntries 批量填充                                                |
+| 🔧 改 | `APP/UI/include/Component/TextInput.h` | 加 `OnTextChange` 回调                                             |
+| 🔧 改 | `APP/UI/src/TextInput.cpp`             | `NotifyTextChange()` 在 SetText/OnChar/OnKeyDown 时触发            |
+| 🔧 改 | `APP/UI/src/Container.cpp`             | 鼠标点击 hit-test + 焦点转移（ScreenToClient + GetMouseScreenPos） |
 
 
 
 ## 2026-07-27 — Buffer.h 重构 + BufferPool + RingBuffer + DataStore 前后端分离
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
+| 操作 | 文件                                 | 说明                                                   |
+| ---- | ------------------------------------ | ------------------------------------------------------ |
 | 🐛 修 | `Core/Log/include/DataStoreDevice.h` | `Log()` 中 `Insert` → `Append`，否则每条日志覆盖上一条 |
-| 🏗️ 新 | `Core/Buffer/include/BufferPool.h` | BufferPool — 通用内存池（预分配大块，复用，线程安全） |
-| 🏗️ 新 | `Core/Buffer/src/BufferPool.cpp` | BufferPool 实现 |
-| 🏗️ 新 | `Core/Buffer/include/RingBuffer.h` | RingBuffer — 循环 Buffer（固定容量，自动覆盖） |
-| 🏗️ 新 | `Core/Buffer/src/RingBuffer.cpp` | RingBuffer 实现 |
-| 🔧 改 | `Core/Buffer/include/Buffer.h` | 大函数移 cpp，头文件只留声明 |
-| 🔧 改 | `Core/Buffer/src/Buffer.cpp` | 移入 Reserve/Ensure/Append/toString 等实现 |
-| ✅ 改 | `Core/DataStore/include/DataStore.h` | 新增 GetOrCreate / GetOrCreateRingBuffer |
-| ✅ 改 | `Core/DataStore/src/DataStore.cpp` | GetOrCreate / GetOrCreateRingBuffer 实现 |
-| ✅ 改 | `Core/Log/include/DataStoreDevice.h` | Log() 改用 RingBuffer，按容量自动覆盖 |
-| 🏗️ 新 | `UI/include/Component/LogViewer.h` | LogViewer 窗口头文件 |
-| 🏗️ 新 | `UI/src/LogViewer.cpp` | Canvas 自绘日志查看器，带颜色等级过滤 |
-| ✅ 改 | `README.md` 或其他 | 如果有 LogViewer 注册需要改 Application 逻辑 |
-| ✨ 改 | `Core/DataStore/include/DataStore.h` | 加 DumpStats() 方法，展示各 key 的 Buffer 大小 |
-| ✨ 改 | `Core/DataStore/src/DataStore.cpp` | DumpStats() 实现 |
+| 🏗️ 新 | `Core/Buffer/include/BufferPool.h`   | BufferPool — 通用内存池（预分配大块，复用，线程安全）  |
+| 🏗️ 新 | `Core/Buffer/src/BufferPool.cpp`     | BufferPool 实现                                        |
+| 🏗️ 新 | `Core/Buffer/include/RingBuffer.h`   | RingBuffer — 循环 Buffer（固定容量，自动覆盖）         |
+| 🏗️ 新 | `Core/Buffer/src/RingBuffer.cpp`     | RingBuffer 实现                                        |
+| 🔧 改 | `Core/Buffer/include/Buffer.h`       | 大函数移 cpp，头文件只留声明                           |
+| 🔧 改 | `Core/Buffer/src/Buffer.cpp`         | 移入 Reserve/Ensure/Append/toString 等实现             |
+| ✅ 改 | `Core/DataStore/include/DataStore.h` | 新增 GetOrCreate / GetOrCreateRingBuffer               |
+| ✅ 改 | `Core/DataStore/src/DataStore.cpp`   | GetOrCreate / GetOrCreateRingBuffer 实现               |
+| ✅ 改 | `Core/Log/include/DataStoreDevice.h` | Log() 改用 RingBuffer，按容量自动覆盖                  |
+| 🏗️ 新 | `UI/include/Component/LogViewer.h`   | LogViewer 窗口头文件                                   |
+| 🏗️ 新 | `UI/src/LogViewer.cpp`               | Canvas 自绘日志查看器，带颜色等级过滤                  |
+| ✅ 改 | `README.md` 或其他                   | 如果有 LogViewer 注册需要改 Application 逻辑           |
+| ✨ 改 | `Core/DataStore/include/DataStore.h` | 加 DumpStats() 方法，展示各 key 的 Buffer 大小         |
+| ✨ 改 | `Core/DataStore/src/DataStore.cpp`   | DumpStats() 实现                                       |
 
 ## 2026-07-26 — DataStore 内核 + Dock 体验优化 + 架构讨论
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 🏗️ 新 | `Core/DataStore/include/DataStore.h` | DataStore 全局单例：Insert/Append/Get/Remove/Rename + Flush/LoadFile/LoadDirectory |
-| 🏗️ 新 | `Core/DataStore/src/DataStore.cpp` | 完整实现（Get 自动回源文件、Append 追加合并旧数据） |
+| 操作 | 文件                                       | 说明                                                                               |
+| ---- | ------------------------------------------ | ---------------------------------------------------------------------------------- |
+| 🏗️ 新 | `Core/DataStore/include/DataStore.h`       | DataStore 全局单例：Insert/Append/Get/Remove/Rename + Flush/LoadFile/LoadDirectory |
+| 🏗️ 新 | `Core/DataStore/src/DataStore.cpp`         | 完整实现（Get 自动回源文件、Append 追加合并旧数据）                                |
 | 🏗️ 新 | `Core/DataStore/include/DataStoreDevice.h` | DataStoreDevice — Log 设备，追加到 DataStore，自动用日期做文件名（YYYY-MM-DD.log） |
-| 🏗️ 新 | `Core/DataStore/premake5.lua` | premake 配置 |
-| ✅ 改 | `premake5.lua` | Core group 加 include "Core/DataStore" |
+| 🏗️ 新 | `Core/DataStore/premake5.lua`              | premake 配置                                                                       |
+| ✅ 改 | `premake5.lua`                             | Core group 加 include "Core/DataStore"                                             |
 
 ## 2026-07-26 — Dock 体验优化 + 架构讨论
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| ✅ 改 | `UI/src/DockLayer.cpp` | 按下标题栏即显示预览（不等鼠标移动） |
-| ✅ 改 | `UI/src/Docker.cpp` | 预览标记改为五块 60x40 小方块（四边中心+中央） |
-| ✅ 改 | `UI/src/Docker.cpp` | 被 Dock 的窗口先隐藏（后续改为析构+数据分离） |
-| 📝 新 | `_notes/arch/DataStore.md` | DataStore 全局数据系统设计构想 |
+| 操作 | 文件                       | 说明                                           |
+| ---- | -------------------------- | ---------------------------------------------- |
+| ✅ 改 | `UI/src/DockLayer.cpp`     | 按下标题栏即显示预览（不等鼠标移动）           |
+| ✅ 改 | `UI/src/Docker.cpp`        | 预览标记改为五块 60x40 小方块（四边中心+中央） |
+| ✅ 改 | `UI/src/Docker.cpp`        | 被 Dock 的窗口先隐藏（后续改为析构+数据分离）  |
+| 📝 新 | `_notes/arch/DataStore.md` | DataStore 全局数据系统设计构想                 |
 
 **讨论纪要：**
 - DataStore 构想：以 OS 文件系统为数据库，`DataStore/` 目录自动创建，文件名=key，后缀=解释器类型，Buffer=统一存储格式
@@ -809,13 +819,13 @@ X_Y::Physics::Test(a, b, [](Body& x, Body& y){ /*碰撞处理*/ });
 
 ## 2026-07-22 — 停靠系统：Overlay 预览指示器 + 拖拽检测线程
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 🏗️ 新 | `UI/include/Component/Overlay.h` | Overlay 半透明覆盖层组件（纯视觉，无事件） |
-| 🏗️ 新 | `UI/src/Overlay.cpp` | FillRect 填充 + 四边 Border 绘制 |
-| ✅ 改 | `UI/include/dock/Docker.h` | 5 个 Overlay 预览框 + 拖拽检测线程 |
-| ✅ 改 | `UI/src/Docker.cpp` | 创建 5 个 Overlay + ShowDropPreviews/HideDropPreviews + 50ms 轮询线程 |
-| ✅ 改 | `UI/src/DockLayer.cpp` | WindowDragBegin 启线程，WindowDragEnd 停线程 |
+| 操作 | 文件                             | 说明                                                                  |
+| ---- | -------------------------------- | --------------------------------------------------------------------- |
+| 🏗️ 新 | `UI/include/Component/Overlay.h` | Overlay 半透明覆盖层组件（纯视觉，无事件）                            |
+| 🏗️ 新 | `UI/src/Overlay.cpp`             | FillRect 填充 + 四边 Border 绘制                                      |
+| ✅ 改 | `UI/include/dock/Docker.h`       | 5 个 Overlay 预览框 + 拖拽检测线程                                    |
+| ✅ 改 | `UI/src/Docker.cpp`              | 创建 5 个 Overlay + ShowDropPreviews/HideDropPreviews + 50ms 轮询线程 |
+| ✅ 改 | `UI/src/DockLayer.cpp`           | WindowDragBegin 启线程，WindowDragEnd 停线程                          |
 
 **设计决策：** 独立 50ms 线程轮询鼠标位置，不走事件队列（系统拖拽模态循环阻塞事件流）。零底层变动。
 
@@ -823,98 +833,98 @@ X_Y::Physics::Test(a, b, [](Body& x, Body& y){ /*碰撞处理*/ });
 
 ## 2026-07-20 — 平台抽象层重构
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 🏗️ 新建 | `Widget/include/WindowImpl.h` | WindowImpl 纯虚接口：窗口生命周期/尺寸/坐标/鼠标/光标/SetParent |
-| 🏗️ 新建 | `Widget/include/Win32/Win32Globals.h` | Win32 全局变量（g_hInstance/g_szClassName/hook 指针） |
-| 🏗️ 新建 | `Widget/include/Win32/Win32Class.h` | Win32 窗口类注册声明 |
-| 🏗️ 新建 | `Widget/include/Win32/Win32WndProc.h` | Win32 StaticWndProc 声明 |
-| 🏗️ 新建 | `Widget/include/Win32/WindowImplWin32.h` | Win32 WindowImpl 创建函数声明 |
-| 🏗️ 新建 | `Widget/src/Win32/Win32Class.cpp` | RegisterWinClass 实现，转发到 WinWndProc |
-| 🏗️ 新建 | `Widget/src/Win32/Win32WndProc.cpp` | StaticWndProc 实现，Handler 映射 + OnPaint 回调 |
-| 🏗️ 新建 | `Widget/src/Win32/WindowImplWin32.cpp` | WindowImplWin32 全实现 + WindowStyleFlag→WS_* 转换 |
-| 🏗️ 新建 | `Widget/src/PlatformFactory.cpp` | 条件编译工厂 |
-| 🏗️ 新建 | `Widget/include/CanvasImpl.h` | CanvasImpl 纯虚接口：FillRect/DrawText/SetClip |
-| 🏗️ 新建 | `Widget/include/Canvas.h` | Canvas 轻量包装类，隐藏平台实现 |
-| 🏗️ 新建 | `Widget/src/Win32/CanvasImplWin32.cpp` | CanvasImplWin32 GDI 实现 |
-| 🏗️ 新建 | `Widget/include/PlatformLoop.h` | PlatformLoop 纯虚接口：PumpMessage |
-| 🏗️ 新建 | `Widget/src/Win32/PlatformLoopWin32.cpp` | PlatformLoopWin32 PeekMessage 实现 |
-| 🏗️ 新建 | `Core/Input/include/KeyMapper.h` | KeyMapper 纯虚接口：键码映射/按键查询/鼠标位置 |
-| 🏗️ 新建 | `Core/Input/src/Win32/KeyMapperWin32.cpp` | KeyMapperWin32 实现（VK_* ↔ KeyCode 映射/GetKeyState/GetCursorPos） |
-| 🏗️ 新建 | `GraphicsContext/src/Win32/OpenGLContextWin32.cpp` | OpenGLContextWin32 WGL 实现 |
-| 🛠️ 重构 | `Widget/include/BaseWin.h` | 去 HWND/去平台宏；WindowStyleFlag 类型；持 unique_ptr<WindowImpl> |
-| 🛠️ 重构 | `Widget/src/BaseWin.cpp` | 所有方法委托 m_Impl；SetParent/OnPaint(Canvas*) 支持 |
-| 🛠️ 重构 | `Widget/include/XWidget.h` | createGraphicsContext(GraphicsType) 工厂方法替代模板 |
-| 🛠️ 重构 | `Widget/src/XWidget.cpp` | 精简重复方法 |
-| 🛠️ 重构 | `Widget/include/Win32/Win32Globals.h` | 移除 g_ContainerHook（已废弃） |
-| 🛠️ 重构 | `Widget/src/Entry.cpp` | WinCore 引用 → Win32::RegisterWinClass |
-| 🛠️ 重构 | `Widget/src/Win32/Win32WndProc.cpp` | WM_PAINT 创建 Canvas 传 OnPaint(Canvas*)；去 g_ContainerHook |
-| 🛠️ 重构 | `Core/Input/include/MapCode.h` | 去模板/Win32 依赖；纯函数声明 |
-| 🛠️ 重构 | `Core/Input/src/Input.cpp` | 委托 KeyMapper |
-| 🛠️ 重构 | `GraphicsContext/include/GraphicsContext.h` | 去 Win32 依赖；GraphicsContextFactory::Create |
-| 🛠️ 重构 | `GraphicsContext/src/GraphicsContext.cpp` | 删旧 Win32 实现（已移至 Win32/） |
-| 🛠️ 重构 | `Application/include/Application.h` | 加 m_PlatformLoop |
-| 🛠️ 重构 | `Application/src/Application.cpp` | pushEvents 委托 PlatformLoop |
-| 🔧 适配 | `UI/src/Container.h/.cpp` | 去钩子/WinCore 引用；override OnPaint(Canvas*) |
-| 🔧 适配 | `UI/src/Docker.cpp` | GetNHWD→GetNativeHandle；::SetParent→SetParent()；ShowCmd 枚举 |
-| 🔧 适配 | `UI/src/DockPanel.cpp` | GetNHWD→GetNativeHandle；WS_*→WindowStyleFlag；RGB()→常量 |
-| 🔧 适配 | `UI/src/DockLayer.cpp` | GetNativeWindow→GetNativeHandle |
-| 🔧 适配 | `UI/src/ImGuiLayer.cpp` | WinCore→Win32Globals |
-| 🔧 适配 | `UI/include/Component/Component.h` | OnKeyDown(int)→OnKeyDown(KeyCode) |
-| 🔧 适配 | `UI/src/TextInput.cpp` | VK_*→Key::* 内部码 |
-| 🗑️ 删除 | `Widget/include/WinCore.h` | 已拆分 |
-| 🗑️ 删除 | `UI/include/Container/Canvas.h` | 移至 Widget 层 |
-| 🗑️ 删除 | `UI/src/Canvas.cpp` | 移至 Widget 层 |
+| 操作   | 文件                                               | 说明                                                                |
+| ------ | -------------------------------------------------- | ------------------------------------------------------------------- |
+| 🏗️ 新建 | `Widget/include/WindowImpl.h`                      | WindowImpl 纯虚接口：窗口生命周期/尺寸/坐标/鼠标/光标/SetParent     |
+| 🏗️ 新建 | `Widget/include/Win32/Win32Globals.h`              | Win32 全局变量（g_hInstance/g_szClassName/hook 指针）               |
+| 🏗️ 新建 | `Widget/include/Win32/Win32Class.h`                | Win32 窗口类注册声明                                                |
+| 🏗️ 新建 | `Widget/include/Win32/Win32WndProc.h`              | Win32 StaticWndProc 声明                                            |
+| 🏗️ 新建 | `Widget/include/Win32/WindowImplWin32.h`           | Win32 WindowImpl 创建函数声明                                       |
+| 🏗️ 新建 | `Widget/src/Win32/Win32Class.cpp`                  | RegisterWinClass 实现，转发到 WinWndProc                            |
+| 🏗️ 新建 | `Widget/src/Win32/Win32WndProc.cpp`                | StaticWndProc 实现，Handler 映射 + OnPaint 回调                     |
+| 🏗️ 新建 | `Widget/src/Win32/WindowImplWin32.cpp`             | WindowImplWin32 全实现 + WindowStyleFlag→WS_* 转换                  |
+| 🏗️ 新建 | `Widget/src/PlatformFactory.cpp`                   | 条件编译工厂                                                        |
+| 🏗️ 新建 | `Widget/include/CanvasImpl.h`                      | CanvasImpl 纯虚接口：FillRect/DrawText/SetClip                      |
+| 🏗️ 新建 | `Widget/include/Canvas.h`                          | Canvas 轻量包装类，隐藏平台实现                                     |
+| 🏗️ 新建 | `Widget/src/Win32/CanvasImplWin32.cpp`             | CanvasImplWin32 GDI 实现                                            |
+| 🏗️ 新建 | `Widget/include/PlatformLoop.h`                    | PlatformLoop 纯虚接口：PumpMessage                                  |
+| 🏗️ 新建 | `Widget/src/Win32/PlatformLoopWin32.cpp`           | PlatformLoopWin32 PeekMessage 实现                                  |
+| 🏗️ 新建 | `Core/Input/include/KeyMapper.h`                   | KeyMapper 纯虚接口：键码映射/按键查询/鼠标位置                      |
+| 🏗️ 新建 | `Core/Input/src/Win32/KeyMapperWin32.cpp`          | KeyMapperWin32 实现（VK_* ↔ KeyCode 映射/GetKeyState/GetCursorPos） |
+| 🏗️ 新建 | `GraphicsContext/src/Win32/OpenGLContextWin32.cpp` | OpenGLContextWin32 WGL 实现                                         |
+| 🛠️ 重构 | `Widget/include/BaseWin.h`                         | 去 HWND/去平台宏；WindowStyleFlag 类型；持 unique_ptr<WindowImpl>   |
+| 🛠️ 重构 | `Widget/src/BaseWin.cpp`                           | 所有方法委托 m_Impl；SetParent/OnPaint(Canvas*) 支持                |
+| 🛠️ 重构 | `Widget/include/XWidget.h`                         | createGraphicsContext(GraphicsType) 工厂方法替代模板                |
+| 🛠️ 重构 | `Widget/src/XWidget.cpp`                           | 精简重复方法                                                        |
+| 🛠️ 重构 | `Widget/include/Win32/Win32Globals.h`              | 移除 g_ContainerHook（已废弃）                                      |
+| 🛠️ 重构 | `Widget/src/Entry.cpp`                             | WinCore 引用 → Win32::RegisterWinClass                              |
+| 🛠️ 重构 | `Widget/src/Win32/Win32WndProc.cpp`                | WM_PAINT 创建 Canvas 传 OnPaint(Canvas*)；去 g_ContainerHook        |
+| 🛠️ 重构 | `Core/Input/include/MapCode.h`                     | 去模板/Win32 依赖；纯函数声明                                       |
+| 🛠️ 重构 | `Core/Input/src/Input.cpp`                         | 委托 KeyMapper                                                      |
+| 🛠️ 重构 | `GraphicsContext/include/GraphicsContext.h`        | 去 Win32 依赖；GraphicsContextFactory::Create                       |
+| 🛠️ 重构 | `GraphicsContext/src/GraphicsContext.cpp`          | 删旧 Win32 实现（已移至 Win32/）                                    |
+| 🛠️ 重构 | `Application/include/Application.h`                | 加 m_PlatformLoop                                                   |
+| 🛠️ 重构 | `Application/src/Application.cpp`                  | pushEvents 委托 PlatformLoop                                        |
+| 🔧 适配 | `UI/src/Container.h/.cpp`                          | 去钩子/WinCore 引用；override OnPaint(Canvas*)                      |
+| 🔧 适配 | `UI/src/Docker.cpp`                                | GetNHWD→GetNativeHandle；::SetParent→SetParent()；ShowCmd 枚举      |
+| 🔧 适配 | `UI/src/DockPanel.cpp`                             | GetNHWD→GetNativeHandle；WS_*→WindowStyleFlag；RGB()→常量           |
+| 🔧 适配 | `UI/src/DockLayer.cpp`                             | GetNativeWindow→GetNativeHandle                                     |
+| 🔧 适配 | `UI/src/ImGuiLayer.cpp`                            | WinCore→Win32Globals                                                |
+| 🔧 适配 | `UI/include/Component/Component.h`                 | OnKeyDown(int)→OnKeyDown(KeyCode)                                   |
+| 🔧 适配 | `UI/src/TextInput.cpp`                             | VK_*→Key::* 内部码                                                  |
+| 🗑️ 删除 | `Widget/include/WinCore.h`                         | 已拆分                                                              |
+| 🗑️ 删除 | `UI/include/Container/Canvas.h`                    | 移至 Widget 层                                                      |
+| 🗑️ 删除 | `UI/src/Canvas.cpp`                                | 移至 Widget 层                                                      |
 
 ## 2026-07-18
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
+| 操作                                                                                            | 文件 | 说明 |
+| ----------------------------------------------------------------------------------------------- | ---- | ---- |
 | ✅ 新 ｜ `APP/UI/include/dock/DockPanel.h` ｜ DockPanel — 停靠面板容器（tab 增删切换、摘出浮动） |
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| ✅ 新 ｜ `APP/UI/include/dock/DockPanel.h` ｜ DockPanel — 停靠面板容器（tab 增删切换、摘出浮动） |
-| ✅ 新 ｜ `APP/UI/src/DockPanel.cpp` ｜ DockPanel 实现 |
-| ✅ 新 ｜ `APP/UI/include/dock/Docker.h` ｜ Docker — 停靠系统主窗口（五区域 + 布局 + DockLayer） |
-| ✅ 新 ｜ `APP/UI/src/Docker.cpp` ｜ Docker 实现 |
-| ✅ 新 ｜ `APP/UI/include/dock/DockLayer.h` ｜ DockLayer — Layer 监听全局窗口拖拽事件 |
-| ✅ 新 ｜ `APP/UI/src/DockLayer.cpp` ｜ DockLayer 实现（switch 分支 + Hanlded 标记） |
-| ⚡ 改 ｜ `Core/Movement/include/movements.h` ｜ MovementType 枚举加 WindowDragBegin / WindowDragEnd |
-| ⚡ 改 ｜ `Core/Movement/include/AppMovement.h` ｜ 新增 WindowDragBegin / WindowDragEnd 事件类 |
-| ⚡ 改 ｜ `APP/Widget/include/WinCore.h` ｜ StaticWndProc 加 WM_NCLBUTTONDOWN(HTCAPTION) → WindowDragBegin；WM_EXITSIZEMOVE → WindowDragEnd |
+| 操作                                                                                                                                                                                                                                  | 文件 | 说明 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | ---- |
+| ✅ 新 ｜ `APP/UI/include/dock/DockPanel.h` ｜ DockPanel — 停靠面板容器（tab 增删切换、摘出浮动）                                                                                                                                       |
+| ✅ 新 ｜ `APP/UI/src/DockPanel.cpp` ｜ DockPanel 实现                                                                                                                                                                                  |
+| ✅ 新 ｜ `APP/UI/include/dock/Docker.h` ｜ Docker — 停靠系统主窗口（五区域 + 布局 + DockLayer）                                                                                                                                        |
+| ✅ 新 ｜ `APP/UI/src/Docker.cpp` ｜ Docker 实现                                                                                                                                                                                        |
+| ✅ 新 ｜ `APP/UI/include/dock/DockLayer.h` ｜ DockLayer — Layer 监听全局窗口拖拽事件                                                                                                                                                   |
+| ✅ 新 ｜ `APP/UI/src/DockLayer.cpp` ｜ DockLayer 实现（switch 分支 + Hanlded 标记）                                                                                                                                                    |
+| ⚡ 改 ｜ `Core/Movement/include/movements.h` ｜ MovementType 枚举加 WindowDragBegin / WindowDragEnd                                                                                                                                    |
+| ⚡ 改 ｜ `Core/Movement/include/AppMovement.h` ｜ 新增 WindowDragBegin / WindowDragEnd 事件类                                                                                                                                          |
+| ⚡ 改 ｜ `APP/Widget/include/WinCore.h` ｜ StaticWndProc 加 WM_NCLBUTTONDOWN(HTCAPTION) → WindowDragBegin；WM_EXITSIZEMOVE → WindowDragEnd                                                                                             |
 | ⚡ 改 ｜ `APP/Widget/include/BaseWin.h` ｜ 新增跨平台工具方法：GetScreenRect / ScreenToClient / ClientToScreen / CaptureMouse / ReleaseMouseCapture / GetParentNHWD / SetCursorStyle / GetMouseScreenPos / GetWindowAt / MoveAndResize |
-| ⚡ 改 ｜ `APP/Widget/src/BaseWIn.cpp` ｜ 实现上述跨平台方法（#ifdef XY_PLATFORM_WINDOWS 包裹） |
-| 🐛 修 ｜ `APP/UI/src/TextInput.cpp` ｜ 删除未定义的 TriggerChange() 调用 |
-| 🐛 修 ｜ `APP/UI/src/DockPanel.cpp` ｜ GetWidth/GetHeight 改为 get_width/get_height；OnPaint 委托 Container::OnPaint 而非手写 |
-| 🐛 修 ｜ `APP/UI/src/Docker.cpp` ｜ include 路径修正；HitTestArea 用 GetActualWidth/Height 保持 const；SetWindowPos 全换 MoveAndResize |
+| ⚡ 改 ｜ `APP/Widget/src/BaseWIn.cpp` ｜ 实现上述跨平台方法（#ifdef XY_PLATFORM_WINDOWS 包裹）                                                                                                                                         |
+| 🐛 修 ｜ `APP/UI/src/TextInput.cpp` ｜ 删除未定义的 TriggerChange() 调用                                                                                                                                                               |
+| 🐛 修 ｜ `APP/UI/src/DockPanel.cpp` ｜ GetWidth/GetHeight 改为 get_width/get_height；OnPaint 委托 Container::OnPaint 而非手写                                                                                                          |
+| 🐛 修 ｜ `APP/UI/src/Docker.cpp` ｜ include 路径修正；HitTestArea 用 GetActualWidth/Height 保持 const；SetWindowPos 全换 MoveAndResize                                                                                                 |
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| ✅ 改 | `README.md` | 架构重构后全面更新：目录结构、状态表、设计理念 |
-| 🐛 修 | `ModelViewer.h` | FlatColor shader 切换时 cube 消失 → 缺少 `u_Color` uniform |
-| 🐛 修 | `ModelLoader.cpp` | **重写 OBJ 解析器** — 旧版指针跳转式只解析了 12 条面中的 6 条（每个面只读到第 1 个三角），改用 `std::getline` + `sscanf_s` 逐行解析 |
-| 🐛 修 | `ModelLoader.cpp` | `sscanf_s` 解析 `v//vn` 时顺序错误（先试 `%d/%d/%d` 再试 `%d//%d`），导致 vn 永远为 -1 → resolveIndex 误解析为有效值 |
-| 🐛 修 | `ModelLoader.cpp` | `resolveIdx(-1, count)` 返回 `count-1`（误把 -1 当相对索引），加 `== -1` 保护 |
-| 🐛 修 | `ModelGenerator.cpp` | `GenerateBoxMeshData()` 新增，直接生成 MeshData（不依赖 OBJ 解析）—— 备用方案 |
-| 💡 下步 | 材质支持 | 解析 Blender 导出的 MTL（Kd/Ka/Ks/Ns/map_Kd），Mesh 绑定材质名，`Submit` 传 `u_Color` 到 shader |
+| 操作   | 文件                 | 说明                                                                                                                                |
+| ------ | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| ✅ 改   | `README.md`          | 架构重构后全面更新：目录结构、状态表、设计理念                                                                                      |
+| 🐛 修   | `ModelViewer.h`      | FlatColor shader 切换时 cube 消失 → 缺少 `u_Color` uniform                                                                          |
+| 🐛 修   | `ModelLoader.cpp`    | **重写 OBJ 解析器** — 旧版指针跳转式只解析了 12 条面中的 6 条（每个面只读到第 1 个三角），改用 `std::getline` + `sscanf_s` 逐行解析 |
+| 🐛 修   | `ModelLoader.cpp`    | `sscanf_s` 解析 `v//vn` 时顺序错误（先试 `%d/%d/%d` 再试 `%d//%d`），导致 vn 永远为 -1 → resolveIndex 误解析为有效值                |
+| 🐛 修   | `ModelLoader.cpp`    | `resolveIdx(-1, count)` 返回 `count-1`（误把 -1 当相对索引），加 `== -1` 保护                                                       |
+| 🐛 修   | `ModelGenerator.cpp` | `GenerateBoxMeshData()` 新增，直接生成 MeshData（不依赖 OBJ 解析）—— 备用方案                                                       |
+| 💡 下步 | 材质支持             | 解析 Blender 导出的 MTL（Kd/Ka/Ks/Ns/map_Kd），Mesh 绑定材质名，`Submit` 传 `u_Color` 到 shader                                     |
 
 ## 2026-07-16
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| ✅ 新 | `APP/UI/include/Container/Canvas.h` | 画布抽象，`CanvasHandle` typedef 隔离平台 |
-| ✅ 新 | `APP/UI/src/Canvas.cpp` | GDI 实现：FillRect/DrawText/SetClip |
-| ✅ 新 | `APP/UI/include/Container/Container.h` | 有 HWND 的容器（继承 XWidget） |
-| ✅ 新 | `APP/UI/src/Container.cpp` | WM_PAINT 创建 Canvas 绘制 + hit-test 事件转发 + 键盘/滚轮处理 |
-| ✅ 新 | `APP/UI/include/Component/Component.h` | 轻量组件基类 |
-| ✅ 新 | `APP/UI/include/Component/Label.h` + `src/Label.cpp` | 文字标签 |
-| ✅ 新 | `APP/UI/include/Component/TextInput.h` + `src/TextInput.cpp` | 可交互输入框 |
-| ✅ 新 | `APP/UI/include/Component/ScrollArea.h` + `src/ScrollArea.cpp` | 滚动容器 |
-| ✅ 新 | `APP/UI/include/Component/ListBox.h` + `src/ListBox.cpp` | 条目列表（每行独立颜色） |
-| ✅ 新 | `APP/UI/include/Component/Button.h` + `src/Button.cpp` | 按钮 |
-| 🔧 改 | `APP/UI/premake5.lua` | UI 模块加 Widget/Movement/Application/Input 等 include 路径 |
-| 🔧 改 | `Widget/include/WinCore.h` | 新增 `g_ContainerHook` 函数指针，跟 ImGui hook 并存 |
+| 操作 | 文件                                                           | 说明                                                          |
+| ---- | -------------------------------------------------------------- | ------------------------------------------------------------- |
+| ✅ 新 | `APP/UI/include/Container/Canvas.h`                            | 画布抽象，`CanvasHandle` typedef 隔离平台                     |
+| ✅ 新 | `APP/UI/src/Canvas.cpp`                                        | GDI 实现：FillRect/DrawText/SetClip                           |
+| ✅ 新 | `APP/UI/include/Container/Container.h`                         | 有 HWND 的容器（继承 XWidget）                                |
+| ✅ 新 | `APP/UI/src/Container.cpp`                                     | WM_PAINT 创建 Canvas 绘制 + hit-test 事件转发 + 键盘/滚轮处理 |
+| ✅ 新 | `APP/UI/include/Component/Component.h`                         | 轻量组件基类                                                  |
+| ✅ 新 | `APP/UI/include/Component/Label.h` + `src/Label.cpp`           | 文字标签                                                      |
+| ✅ 新 | `APP/UI/include/Component/TextInput.h` + `src/TextInput.cpp`   | 可交互输入框                                                  |
+| ✅ 新 | `APP/UI/include/Component/ScrollArea.h` + `src/ScrollArea.cpp` | 滚动容器                                                      |
+| ✅ 新 | `APP/UI/include/Component/ListBox.h` + `src/ListBox.cpp`       | 条目列表（每行独立颜色）                                      |
+| ✅ 新 | `APP/UI/include/Component/Button.h` + `src/Button.cpp`         | 按钮                                                          |
+| 🔧 改 | `APP/UI/premake5.lua`                                          | UI 模块加 Widget/Movement/Application/Input 等 include 路径   |
+| 🔧 改 | `Widget/include/WinCore.h`                                     | 新增 `g_ContainerHook` 函数指针，跟 ImGui hook 并存           |
 
 ## 2026-07-08
 （旧记录保留）
