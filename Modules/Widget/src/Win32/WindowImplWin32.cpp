@@ -307,6 +307,16 @@ namespace X_Y
             ::SetWindowPos(m_Hwnd, nullptr, x, y, w, h, flags);
         }
 
+        void MoveAndResizePhysical(int x, int y, int w, int h,
+                                   bool noZOrder) override
+        {
+            if (!m_Hwnd)
+                return;
+
+            UINT flags = SWP_SHOWWINDOW | (noZOrder ? SWP_NOZORDER : 0);
+            ::SetWindowPos(m_Hwnd, nullptr, x, y, w, h, flags);
+        }
+
         void RequestRepaint() override
         {
             if (m_Hwnd)

@@ -161,7 +161,7 @@ namespace X_Y
             return nullptr; // 复杂场景：已有布局，不能再塞单面板
 
         EnsureLayout();
-        Dock *dock = new Dock();
+        Dock *dock = CreateSinglePanelDock();
         if (!dock)
             return nullptr;
         dock->SetMaxPanelCount(1); // 单面板
@@ -170,6 +170,11 @@ namespace X_Y
         m_Layout->DockBind(*dock, InvalidBoundary, InvalidBoundary,
                            InvalidBoundary, InvalidBoundary);
         return dock->AddPanel(panel, title);
+    }
+
+    Dock *Container::CreateSinglePanelDock()
+    {
+        return new Dock();
     }
 
     Panel *Container::DetachPanel(Panel *panel, std::string *title)

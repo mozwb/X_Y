@@ -5,6 +5,7 @@
 #include <set>
 #ifdef XY_PLATFORM_WINDOWS
 #include <windows.h>
+#include "Win32/Win32Globals.h"
 #endif
 
 namespace X_Y
@@ -213,6 +214,13 @@ namespace X_Y
             m_Impl->MoveAndResize(x, y, w, h, noZOrder);
     }
 
+    void BaseWin::MoveAndResizePhysical(int x, int y, int w, int h,
+                                        bool noZOrder)
+    {
+        if (m_Impl)
+            m_Impl->MoveAndResizePhysical(x, y, w, h, noZOrder);
+    }
+
     // ── 离屏自绘(方案B)：窗口常驻画布 + 主动刷新，不走系统循环 ──
     // 组件们 GetCanvas() 往同一张位图上叠画，最后 Flush() 一次上屏。
 
@@ -294,8 +302,16 @@ namespace X_Y
 #ifdef XY_PLATFORM_WINDOWS
         POINT pt = {screenX, screenY};
         HWND hwnd = ::WindowFromPoint(pt);
+        if (hwnd)
+            hwnd = ::GetAncestor(hwnd, GA_ROOT);
         if (!hwnd)
             return nullptr;
+
+        TCHAR className[256] = {};
+        if (::GetClassName(hwnd, className, 256) == 0 ||
+            ::lstrcmp(className, Win32::g_szClassName) != 0)
+            return nullptr;
+
         return (BaseWin *)::GetWindowLongPtr(hwnd, GWLP_USERDATA);
 #else
         return nullptr;

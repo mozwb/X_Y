@@ -68,6 +68,9 @@ namespace X_Y
         void SetCursorStyle(CursorStyle style);
         // 把窗口搬到物理位置
         void MoveAndResize(int x, int y, int w, int h, bool noZOrder = true);
+        // 使用真实屏幕像素移动和调整窗口，不再进行 DPI 缩放。
+        void MoveAndResizePhysical(int x, int y, int w, int h,
+                                   bool noZOrder = true);
 
         // 置顶/取消置顶(运行时可切换，通用工具)
 
