@@ -1,4 +1,4 @@
-﻿#include "Win32/Win32WndProc.h"
+#include "Win32/Win32WndProc.h"
 #include "Win32/Win32Globals.h"
 #include "BaseWin.h"
 #include "Widget/Application.h"
@@ -272,9 +272,16 @@ namespace X_Y::Win32
             {
                 int delta = GET_WHEEL_DELTA_WPARAM(wParam);
                 float yOffset = static_cast<float>(delta) / WHEEL_DELTA;
+                // ⚠️ WM_MOUSEWHEEL 的 lParam 是【屏幕坐标】（与 WM_MOUSEMOVE 的
+                //    客户区坐标不同），必须先转客户区。
+                //    但只能用 ScreenToClientPhysical（物理→物理），不能用 ScreenToClient
+                //    —— 后者会顺带 ÷scale 转成逻辑坐标，而上层 Container 统一会对
+                //    鼠标事件做 ClientPhysicalToLogical，那就会【重复缩放】。
+                //    在 150% DPI 下坐标会被多除一次 1.5，表现为滚轮位置偏左上，
+                //    于是"鼠标在底部/右侧 Dock 上滚轮没反应"（坐标被算到了别的 Dock）。
                 int mouseX = (short)LOWORD(lParam);
                 int mouseY = (short)HIWORD(lParam);
-                pThis->ScreenToClient(mouseX, mouseY);
+                pThis->ScreenToClientPhysical(mouseX, mouseY);
                 movement = new MouseScrolled(pThis, 0.0, yOffset,
                                              (float)mouseX, (float)mouseY);
                 app->GetEventQueue().Push(movement);

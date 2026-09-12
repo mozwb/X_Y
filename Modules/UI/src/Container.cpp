@@ -19,6 +19,16 @@ namespace X_Y
     Container::Container(XWidget *parent)
         : XWidget(parent)
     {
+        // ⚠️ 坐标契约（改鼠标事件前必读）：
+        //   所有鼠标 Movement（Pressed/Moved/Released/Scrolled）的 GetX/GetY
+        //   必须携带【物理客户区坐标】。壳在这里统一做唯一一次
+        //   ClientPhysicalToLogical，之后全链路都是逻辑坐标。
+        //   → 若某个 Movement 的产生处提前转成了逻辑坐标（例如滚轮曾误用
+        //     ScreenToClient 而不是 ScreenToClientPhysical），这里会【重复缩放】，
+        //     150% DPI 下坐标被多除一次 1.5，表现为命中位置偏左上
+        //     （"鼠标在底部/右侧 Dock 上滚轮没反应"就是这么来的）。
+        //   产出侧契约见 Widget/src/Win32/Win32WndProc.cpp 的鼠标分支。
+
         // 文件拖拽是窗口行为；Container 负责开启，具体面板决定如何处理。
         EnableFileDrop(true);
 
