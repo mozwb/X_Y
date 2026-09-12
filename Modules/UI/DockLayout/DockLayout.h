@@ -65,8 +65,8 @@ namespace X_Y
         bool DockBind(Dock &dock, BoundaryId top, BoundaryId bottom,
                       BoundaryId left, BoundaryId right);
         void RemoveDock(Dock *dock);
-        // 收容一个已脱离宿主的 Panel；不销毁或复制 Panel。
-        Panel *TakePanel(Panel *panel, const std::string &title = "");
+        // 按落点收容一个已脱离宿主的 Panel；不销毁也不复制 Panel。
+        // 落点命中哪个 Dock 就交给它，落空/不可加返回 nullptr（调用方负责回退）。
         Panel *AddPanelAt(Panel *panel, int x, int y,
                           const std::string &title = "");
         const std::vector<Dock *> &GetDockList() const { return m_Docks; }

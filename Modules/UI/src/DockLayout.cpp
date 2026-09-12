@@ -249,49 +249,27 @@ namespace X_Y
         RecalcLayout();
         RequestRepaint();
     }
-    // 这个行为貌似是错的
-    Panel *DockLayout::TakePanel(Panel *panel, const std::string &title)
-    {
-        if (!panel)
-            return nullptr;
-
-        Dock *target = nullptr;
-        for (Dock *dock : m_Docks)
-        {
-            if (dock && dock->GetActivePanel())
-            {
-                target = dock;
-                break;
-            }
-        }
-
-        if (!target)
-        {
-            target = new Dock();
-            AddDock(target);
-            DockBind(*target, InvalidBoundary, InvalidBoundary,
-                     InvalidBoundary, InvalidBoundary);
-        }
-
-        return target->AddPanel(panel, title);
-    }
-
+    // 按落点收容一个已脱离宿主的 Panel（不销毁/不复制 Panel）。
+    // 落点命中哪个 Dock 就交给它；落空返回 nullptr，由调用方决定后续
+    // （通常回退成独立窗口，见 TabDock::DropPanel / TabHostContainer）。
+    //
+    // ℹ️ 早期这里有个 TakePanel(panel, title)：语义是"找第一个【有】激活面板的
+    //    Dock 塞进去"，方向正好相反（该找的是**能收容**的 Dock），且会 new 裸 Dock
+    //    （没有 tab 栏）却无人释放。它从未被调用，已删除 —— 按落点收容走本函数。
     Panel *DockLayout::AddPanelAt(Panel *panel, int x, int y,
                                   const std::string &title)
     {
         if (!panel)
             return nullptr;
 
-        for (Dock *dock : m_Docks)
-        {
-            if (!dock)
-                continue;
-            if (x >= dock->GetX() && x < dock->GetX() + dock->GetWidth() &&
-                y >= dock->GetY() && y < dock->GetY() + dock->GetHeight())
-                return dock->AddPanel(panel, title);
-        }
+        // 复用 HitTestDock：与绘制 z 序 / 事件命中同一套顺序（逆序 = 上层优先）
+        Dock *dock = HitTestDock(x, y);
+        if (!dock)
+            return nullptr;
+        if (!dock->CanAddPanel())
+            return nullptr;
 
-        return nullptr;
+        return dock->AddPanel(panel, title);
     }
 
     void DockLayout::RouteFileDragEnter(const std::vector<XPath> &files, int x, int y)
