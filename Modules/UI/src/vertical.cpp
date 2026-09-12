@@ -1,4 +1,5 @@
 #include "Component/vertical.h"
+#include "../UiCore/UINode.h"
 #include <algorithm>
 
 namespace X_Y
@@ -107,8 +108,9 @@ namespace X_Y
                 continue;
 
             // 子组件按自己的 (0,0) 起画：压入它在自身局部坐标系里的位置
-            canvas.PushOrigin(component->GetX(), component->GetY());
-            canvas.SetClip(0, 0, component->GetWidth(), component->GetHeight());
+            const UINodeView cv = View(*component);
+            canvas.PushOrigin(cv.self.x, cv.self.y);
+            canvas.SetClip(0, 0, cv.self.w, cv.self.h);
             component->OnPaint(canvas);
             canvas.ResetClip();
             canvas.PopOrigin();
@@ -141,11 +143,10 @@ namespace X_Y
         if (me->action == MouseAction::Press)
             Select(index);
 
-        const int cx = component->GetX(), cy = component->GetY();
-        e.x -= cx;
-        e.y -= cy;
+        // 用共用原语下钻（与 OnPaint 的 PushOrigin 同源：都取 View(comp).self）
+        const UINodeView cv = View(*component);
+        ToLocal(cv, e.x, e.y);
         component->OnInput(e);
-        e.x += cx;
-        e.y += cy;
+        ToParent(cv, e.x, e.y);
     }
 }
