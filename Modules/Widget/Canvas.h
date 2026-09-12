@@ -61,25 +61,38 @@ namespace X_Y {
             m_Impl->FillCircle(cx, cy, rOuter, rInner, color);
         }
 
+        // ── 原点平移（分层 UI 的坐标下钻）──
+        // 宿主按绝对坐标压入自己的位置，子层内部一律按 (0,0) 起画。
+        // 可嵌套压栈。详见 CanvasImpl::PushOrigin 的语义说明。
+        void PushOrigin(int dx, int dy) { m_Impl->PushOrigin(dx, dy); }
+        void PopOrigin() { m_Impl->PopOrigin(); }
+        int OriginX() const { return m_Impl->GetOriginX(); }
+        int OriginY() const { return m_Impl->GetOriginY(); }
+
         // ── 文字（薄转发壳，文字逻辑归 Font）──
         // font = "用哪款字体画这段字"（每次显式指定，无 SetFont 状态）。
+        // (x,y) 与其他绘制一样走当前原点（文字后端不认原点，这里先加好）。
         void DrawText(const Font& font, int x, int y,
                       const char* text, uint32_t color) {
-            font.DrawText(MakeTarget(), x, y, text, color);
+            font.DrawText(MakeTarget(), x + OriginX(), y + OriginY(), text, color);
         }
         void DrawText(const Font& font, int x, int y,
                       const wchar_t* text, uint32_t color) {
-            font.DrawText(MakeTarget(), x, y, text, color);
+            font.DrawText(MakeTarget(), x + OriginX(), y + OriginY(), text, color);
         }
         void FillText(const Font& font, int x, int y, int w, int h,
                       int tx, int ty, const char* text,
                       uint32_t textColor, uint32_t bgColor) {
-            font.FillText(MakeTarget(), x, y, w, h, tx, ty, text, textColor, bgColor);
+            font.FillText(MakeTarget(), x + OriginX(), y + OriginY(), w, h,
+                          tx + OriginX(), ty + OriginY(),
+                          text, textColor, bgColor);
         }
         void FillText(const Font& font, int x, int y, int w, int h,
                       int tx, int ty, const wchar_t* text,
                       uint32_t textColor, uint32_t bgColor) {
-            font.FillText(MakeTarget(), x, y, w, h, tx, ty, text, textColor, bgColor);
+            font.FillText(MakeTarget(), x + OriginX(), y + OriginY(), w, h,
+                          tx + OriginX(), ty + OriginY(),
+                          text, textColor, bgColor);
         }
 
         void SetClip(int x, int y, int w, int h) { m_Impl->SetClip(x, y, w, h); }

@@ -6,7 +6,8 @@ namespace X_Y
 
     void Button::OnPaint(Canvas &canvas)
     {
-        int x = GetX(), y = GetY(), w = GetWidth(), h = GetHeight();
+        // 组件坐标一律【相对所属容器】(0,0 起画)；位置偏移由宿主压 canvas origin 处理。
+        const int x = 0, y = 0, w = GetWidth(), h = GetHeight();
 
         uint32_t bg = m_MouseHover ? m_HoverColor : m_BgColor;
 

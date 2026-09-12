@@ -1,9 +1,22 @@
 #include "../dock/Dock.h"
 #include "DockLayout/DockLayout.h"
+#include "../UiCore/UINode.h"
 #include <algorithm>
 
 namespace X_Y
 {
+
+    // ── UINodeView：Dock 在 DockLayout 坐标系（= 布局绝对）里的矩形 ──
+    // content 去掉顶部 tab 栏 —— 面板内容从 m_MenuBarHeight 之后开始。
+    UINodeView View(const Dock &node)
+    {
+        UINodeView v;
+        v.self = Rect{ node.GetX(), node.GetY(), node.GetWidth(), node.GetHeight() };
+        const int barH = std::min(node.GetMenuBarHeight(), v.self.h);
+        v.content = Rect{ 0, barH, v.self.w, v.self.h - barH };
+        v.visible = true; // Dock 不隐藏自身（空 dock 也占位）
+        return v;
+    }
 
     Dock::~Dock()
     {
@@ -144,7 +157,12 @@ namespace X_Y
         RequestRepaint();
     }
 
-    // ── 边界命中（供拖分割线；布局坐标）──
+    // ── 边界命中（供拖分割线）──
+    // ★ 坐标约定：入参 x/y 是【布局绝对坐标】，不是 Dock 局部坐标！
+    //   调用方 DockLayout::RouteInput 传的是未平移的 e.x/e.y，本函数内部
+    //   也用 m_Layout->GetBoundaryPosition()（绝对像素）比较。
+    //   ⚠️ 这与 HitTestPanel（Dock 局部）【不同】—— 别顺手"统一"成局部，
+    //      否则拖分割线会命中不到（boundary 是全布局共享的，天然属于绝对层）。
     BoundaryId Dock::HitTestEdge(int x, int y, int thickness) const
     {
         if (!m_Layout)
@@ -188,9 +206,10 @@ namespace X_Y
 
     Panel *Dock::HitTestPanel(int x, int y) const
     {
-        // x/y 为 dock 内坐标(原点 dock 左上)；菜单栏区域不算面板内容
-        if (x < m_PanelX || x >= m_PanelX + m_PanelW ||
-            y < m_PanelY || y >= m_PanelY + m_PanelH)
+        // x/y 为 dock 内坐标(原点 dock 左上)；菜单栏区域不算面板内容。
+        // 用【生效面板区】(m_EffPanel*) —— 与实际交给 Panel 的矩形同一份数据。
+        if (x < m_EffPanelX || x >= m_EffPanelX + m_EffPanelW ||
+            y < m_EffPanelY || y >= m_EffPanelY + m_EffPanelH)
             return nullptr;
         Panel *p = GetActivePanel();
         if (!p)
@@ -245,13 +264,13 @@ namespace X_Y
                 me && me->action == MouseAction::Press)
                 m_MouseCapturePanel = p;
 
-            const int px0 = p->GetX() - m_X; // panel 相对 dock 的偏移
-            const int py0 = p->GetY() - m_Y;
-            e.x -= px0;
-            e.y -= py0;
+            // Panel 的矩形就是【Dock 局部坐标】，直接用生效面板区偏移即可，
+            // 不再需要 `p->GetX() - m_X` 那种"绝对减绝对"的补丁。
+            e.x -= m_EffPanelX;
+            e.y -= m_EffPanelY;
             p->OnInput(e);
-            e.x += px0;
-            e.y += py0;
+            e.x += m_EffPanelX;
+            e.y += m_EffPanelY;
         }
 
         if (auto *me = dynamic_cast<UIMouseEvent *>(&e);
@@ -375,36 +394,50 @@ namespace X_Y
         if (!active)
             return;
 
-        const int panelX = std::clamp(m_PanelX, 0, m_W);
-        const int panelY = std::clamp(m_PanelY, 0, m_H);
-        const int panelW = std::min(m_PanelW, m_W - panelX);
-        const int panelH = std::min(m_PanelH, m_H - panelY);
-        active->SetLayoutRect(m_X + panelX, m_Y + panelY, panelW, panelH);
+        // 计算实际生效的面板区（钳到 Dock 内）。
+        // ⚠️ 注意：钳制结果【不写回】m_PanelW/m_PanelH —— 那对是"声明值"，
+        //    必须跨 resize 存活（否则窗口缩到 0 再放大，声明尺寸就被永久压掉了）。
+        //    改为把生效矩形缓存到 m_EffPanel*，命中判定与交给 Panel 的矩形都用它，
+        //    保证"画在哪"和"点在哪"仍然是同一份数据。
+        m_EffPanelX = std::clamp(m_PanelX, 0, std::max(0, m_W));
+        m_EffPanelY = std::clamp(m_PanelY, 0, std::max(0, m_H));
+        m_EffPanelW = std::clamp(m_PanelW, 0, std::max(0, m_W - m_EffPanelX));
+        m_EffPanelH = std::clamp(m_PanelH, 0, std::max(0, m_H - m_EffPanelY));
+
+        // ★ Panel 的矩形是【Dock 局部坐标】（父坐标系 = Dock）。
+        //   不是布局绝对坐标 —— 绝对坐标只活在 DockLayout/Dock 这一侧，
+        //   到 Dock↔Panel 交界就转成相对，Panel 及以下全程相对。
+        active->SetLayoutRect(m_EffPanelX, m_EffPanelY, m_EffPanelW, m_EffPanelH);
     }
 
     // ── 绘制：tab 栏 + 激活 Panel 内容 ──
+    // 坐标约定：本函数收到的是【Dock 局部坐标】canvas —— DockLayout 已压过
+    //           PushOrigin(dock->GetX(), dock->GetY())。所以这里一律按 (0,0) 起画，
+    //           不再自己加 m_X/m_Y（与输入链 DockLayout 减 dock->GetX() 对称）。
     void Dock::OnPaint(Canvas &canvas)
     {
-        canvas.FillRect(m_X, m_Y, m_W, m_H, 0xFF232527);
+        canvas.FillRect(0, 0, m_W, m_H, 0xFF232527);
 
-        // tab 栏
-        const int tabY = m_Y;
-        int tabX = m_X;
+        // tab 栏（Dock 局部坐标）
+        int tabX = 0;
         for (int i = 0; i < (int)m_Panels.size(); ++i)
         {
             const bool active = (i == m_ActiveIndex);
             const int tabW = 120;
-            canvas.FillRect(tabX, tabY, tabW, m_MenuBarHeight,
+            canvas.FillRect(tabX, 0, tabW, m_MenuBarHeight,
                             active ? 0xFF007ACC : 0xFF3E3E42);
-            // 用 Panel 首标/序列做标题占位（标题存 m_Titles）
             // (字体绘制后续接 FontLibrary；先只画色块+索引)
             tabX += tabW;
         }
 
-        // 激活 Panel 内容
+        // 激活 Panel 内容：压入 Panel 在 Dock 内的偏移，Panel 及以下全程 (0,0) 起画
         Panel *active = GetActivePanel();
         if (active)
+        {
+            canvas.PushOrigin(m_EffPanelX, m_EffPanelY);
             active->OnPaint(canvas);
+            canvas.PopOrigin();
+        }
     }
 
     // ════════════════════════════════════════════════════════════

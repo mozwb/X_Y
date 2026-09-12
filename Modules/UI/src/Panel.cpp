@@ -1,9 +1,33 @@
 #include "Panel/Panel.h"
+#include "../UiCore/UINode.h"
 #include <algorithm>
 
 namespace X_Y
 {
 
+    // ── UINodeView：Panel 在 Dock 坐标系（= Dock 局部）里的矩形 ──
+    UINodeView View(const Panel &node)
+    {
+        UINodeView v;
+        v.self = Rect{ node.GetX(), node.GetY(), node.GetWidth(), node.GetHeight() };
+        v.content = Rect{ 0, 0, v.self.w, v.self.h }; // 整块都是内容
+        v.visible = true;
+        return v;
+    }
+
+    // ── UINodeView：Component 在 Panel 坐标系（= Panel 局部）里的矩形 ──
+    // Component 是叶子：没有子节点，content 即自身。
+    UINodeView View(const Component &node)
+    {
+        UINodeView v;
+        v.self = Rect{ node.GetX(), node.GetY(), node.GetWidth(), node.GetHeight() };
+        v.content = Rect{ 0, 0, v.self.w, v.self.h };
+        v.visible = node.IsVisible();
+        return v;
+    }
+
+    // ⚠️ 坐标语义：x/y 是【宿主坐标系】里的位置 —— 由 Dock 调用时即 Dock 局部坐标。
+    //    绝对坐标只活在 DockLayout/Dock 一侧，Panel 及以下全程相对。
     void Panel::SetLayoutRect(int x, int y, int w, int h)
     {
         m_X = x;
@@ -136,6 +160,10 @@ namespace X_Y
         }
     }
 
+    // Panel 把自己这棵树画到 canvas 上。
+    // ★ 坐标约定：调用方（Dock）已 PushOrigin 到 Panel 的位置，所以本函数
+    //   及所有组件一律按【Panel 局部坐标】(0,0 起画) —— 不再加 m_X/m_Y。
+    //   组件也不需要知道自己在哪个 Panel/Dock/窗口里。
     void Panel::OnPaint(Canvas &canvas)
     {
         for (auto *comp : m_Components)
@@ -143,7 +171,7 @@ namespace X_Y
             if (comp->IsVisible())
             {
                 canvas.SetClip(
-                    m_X + comp->GetX(), m_Y + comp->GetY(),
+                    comp->GetX(), comp->GetY(),
                     comp->GetWidth(), comp->GetHeight());
                 comp->OnPaint(canvas);
                 canvas.ResetClip();

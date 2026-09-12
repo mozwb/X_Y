@@ -52,8 +52,10 @@ namespace X_Y
 
         void OnPaint(Canvas &canvas) override
         {
-            const int x = GetX();
-            const int y = GetY();
+            // 本组件由 ScrollArea 持有；ScrollArea 已压过 origin（含滚动位移），
+            // 所以这里一律按【自身局部坐标】(0,0 起画)，不再加 GetX()/GetY()。
+            constexpr int x = 0;
+            constexpr int y = 0;
             const int width = GetWidth();
             const int firstRow = std::max(0, m_ViewportOffset / kRowHeight);
             const uint64_t rowCount = (m_Data.Size + kBytesPerRow - 1) / kBytesPerRow;
@@ -264,13 +266,13 @@ namespace X_Y
     void HexViewer::OnPaint(Canvas &canvas)
     {
         ProcessPendingClose();
-        canvas.FillRect(GetX(), GetY(), GetWidth(), GetHeight(), 0xFF11151A);
+        // HexViewer 是 Panel：宿主（Dock）已压过 origin，一律按 Panel 局部 (0,0) 起画。
+        canvas.FillRect(0, 0, GetWidth(), GetHeight(), 0xFF11151A);
         Panel::OnPaint(canvas);
         if (m_FileDragHover)
         {
-            canvas.FillRect(GetX(), GetY(), GetWidth(), 3, 0xFF36A3FF);
-            canvas.FillRect(GetX(), GetY() + GetHeight() - 3,
-                            GetWidth(), 3, 0xFF36A3FF);
+            canvas.FillRect(0, 0, GetWidth(), 3, 0xFF36A3FF);
+            canvas.FillRect(0, GetHeight() - 3, GetWidth(), 3, 0xFF36A3FF);
         }
     }
 

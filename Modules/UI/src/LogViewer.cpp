@@ -1,4 +1,4 @@
-﻿#include "../panel/LogViewer.h"
+#include "../panel/LogViewer.h"
 #include "DataStore/DataStore.h"
 #include "XCore/Timer/Timer.h"
 #include "Widget/BaseWin.h"
@@ -458,9 +458,12 @@ namespace X_Y
         MeasureTags();
         OnLayout();
 
-        canvas.FillRect(GetX(), GetY(), GetWidth(), GetHeight(), 0xFF1E1E1E);
-        canvas.FillRect(GetX() + m_ScrollArea->GetX(),
-                        GetY() + m_ScrollArea->GetY(),
+        // LogViewer 是 Panel：坐标一律【Panel 局部】(0,0 起画)。
+        // 宿主（Dock）已经把 canvas origin 压到本 Panel 的位置了，
+        // 所以这里不再需要 GetX()/GetY() 那层手工偏移。
+        canvas.FillRect(0, 0, GetWidth(), GetHeight(), 0xFF1E1E1E);
+        canvas.FillRect(m_ScrollArea->GetX(),
+                        m_ScrollArea->GetY(),
                         m_ScrollArea->GetWidth(),
                         m_ScrollArea->GetHeight(),
                         0xFF000000);

@@ -106,10 +106,12 @@ namespace X_Y
             if (!component->IsVisible())
                 continue;
 
-            canvas.SetClip(component->GetX(), component->GetY(),
-                           component->GetWidth(), component->GetHeight());
+            // 子组件按自己的 (0,0) 起画：压入它在自身局部坐标系里的位置
+            canvas.PushOrigin(component->GetX(), component->GetY());
+            canvas.SetClip(0, 0, component->GetWidth(), component->GetHeight());
             component->OnPaint(canvas);
             canvas.ResetClip();
+            canvas.PopOrigin();
         }
     }
 

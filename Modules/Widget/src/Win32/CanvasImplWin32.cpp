@@ -2,6 +2,7 @@
 #include "Dpi.h"
 #include <windows.h>
 #include <cstring>
+#include <vector>
 
 #ifdef DrawText
 #undef DrawText
@@ -68,6 +69,28 @@ namespace X_Y
         int GetHeight() const override { return m_LogicH; }
         int GetPhysicalWidth() const override { return m_Width; }
         int GetPhysicalHeight() const override { return m_Height; }
+
+        // ── 原点平移（可嵌套压栈）──
+        // 注意语义：origin 只影响"按坐标画的"东西（图形/裁剪/文字），
+        // 不影响物理缓冲本身（Clear/Flush/GetPixelBuffer）。
+        void PushOrigin(int dx, int dy) override
+        {
+            m_OriginStack.push_back({m_OriginX, m_OriginY});
+            m_OriginX += dx;
+            m_OriginY += dy;
+        }
+
+        void PopOrigin() override
+        {
+            if (m_OriginStack.empty())
+                return; // 空了就保持不动（比崩掉安全）
+            m_OriginX = m_OriginStack.back().first;
+            m_OriginY = m_OriginStack.back().second;
+            m_OriginStack.pop_back();
+        }
+
+        int GetOriginX() const override { return m_OriginX; }
+        int GetOriginY() const override { return m_OriginY; }
 
         // 逻辑 ↔ 物理 互译（基于后端自持 m_Scale，与 S() 同一份换算）
         float GetScale() const override { return m_Scale; }
@@ -168,7 +191,7 @@ namespace X_Y
 
         void FillRect(int x, int y, int w, int h, uint32_t color) override
         {
-            int px = S(x), py = S(y), pw = S(w), ph = S(h);
+            int px = S(x + m_OriginX), py = S(y + m_OriginY), pw = S(w), ph = S(h);
             FillRectPhys(px, py, pw, ph, color);
         }
 
@@ -176,7 +199,7 @@ namespace X_Y
         {
             if (r < 0)
                 r = 0;
-            int px = S(x), py = S(y), pw = S(w), ph = S(h);
+            int px = S(x + m_OriginX), py = S(y + m_OriginY), pw = S(w), ph = S(h);
             int pr = S(r);
             if (pw <= 0 || ph <= 0)
                 return;
@@ -229,9 +252,9 @@ namespace X_Y
         void FillTriangle(int x1, int y1, int x2, int y2,
                           int x3, int y3, uint32_t color) override
         {
-            int ax = S(x1), ay = S(y1);
-            int bx = S(x2), by = S(y2);
-            int cx = S(x3), cy = S(y3);
+            int ax = S(x1 + m_OriginX), ay = S(y1 + m_OriginY);
+            int bx = S(x2 + m_OriginX), by = S(y2 + m_OriginY);
+            int cx = S(x3 + m_OriginX), cy = S(y3 + m_OriginY);
             // 包围盒
             int minX = min3(ax, bx, cx), maxX = max3(ax, bx, cx);
             int minY = min3(ay, by, cy), maxY = max3(ay, by, cy);
@@ -249,7 +272,7 @@ namespace X_Y
         void FillCircle(int cx, int cy, float rOuter, float rInner, uint32_t color) override
         {
             // 逻辑 → 物理（半径是浮点，直接用 S 对单个值缩放会失真，改对半径做换算）
-            int px = S(cx), py = S(cy);
+            int px = S(cx + m_OriginX), py = S(cy + m_OriginY);
             float outer = rOuter * m_Scale;
             float inner = (rInner > 0.0f) ? rInner * m_Scale : 0.0f;
             if (outer <= 0.0f)
@@ -281,8 +304,8 @@ namespace X_Y
 
         void SetClip(int x, int y, int w, int h) override
         {
-            m_ClipX = S(x);
-            m_ClipY = S(y);
+            m_ClipX = S(x + m_OriginX);
+            m_ClipY = S(y + m_OriginY);
             m_ClipW = S(w);
             m_ClipH = S(h);
             m_ClipSet = true;
@@ -374,6 +397,11 @@ namespace X_Y
         HBITMAP m_OldBitmap = nullptr;
         bool m_ClipSet = false;
         int m_ClipX = 0, m_ClipY = 0, m_ClipW = 0, m_ClipH = 0;
+
+        // 原点平移（逻辑坐标）：所有绘制/裁剪/文字的坐标都先加它。
+        // 栈保存上一层原点，PopOrigin 还原 —— 支持任意层数嵌套。
+        int m_OriginX = 0, m_OriginY = 0;
+        std::vector<std::pair<int, int>> m_OriginStack;
     };
 
     // 工厂：nativeHandle = 窗口句柄(HWND)。创建软件 ARGB 后端。

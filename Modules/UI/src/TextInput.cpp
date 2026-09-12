@@ -48,7 +48,8 @@ namespace X_Y
 
     void TextInput::OnPaint(Canvas &canvas)
     {
-        int x = GetX(), y = GetY(), w = GetWidth(), h = GetHeight();
+        // 组件坐标一律【相对所属容器】(0,0 起画)；位置偏移由宿主压 canvas origin 处理。
+        const int x = 0, y = 0, w = GetWidth(), h = GetHeight();
 
         canvas.FillRect(x, y, w, h, IsFocused() ? 0xFFFFFFFF : 0xFFF0F0F0);
 

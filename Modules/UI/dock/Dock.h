@@ -170,8 +170,15 @@ namespace X_Y
 
         int m_X = 0, m_Y = 0, m_W = 100, m_H = 100;
         int m_LayoutW = 0, m_LayoutH = 0; // 宿主喂的布局总尺寸
+        // ── 面板区（两套，务必分清）──
+        // m_Panel*    : 声明值（SetPanelArea/SetMenuBarHeight/SetActiveRect 维护），
+        //               跨 resize 存活，语义是"我希望面板占多大"。
+        // m_EffPanel* : 生效值（UpdatePanelRects 把声明值钳到 Dock 内算出），
+        //               绘制原点、输入偏移、命中判定【都用它】，保证三者同一份数据。
         int m_PanelX = 0, m_PanelY = 0;
         int m_PanelW = 100, m_PanelH = 76;
+        int m_EffPanelX = 0, m_EffPanelY = 0;
+        int m_EffPanelW = 100, m_EffPanelH = 76;
         int m_MenuBarHeight = 0;
         bool m_PanelAreaCustomized = false;
         float m_MinWidth = 0.05f;

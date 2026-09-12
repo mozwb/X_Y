@@ -63,6 +63,21 @@ namespace X_Y {
         virtual void SetClip(int x, int y, int w, int h) = 0;
         virtual void ResetClip() = 0;
 
+        // ── 原点平移（坐标系转换）──────────────────────────
+        // 语义：把"当前绘制原点"平移 (dx,dy)，之后所有绘制/裁剪/文字的坐标
+        // 都相对新原点解释。用于分层 UI 的逐层坐标下钻：
+        //   宿主按绝对坐标压入自己的位置 → 子层内部一律按 (0,0) 起画。
+        // 可嵌套压栈（每层压自己那一层），PopOrigin 弹回上一层。
+        // ⚠️ Clear() 不受 origin 影响（整幅清屏，无坐标语义）；
+        //    Flush/FlushRect 是上屏操作，同样不走 origin。
+        virtual void PushOrigin(int dx, int dy) = 0;
+        virtual void PopOrigin() = 0;
+
+        // 当前原点（逻辑坐标）。Canvas 的文字转发壳需要它把 (x,y) 预先加好，
+        // 因为文字绘制走 Font（不认识原点）。
+        virtual int GetOriginX() const = 0;
+        virtual int GetOriginY() const = 0;
+
         // ── 软件 ARGB 缓冲访问（供 Font 文字绘制拼目标 / 特殊上层直读）──
         // 32bpp ARGB 物理像素指针（布局为 width*height，每像素 0xAARRGGBB）。
         // 后端若不暴露（非软件后端）返回 nullptr。

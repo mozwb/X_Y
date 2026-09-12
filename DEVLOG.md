@@ -1,5 +1,79 @@
 # DEVLOG
 
+## 2026-09-12 — UI 坐标体系统一（修正非顶部 Dock 的 Panel 绘制错位）
+
+> 砚台报的 bug：TabHostContainer 里把 Panel 拖进**除 TopDock 以外的** Dock 会错位，
+> 表现是从 (0,0) 起画而不是从 Dock 在窗口内的实际位置起画。TopDock 恰好正常。
+
+### 根因（诊断定案）
+四层各持 m_X/m_Y，但**坐标语义不统一**，且绘制链和输入链不对称：
+
+| 层 | 存的坐标 | 参照系 |
+|----|---------|--------|
+| Dock | 布局绝对 | DockLayout 左上角 |
+| Panel | **布局绝对** | 布局左上角（不是 Dock 相对！） |
+| Component | Panel 相对 | 所属 Panel 左上角 |
+| Canvas | 无坐标系概念 | 绝对 |
+
+- **输入链自洽**：每层 `e.x -= 偏移` 下钻，下钻后还原 → 点击一直是对的。
+- **绘制链断裂**：`Panel::OnPaint` 用 `m_X + comp->GetX()` 算 clip（知道要加绝对偏移），
+  但传给组件的 canvas **仍是绝对坐标**，组件只得自己再加一次 → `LogViewer.cpp` 里
+  手工写 `canvas.FillRect(GetX() + m_ScrollArea->GetX(), ...)` 就是这个病的症状。
+- **TopDock 为何正常**：`top=InvalidBoundary, left=InvalidBoundary` → `m_X = m_Y = 0`，
+  偏移量恰好为 0，把混用掩盖了。其余四 Dock 偏差量正好是 `Dock::m_X/m_Y`。
+
+### 定案方向（砚台拍板）
+砚台确认分层设计：**窗口布局（DockLayout/Dock）用绝对，面板内（Panel/Component）用相对**。
+两者各自合理，冲突在于转换点不明确。定案：
+- 转换点落在 **Dock↔Panel 交界**，两侧各自纯粹。
+- 用 **Canvas 可嵌套 origin 压栈**做转换（不是各组件自己加偏移）。
+- 选**选项 2**：origin 在 `Dock::OnPaint` 压，连 Panel 作者都无需感知 ——
+  **Panel 内部 + Component 内部全部按 (0,0) 起画**。
+- **写法乙**：`DockLayout::OnPaint` 先压 dock origin，使绘制与输入**逐层同构**：
+  ```
+  绘制: 绝对 ─PushOrigin(dock.X/Y)→ Dock局部 ─PushOrigin(panelX/Y)→ Panel局部
+  输入: 绝对 ─减 dock.GetX/Y→        Dock局部 ─减 panelX/Y→         Panel局部
+  ```
+
+### 本次改动（第一批：修错位 + 建坐标原语）
+- `Widget/Canvas.h`：加 `PushOrigin(dx,dy)` / `PopOrigin()` / `OriginX()` / `OriginY()`（可嵌套压栈）。
+- `Widget/CanvasImpl.h`：接口加 `PushOrigin/PopOrigin/GetOriginX/GetOriginY`。
+- `Widget/src/Win32/CanvasImplWin32.cpp`：后端持 `m_OriginX/m_OriginY` + 栈；
+  `FillRect/FillRoundRect/FillTriangle/FillCircle/SetClip` 全部叠加 origin；
+  `Clear/Flush/FlushRect` **不走** origin（物理缓冲操作，无坐标语义）。
+  文字走 `Font`（不认原点），故由 `Canvas` 转发壳在传参前加好 `OriginX/Y`。
+- 新 `UI/UiCore/UINode.h`：`UINodeView{Rect self, content; bool visible}` + `ContentInParent()`
+  + 原语 `ToLocal/ToParent/Hits` + 四层 `View()` 声明（定义在各自 .cpp）。
+- **Panel 坐标语义改为 Dock 局部**（`View(Panel).self` 落在父坐标系里）：
+  - `Dock::UpdatePanelRects`：改传 `m_EffPanel*`（Dock 局部），不再 `m_X + panelX`。
+  - **新增 `m_EffPanelX/Y/W/H` 生效面板区**：声明值 `m_Panel*` 钳到 Dock 内算出生效值，
+    绘制原点、输入偏移、命中判定三者统一用它 —— 且钳制结果**不写回声明值**
+    （否则窗口缩到 0 再放大会把声明尺寸永久压掉）。
+  - `Dock::RouteInput`：删掉 `p->GetX() - m_X` 补丁，改减 `m_EffPanelX/Y`。
+  - `Dock::HitTestPanel`：改用 `m_EffPanel*`。
+  - `Dock::OnPaint`：Panel 前 `PushOrigin(m_EffPanelX, m_EffPanelY)`；tab 栏改按 Dock 局部 (0,0) 画。
+  - `Panel::OnPaint`：clip 去掉 `m_X/m_Y`（origin 已由 Dock 压好）。
+- `DockLayout::OnPaint`：遍历 Dock 时 `PushOrigin(dock->GetX(), dock->GetY())`（写法乙）。
+- 清理各层手工偏移，统一成"(0,0) 起画"：
+  `LogViewer::OnPaint`、`HexViewer::OnPaint` + 内部 BinaryContent、`ScrollArea::OnPaint`
+  （改嵌套 origin，滚动位移并入 `PushOrigin(0, -m_ScrollOffset)`）、
+  `Horizontal::OnPaint` / `Vertical::OnPaint`（子组件前压 origin）、
+  `Label` / `Button` / `TextInput` / `Overlay` / `ListBox`（`x=GetX(),y=GetY()` → `x=0,y=0`）。
+- `Dock::HitTestEdge` **保持绝对语义**（由 DockLayout 用未平移坐标调用），加注释钉死，
+  防止以后被误"统一"成局部坐标。
+
+### 已知限制（本次未处理，非本次引入）
+- `Canvas::SetClip` 只对**图形**（`BlitPixel` 路径）生效；**文字**经 `Font` 直写像素/桥 DC，
+  不走裁剪。即超出 clip 的文字仍会画出来。属既有行为，滚动区文字可能溢出。
+- `Dock::OnPaint` 的 tab 栏仍不画标题文字（只画色块），宽度硬编码 120。
+
+### 待办（第二批：统一驱动器，本次不做）
+- 把四层 `OnPaint`/`RouteInput` 重构成 `PaintSelf`/`PaintChildren` + 递归驱动器。
+- SpecialLayer 优先级显式化（boundary > tab 栏 > 子节点树；z 序 = 路由优先级）。
+- 分割线/边界命中与绘制共用 `UINodeView`。
+
+### 顺延
+- **窗口资源释放/泄露**问题（砚台：先不管，本次不动）。
 
 ## 2026-9-10
 

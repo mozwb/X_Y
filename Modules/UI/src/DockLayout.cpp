@@ -313,8 +313,9 @@ namespace X_Y
             target = dock->HitTestPanel(localX, localY);
             if (target)
             {
-                const int panelX = target->GetX();
-                const int panelY = target->GetY();
+                // Panel 的矩形是【Dock 局部坐标】，转成布局绝对要加上 Dock 的位置。
+                const int panelX = dock->GetX() + target->GetX();
+                const int panelY = dock->GetY() + target->GetY();
                 if (target != m_FileDropPanel)
                 {
                     if (m_FileDropPanel)
@@ -352,7 +353,19 @@ namespace X_Y
         if (m_FileDropPanel)
         {
             Panel *target = m_FileDropPanel;
-            target->OnFileDrop(files, x - target->GetX(), y - target->GetY());
+            // 需要 Panel 的【布局绝对】原点：Panel 自身存的是 Dock 局部坐标，
+            // 所以先找到它所在的 Dock，再加上 Dock 位置。
+            int originX = target->GetX();
+            int originY = target->GetY();
+            for (Dock *dock : m_Docks)
+            {
+                if (!dock || !dock->ContainsPanel(target))
+                    continue;
+                originX += dock->GetX();
+                originY += dock->GetY();
+                break;
+            }
+            target->OnFileDrop(files, x - originX, y - originY);
             target->OnFileDragLeave();
             m_FileDropPanel = nullptr;
         }
@@ -540,14 +553,24 @@ namespace X_Y
     }
 
     // ── 绘制 ──
+    // 坐标约定（写法乙）：DockLayout 画的是布局绝对坐标；遍历到某个 Dock 时
+    // 压入它的位置，于是 Dock 内部（tab 栏、Panel、组件）全程按 (0,0) 起画。
+    // 与输入链对称：
+    //   绘制: 绝对 ─PushOrigin(dock.X/Y)→ Dock局部 ─PushOrigin(panelX/Y)→ Panel局部
+    //   输入: 绝对 ─减 dock.GetX/Y→        Dock局部 ─减 panelX/Y→         Panel局部
     void DockLayout::OnPaint(Canvas &canvas)
     {
         canvas.Clear(m_BackgroundColor);
 
         // 各 Dock
         for (Dock *dock : m_Docks)
-            if (dock)
-                dock->OnPaint(canvas);
+        {
+            if (!dock)
+                continue;
+            canvas.PushOrigin(dock->GetX(), dock->GetY());
+            dock->OnPaint(canvas);
+            canvas.PopOrigin();
+        }
 
         // 分割线
         constexpr int thickness = 2;

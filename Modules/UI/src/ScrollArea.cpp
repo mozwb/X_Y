@@ -61,16 +61,17 @@ namespace X_Y
         if (!NeedsScrollbar())
             return;
 
-        int x = GetX(), y = GetY(), w = GetWidth(), h = GetHeight();
-        int sbX = x + w - kScrollbarWidth;
+        // ScrollArea 是 Component：坐标一律【相对所属 Panel】(0,0 起画)
+        const int w = GetWidth(), h = GetHeight();
+        const int sbX = w - kScrollbarWidth;
 
         // 轨道
-        canvas.FillRect(sbX, y, kScrollbarWidth, h, 0xFF2A2A2A);
+        canvas.FillRect(sbX, 0, kScrollbarWidth, h, 0xFF2A2A2A);
 
         int thumbY, thumbH;
         GetThumbRect(thumbY, thumbH);
 
-        canvas.FillRect(sbX, y + thumbY, kScrollbarWidth, thumbH, 0xFF5A5A5A);
+        canvas.FillRect(sbX, thumbY, kScrollbarWidth, thumbH, 0xFF5A5A5A);
     }
 
     void ScrollArea::OnPaint(Canvas &canvas)
@@ -78,20 +79,22 @@ namespace X_Y
         if (!m_Content)
             return;
 
-        int x = GetX(), y = GetY(), w = GetWidth(), h = GetHeight();
-        int viewW = GetViewWidth();
+        const int w = GetWidth(), h = GetHeight();
+        const int viewW = GetViewWidth();
 
-        // 内容裁到可视区
-        canvas.SetClip(x, y, w, h);
+        // 内容裁到可视区（本组件局部坐标）
+        canvas.SetClip(0, 0, w, h);
 
-        int oldX = m_Content->GetX();
-        int oldY = m_Content->GetY();
-        m_Content->SetRect(x, y - m_ScrollOffset, viewW, m_Content->GetHeight());
+        // 内容在"本组件本地"的位置：x=0，y=负的滚动偏移。
+        // 压入 origin 后，内容也按自己的 (0,0) 起画 —— 嵌套原点自动处理滚动位移。
+        canvas.PushOrigin(0, -m_ScrollOffset);
+
         // 通知内容本次可视范围（供支持可视裁剪的内容如 ListBox 只画可视行）
+        m_Content->SetRect(0, 0, viewW, m_Content->GetHeight());
         m_Content->SetViewport(m_ScrollOffset, h);
         m_Content->OnPaint(canvas);
-        m_Content->SetRect(oldX, oldY, viewW, m_Content->GetHeight());
 
+        canvas.PopOrigin();
         canvas.ResetClip();
 
         DrawScrollbar(canvas);

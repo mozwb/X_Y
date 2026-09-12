@@ -1,4 +1,4 @@
-﻿#include "UI/Component/ListBox.h"
+#include "UI/Component/ListBox.h"
 #include "Widget/FontLibrary.h"
 #include <algorithm>
 
@@ -240,7 +240,8 @@ namespace X_Y
         // 惰性折叠：宽度变化 / 有新增时重算（需 Canvas 测宽）
         EnsureFold(canvas);
 
-        int x = GetX(), y = GetY(), w = GetWidth();
+        // 组件坐标一律【相对所属容器】(0,0 起画)；位置偏移由宿主压 canvas origin 处理。
+        const int x = 0, y = 0, w = GetWidth();
         const int total = m_TotalLines;
         if (total <= 0)
             return;
