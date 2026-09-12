@@ -283,6 +283,29 @@ dock#4 (Right)  rect=(550,134 135x551) panelArea=(0,0 135x551)   panels=0
 - **涉及文件**：`UI/UiCore/UINode.h`、`UI/dock/Dock.h`、`UI/src/Dock.cpp`、
   `UI/src/DockLayout.cpp`、`UI/src/Panel.cpp`、`UI/src/horizontal.cpp`、`UI/src/vertical.cpp`。
 
+### 追加 — 修复回归：HitTestDock 误用 content 导致 tab 拖不动
+> 坐标统一落地后砚台立刻报"**tab 又不能拖动了**"。是我引入的回归。
+
+- **根因**：`HitTestDock` 里写了 `Hits(View(*dock))`，而 `Hits` 判的是 **`content`（内容区）**；
+  `View(Dock).content` = `m_EffPanel*`，**从 tab 栏下方开始**。
+  于是鼠标按在 tab 栏上时 `HitTestDock` 返回 `nullptr` → `m_MouseCaptureDock` 拿不到
+  → 事件根本下不去 → `TabDock` 收不到 Press → **tab 拖不动**。
+- **语义辨析（关键）**：「命中哪个 Dock」与「命中 Dock 内的面板内容」是两件事：
+  | 用途 | 用哪个矩形 | 位置 |
+  |---|---|---|
+  | 找**节点本身**（把事件交给它） | **`self`**（Dock 全矩形，含 tab 栏） | `DockLayout::HitTestDock` |
+  | 找**节点内的内容区** | **`content`**（避开 tab 栏） | `Dock::HitTestPanel` |
+- **修法**：`HitTestDock` 改用 `View(*dock).self.Contains(x, y)`。
+- **附带加固**：**从 `UINode.h` 移除 `Hits()` 原语**。它的名字暗示"命中"却静默选了
+  `content` 而非 `self`，正是本次事故的成因；移除后已无调用方。
+  改为要求调用方**显式写** `self.Contains(...)` / `Content().Contains(...)`，
+  读代码时一眼能看出用的是哪个矩形。原语收敛为 `ToLocal` / `ToParent` 两个。
+- **全量审计**：所有 `.self` / `.content` 使用点已逐处核对（见 DEVLOG 下方表格）。
+  **`Dock` 是唯一 `self != content` 的节点**，它正确地在"找节点本身"处用 `self`
+  （`HitTestDock` / 压 origin / 下钻）、在"找面板内容区"处用 `content`
+  （`HitTestPanel` / 画 Panel 前的 origin）。`Panel`/`Component` 的 `self == content`，两可。
+- **涉及文件**：`UI/UiCore/UINode.h`、`UI/src/DockLayout.cpp`、`UI/src/Panel.cpp`。
+
 ### 已知问题（下一轮）
 - `Dock` 的 tab 栏仍不绘制标题文字（只画色块），宽度固定 `kTabWidth = 120`，
   未按标题测宽。字体绘制需接 `FontLibrary`。
