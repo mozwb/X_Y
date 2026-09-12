@@ -1,4 +1,5 @@
 #include "../DockLayout/DockLayout.h"
+#include "../UiCore/UINode.h"
 
 #include <algorithm>
 
@@ -492,28 +493,24 @@ namespace X_Y
 
         if (targetDock)
         {
-            const int dx = targetDock->GetX(), dy = targetDock->GetY();
-            e.x -= dx;
-            e.y -= dy;
+            // 下钻到 Dock：用共用原语（View(Dock).self 在布局坐标系里）
+            const UINodeView dv = View(*targetDock);
+            ToLocal(dv, e.x, e.y);
             targetDock->RouteInput(e);
-            e.x += dx; // 还原坐标，供上层保持视角
-            e.y += dy;
+            ToParent(dv, e.x, e.y); // 还原，供上层保持视角
             return;
         }
     }
 
     // 命中哪个 Dock（入参为布局绝对坐标）。
     // ★ 逆序遍历：与 OnPaint 的绘制 z 序一致 —— 后画的 Dock 在上层，应优先命中。
-    //   若将来 DexLayout 支持把某个 Dock 提到最前，这里自然跟随 m_Docks 顺序。
+    // ★ 判定走共用的 Hits(UINodeView)，与绘制/输入的矩形描述同源。
     Dock *DockLayout::HitTestDock(int x, int y) const
     {
         for (auto it = m_Docks.rbegin(); it != m_Docks.rend(); ++it)
         {
             Dock *dock = *it;
-            if (!dock)
-                continue;
-            if (x >= dock->GetX() && x < dock->GetX() + dock->GetWidth() &&
-                y >= dock->GetY() && y < dock->GetY() + dock->GetHeight())
+            if (dock && Hits(View(*dock), x, y))
                 return dock;
         }
         return nullptr;
@@ -545,12 +542,14 @@ namespace X_Y
         // 各 Dock
         // 每个 Dock 前压 origin + 设自己的裁剪区：Dock 内容（含 Panel 溢出）
         // 不许画到本 Dock 矩形之外，避免相邻 Dock 互相覆盖。
+        // 几何走 View(*dock)（与命中共用同一份描述）。
         for (Dock *dock : m_Docks)
         {
             if (!dock)
                 continue;
-            canvas.PushOrigin(dock->GetX(), dock->GetY());
-            canvas.SetClip(0, 0, dock->GetWidth(), dock->GetHeight());
+            const UINodeView dv = View(*dock);
+            canvas.PushOrigin(dv.self.x, dv.self.y);
+            canvas.SetClip(0, 0, dv.self.w, dv.self.h);
             dock->OnPaint(canvas);
             canvas.ResetClip();
             canvas.PopOrigin();

@@ -113,6 +113,12 @@ namespace X_Y
         void SetPanelArea(int x, int y, int w, int h);
         void GetPanelArea(int &x, int &y, int &w, int &h) const;
 
+        // 生效面板区（钳到 Dock 内后的实际值）。绘制原点 / 输入偏移 / 命中判定都用它。
+        int GetEffPanelX() const { return m_EffPanelX; }
+        int GetEffPanelY() const { return m_EffPanelY; }
+        int GetEffPanelW() const { return m_EffPanelW; }
+        int GetEffPanelH() const { return m_EffPanelH; }
+
         // 设置 Dock 顶部菜单/Tab 栏高度。面板区域会自动从该高度之后开始。
         void SetMenuBarHeight(int height);
         int GetMenuBarHeight() const { return m_MenuBarHeight; }

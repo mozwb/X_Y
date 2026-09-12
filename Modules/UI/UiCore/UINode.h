@@ -30,6 +30,15 @@ namespace X_Y
     //     Panel.self 在 Dock 坐标系（= Dock 局部！不再是绝对）；
     //     Component.self 在 Panel 坐标系（= Panel 局部）。
     //
+    // ★ 现状（2026-09-12）：四层已全部改用本契约，不再是"预留"：
+    //     DockLayout::OnPaint / RouteInput / HitTestDock   → View(Dock) + Hits/ToLocal/ToParent
+    //     Dock::OnPaint / RouteInput / HitTestPanel        → View(Dock).content + ToLocal/ToParent
+    //     Panel::OnPaint / OnInput / HitTest               → View(Panel)/View(Component) + 原语
+    //   每层的"位置值"只在一处（各自的 View），绘制与路由都从它派生。
+    //
+    // ⚠️ 加新层/新节点时：只需提供 View() 重载 + 用这三个原语，
+    //    不要在绘制或路由里另写一份坐标算术。
+    //
     // 统一后组件作者与 Panel 作者都不需要感知宿主：
     //     void MyWidget::OnPaint(Canvas& c) override {
     //         c.FillRect(0, 0, GetWidth(), GetHeight(), 0xFF1E1E1E);  // 就这么多
@@ -40,6 +49,9 @@ namespace X_Y
         Rect self;    // 本节点在【父坐标系】里的矩形
         Rect content; // 内容区（在【自身局部坐标系】里）：子节点绘制/命中的有效范围
                       // 例如 Dock 要避开顶部 tab 栏 → content = {0, tabH, w, h - tabH}
+                      // ⚠️ 必须是【唯一真相】：content 要直接引用该层实际用于布局
+                      //    子节点的那个矩形（Dock 用 m_EffPanel*、Panel 用整个自身），
+                      //    不能"另算一份"。过去正是多份数据各算各的导致画的和点的打架。
         bool visible = true;
 
         // 便捷：内容区在父坐标系里的矩形（self 原点 + content 偏移）
@@ -47,6 +59,9 @@ namespace X_Y
         {
             return Rect{ self.x + content.x, self.y + content.y, content.w, content.h };
         }
+
+        // 便捷：内容区在自身局部坐标里的矩形（= content，语义别名，便于书写）
+        Rect Content() const { return content; }
     };
 
     // ── 坐标原语（绘制链与路由链共用，只有这三个）──

@@ -77,6 +77,8 @@ namespace X_Y
         m_DragTargetVisible = false;
     }
 
+    // 命中组件（z 序：后加的在上层，故 rbegin 反向遍历，最上层优先）。
+    // 用共用的 Hits/UINodeView 判定，与 Panel::OnPaint 的绘制遍历同源。
     Component *Panel::HitTest(int x, int y)
     {
         for (auto it = m_Components.rbegin(); it != m_Components.rend(); ++it)
@@ -84,11 +86,7 @@ namespace X_Y
             Component *comp = *it;
             if (!comp->IsVisible())
                 continue;
-            int cx = comp->GetX();
-            int cy = comp->GetY();
-            int cw = comp->GetWidth();
-            int ch = comp->GetHeight();
-            if (x >= cx && x < cx + cw && y >= cy && y < cy + ch)
+            if (View(*comp).self.Contains(x, y))
                 return comp;
         }
         return nullptr;
@@ -108,6 +106,7 @@ namespace X_Y
     }
 
     // ── 输入命中路由：把事件对象下传给命中的组件（z 序），支持 Handled 冒泡 ──
+    // ★ 几何来源：View(*this) / View(*comp)，与 Panel::OnPaint 共用同一份描述。
     void Panel::OnInput(UIInputEvent &e)
     {
         // 鼠标类事件：命中组件，下传
@@ -133,14 +132,13 @@ namespace X_Y
                     m_DragTargetVisible = false;
                 }
 
-                // 下传：把坐标转成组件局部坐标
-                const int cx = target->GetX();
-                const int cy = target->GetY();
-                e.x -= cx;
-                e.y -= cy;
+                // 下钻到组件：e 是 Panel 局部坐标，View(Component).self 正是
+                // 组件在 Panel 坐标系里的位置 —— 直接用共用原语转换。
+                // （不再手写 e.x -= cx / e.y -= cy）
+                const UINodeView cv = View(*target);
+                ToLocal(cv, e.x, e.y);
                 target->OnInput(e);
-                e.x += cx;
-                e.y += cy;
+                ToParent(cv, e.x, e.y); // 还原成 Panel 局部，供上层保持视角
             }
             else if (me->action == MouseAction::Press)
             {
@@ -162,30 +160,30 @@ namespace X_Y
 
     // Panel 把自己这棵树画到 canvas 上。
     // ★ 坐标约定：调用方（Dock）已 PushOrigin 到 Panel 的位置，所以本函数
-    //   及所有组件一律按【Panel 局部坐标】(0,0 起画) —— 不再加 m_X/m_Y。
-    //   组件也不需要知道自己在哪个 Panel/Dock/窗口里。
+    //   及所有组件一律按【Panel 局部坐标】(0,0 起画)。
+    // ★ 几何来源：走 View(*this) / View(*comp)，与 Panel::OnInput 的命中
+    //   共用同一份节点描述（绘制与路由同构）。
     void Panel::OnPaint(Canvas &canvas)
     {
-        // ★ 外层裁剪：整个 Panel 的内容不许画到自己矩形之外。
-        //   没有这道裁剪时，滚动中的内容（尤其 ScrollArea 里的列表/文字）
-        //   会溢出到 Panel 外，盖住 Dock 的 tab 栏、越过分割线。
-        canvas.SetClip(0, 0, m_W, m_H);
+        const UINodeView self = View(*this);
+
+        // 外层裁剪：整个 Panel 的内容不许画到自己矩形之外。
+        canvas.SetClip(0, 0, self.content.w, self.content.h);
 
         for (auto *comp : m_Components)
         {
-            if (comp->IsVisible())
-            {
-                // ★ 每个组件都要压自己的 origin：组件内部一律按 (0,0) 起画，
-                //   位置由宿主压 origin 提供（与 Dock 对 Panel 的做法一致）。
-                //   少了这一步，组件的 (0,0) 会落在 Panel 的 (0,0) ——
-                //   例如 ScrollArea 会把内容画到 Panel 顶部，盖住上方的筛选栏。
-                canvas.PushOrigin(comp->GetX(), comp->GetY());
-                canvas.SetClip(0, 0, comp->GetWidth(), comp->GetHeight());
-                comp->OnPaint(canvas);
-                canvas.ResetClip();
-                canvas.PopOrigin();
-                canvas.SetClip(0, 0, m_W, m_H); // 恢复外层裁剪
-            }
+            if (!comp->IsVisible())
+                continue;
+
+            // 每个组件压自己的 origin：组件内部一律按 (0,0) 起画，
+            // 位置由宿主提供（与 Dock 对 Panel 的做法一致）。
+            const UINodeView cv = View(*comp);
+            canvas.PushOrigin(cv.self.x, cv.self.y);
+            canvas.SetClip(0, 0, cv.self.w, cv.self.h);
+            comp->OnPaint(canvas);
+            canvas.ResetClip();
+            canvas.PopOrigin();
+            canvas.SetClip(0, 0, self.content.w, self.content.h); // 恢复外层裁剪
         }
 
         canvas.ResetClip();

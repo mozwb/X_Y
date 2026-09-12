@@ -7,13 +7,17 @@ namespace X_Y
 {
 
     // ── UINodeView：Dock 在 DockLayout 坐标系（= 布局绝对）里的矩形 ──
-    // content 去掉顶部 tab 栏 —— 面板内容从 m_MenuBarHeight 之后开始。
+    // self    = Dock 的完整矩形
+    // content = 面板区（避开 tab 栏）—— 用【生效面板区 m_EffPanel*】，
+    //           因为那才是真正交给 Panel::SetLayoutRect 的矩形。
+    //           若这里改用 m_MenuBarHeight 推算，就等于又引入了第二份"面板区真相"，
+    //           正是过去 m_Panel* / m_EffPanel* / Panel::GetX() 三份数据打架的根源。
     UINodeView View(const Dock &node)
     {
         UINodeView v;
         v.self = Rect{ node.GetX(), node.GetY(), node.GetWidth(), node.GetHeight() };
-        const int barH = std::min(node.GetMenuBarHeight(), v.self.h);
-        v.content = Rect{ 0, barH, v.self.w, v.self.h - barH };
+        v.content = Rect{ node.GetEffPanelX(), node.GetEffPanelY(),
+                          node.GetEffPanelW(), node.GetEffPanelH() };
         v.visible = true; // Dock 不隐藏自身（空 dock 也占位）
         return v;
     }
@@ -204,17 +208,13 @@ namespace X_Y
         return InvalidBoundary;
     }
 
+    // ── 命中面板区（入参 x/y 为【Dock 局部坐标】）──
+    // 与绘制共用 UINodeView 的内容区描述（= m_EffPanel*）。
     Panel *Dock::HitTestPanel(int x, int y) const
     {
-        // x/y 为 dock 内坐标(原点 dock 左上)；菜单栏区域不算面板内容。
-        // 用【生效面板区】(m_EffPanel*) —— 与实际交给 Panel 的矩形同一份数据。
-        if (x < m_EffPanelX || x >= m_EffPanelX + m_EffPanelW ||
-            y < m_EffPanelY || y >= m_EffPanelY + m_EffPanelH)
+        if (!View(*this).Content().Contains(x, y))
             return nullptr;
-        Panel *p = GetActivePanel();
-        if (!p)
-            return nullptr;
-        return p;
+        return GetActivePanel();
     }
 
     // ── 输入：命中 tab 栏切 tab；否则下传给激活 Panel ──
@@ -262,13 +262,13 @@ namespace X_Y
                 me && me->action == MouseAction::Press)
                 m_MouseCapturePanel = p;
 
-            // Panel 的矩形就是【Dock 局部坐标】，直接用生效面板区偏移即可，
-            // 不再需要 `p->GetX() - m_X` 那种"绝对减绝对"的补丁。
-            e.x -= m_EffPanelX;
-            e.y -= m_EffPanelY;
+            // 下钻到 Panel：e 现在是【Dock 局部坐标】，而 View(Panel).self 正是
+            // Panel 在 Dock 坐标系里的位置 —— 直接 ToLocal 即可（不再有
+            // `e.x -= p->GetX() - m_X` 那种"绝对减绝对"的补丁）。
+            const UINodeView pv = View(*p);
+            ToLocal(pv, e.x, e.y);
             p->OnInput(e);
-            e.x += m_EffPanelX;
-            e.y += m_EffPanelY;
+            ToParent(pv, e.x, e.y); // 还原成 Dock 局部，供上层保持视角
         }
 
         if (auto *me = dynamic_cast<UIMouseEvent *>(&e);
@@ -410,21 +410,25 @@ namespace X_Y
 
     // ── 绘制：Panel 内容 + tab 栏 ──
     // 坐标约定：本函数收到的是【Dock 局部坐标】canvas —— DockLayout 已压过
-    //           PushOrigin(dock->GetX(), dock->GetY())。所以这里一律按 (0,0) 起画，
-    //           不再自己加 m_X/m_Y（与输入链 DockLayout 减 dock->GetX() 对称）。
+    //           PushOrigin(dock->GetX(), dock->GetY())。
     //
     // ★ 绘制顺序：先 Panel 内容、后 tab 栏。tab 栏【最后画 = 压在最上层】，
     //   这样任何内容（含滚动溢出）都盖不住它。
+    // ★ 几何来源：面板区走 View(*this).Content()（= m_EffPanel*），
+    //   与 HitTestPanel / RouteInput 的输入偏移同源，不再各算一份。
     void Dock::OnPaint(Canvas &canvas)
     {
+        const UINodeView view = View(*this);
+
         canvas.FillRect(0, 0, m_W, m_H, 0xFF232527);
 
         // ① 激活 Panel 内容：裁到面板区，绝不允许画到 tab 栏/边界上
         Panel *active = GetActivePanel();
         if (active)
         {
-            canvas.PushOrigin(m_EffPanelX, m_EffPanelY);
-            canvas.SetClip(0, 0, m_EffPanelW, m_EffPanelH);
+            const Rect &area = view.content;
+            canvas.PushOrigin(area.x, area.y);
+            canvas.SetClip(0, 0, area.w, area.h);
             active->OnPaint(canvas);
             canvas.ResetClip();
             canvas.PopOrigin();
