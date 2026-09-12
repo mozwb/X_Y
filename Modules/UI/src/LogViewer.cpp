@@ -4,19 +4,9 @@
 #include "Widget/BaseWin.h"
 #include "Widget/FontLibrary.h"
 #include <algorithm>
-#include <cstdio>
 
 namespace X_Y
 {
-
-    namespace
-    {
-        void TraceLogViewer(const char *key, uint64_t size)
-        {
-            std::fprintf(stderr, "[UI][LogViewer] key=%s bytes=%llu\n",
-                         key, static_cast<unsigned long long>(size));
-        }
-    }
 
     void LogStripe::SetEntries(const std::vector<LogEntry> &entries)
     {
@@ -180,11 +170,6 @@ namespace X_Y
         m_Timer->Start(500, [this]()
                        {
         Buffer buf = DataStore::Instance().ReadCopy(m_Key);
-        static bool reportedState = false;
-        if (!reportedState) {
-            TraceLogViewer(m_Key.c_str(), buf ? buf.Size : 0);
-            reportedState = true;
-        }
         if (!buf || !buf.Data || buf.Size == 0) return;
 
         uint64_t currentSize = buf.Size;

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 // 配置里用到的类型
 #include <iostream>
 #include <string>
@@ -160,11 +160,8 @@ public:                                                   \
 			}
 			void logAll(const std::string &msg)
 			{
-				std::fprintf(stderr, "[LOG] dispatch bytes=%zu devices=%zu\n",
-							 msg.size(), devices.size());
 				for (auto &dev : devices)
 				{
-					std::fprintf(stderr, "[LOG] device=%s\n", dev->toString().c_str());
 					dev->Log(msg);
 				}
 			}

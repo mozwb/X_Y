@@ -5,18 +5,9 @@
 #include "Movement/MouseMovement.h"
 #include "Movement/KeyMovement.h"
 #include "Widget/Application.h"
-#include <cstdio>
 
 namespace X_Y
 {
-
-    namespace
-    {
-        void TraceUI(const char *kind, int x, int y)
-        {
-            std::fprintf(stderr, "[UI] %s logical=(%d,%d)\n", kind, x, y);
-        }
-    }
 
     // 取相对本窗口客户区的逻辑坐标（命中路由统一用它）
     void GetClientPos(Container &self, int &x, int &y)
@@ -47,7 +38,6 @@ namespace X_Y
             uie.x = static_cast<int>(mb.GetX());
             uie.y = static_cast<int>(mb.GetY());
             ClientPhysicalToLogical(uie.x, uie.y);
-            TraceUI("mouse-press", uie.x, uie.y);
             if (m_Layout)
             {
                 m_Layout->RouteInput(uie);
@@ -64,7 +54,6 @@ namespace X_Y
             uie.x = static_cast<int>(mm.GetX());
             uie.y = static_cast<int>(mm.GetY());
             ClientPhysicalToLogical(uie.x, uie.y);
-            TraceUI("mouse-release", uie.x, uie.y);
             if (m_Layout)
                 m_Layout->RouteInput(uie); });
 
@@ -78,7 +67,6 @@ namespace X_Y
             uie.x = static_cast<int>(mb.GetX());
             uie.y = static_cast<int>(mb.GetY());
             ClientPhysicalToLogical(uie.x, uie.y);
-            TraceUI("mouse-scroll", uie.x, uie.y);
             if (m_Layout)
                 m_Layout->RouteInput(uie);
             ReleaseMouseCapture(); });

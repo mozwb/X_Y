@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <iostream>
 #include <string>
 #include <regex>
@@ -27,7 +27,6 @@ namespace X_Y
         {
             if constexpr (HasToString<T>::value || HasStaticToString<T>::value)
             {
-                std::cout << "log内部<<" << std::endl;
                 return os << To_Str<T>(obj);
             }
             else

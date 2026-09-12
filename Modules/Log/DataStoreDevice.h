@@ -1,8 +1,7 @@
-﻿#pragma once
+#pragma once
 #include "XCore/XLog/LogConfigure.h"
 #include "DataStore/DataStore.h"
 #include "XCore/FilesSystem/FilesSystem.h"
-#include <cstdio>
 
 namespace X_Y
 {
@@ -32,11 +31,7 @@ namespace X_Y
         void Log(const std::string &message) const override
         {
             std::string record = message + "\n";
-            const bool ok = DataStore::Instance().Append(
-                m_Key, record.data(), record.size(), m_Capacity);
-            std::fprintf(stderr, "[LOG][DataStoreDevice] key=%s bytes=%zu append=%s enabled=%s\n",
-                         m_Key.c_str(), record.size(), ok ? "ok" : "failed",
-                         DataStore::Instance().IsEnabled() ? "yes" : "no");
+            DataStore::Instance().Append(m_Key, record.data(), record.size(), m_Capacity);
         }
 
         ~DataStoreDevice()

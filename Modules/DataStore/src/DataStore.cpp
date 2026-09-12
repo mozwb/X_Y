@@ -1,9 +1,8 @@
-﻿#include "DataStore/DataStore.h"
+#include "DataStore/DataStore.h"
 #include <cassert>
 #include <sstream>
 #include <fstream>
 #include <mutex>
-#include <cstdio>
 
 namespace X_Y
 {
@@ -191,16 +190,12 @@ namespace X_Y
     {
         if (!data && size > 0)
         {
-            std::fprintf(stderr, "[DataStore] append key=%s bytes=%llu result=invalid-data\n",
-                         key.c_str(), static_cast<unsigned long long>(size));
             return false;
         }
 
         std::unique_lock lock(m_Mutex);
         if (!m_Enabled)
         {
-            std::fprintf(stderr, "[DataStore] append key=%s bytes=%llu result=disabled\n",
-                         key.c_str(), static_cast<unsigned long long>(size));
             return false;
         }
 
@@ -236,8 +231,6 @@ namespace X_Y
                 parent.CreateDirectory();
             if (buffer && !FilesSystem::AppendFileBinary(path, buffer))
             {
-                std::fprintf(stderr, "[DataStore] append key=%s flush-path=%s result=flush-failed\n",
-                             key.c_str(), path.Path().string().c_str());
                 return false;
             }
             buffer.Allocate(0);
@@ -245,10 +238,6 @@ namespace X_Y
         }
 
         buffer.Append(data, size);
-        std::fprintf(stderr, "[DataStore] append key=%s bytes=%llu buffer-size=%llu path=%s result=ok\n",
-                     key.c_str(), static_cast<unsigned long long>(size),
-                     static_cast<unsigned long long>(buffer.Size),
-                     KeyToPath(key).Path().string().c_str());
         return true;
     }
 
