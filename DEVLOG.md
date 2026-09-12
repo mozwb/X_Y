@@ -175,11 +175,46 @@ dock#4 (Right)  rect=(550,134 135x551) panelArea=(0,0 135x551)   panels=0
   （输入链用逐层减偏移，绘制链用逐层压 origin）。
 - **涉及文件**：`UI/src/Panel.cpp`。
 
+### 追加 — 交互修复（命中 z 序 / tab 栏穿透 / 落点判定）
+> 砚台报：**右侧与底部 Dock 吃不到交互**（滑动无效）；**tab 栏的交互在 Dock 中也吃不到**。
+
+**共 4 处问题，核心是"同一份几何/顺序在多处各写一遍"：**
+
+1. **命中顺序与绘制 z 序相反**（主因）
+   - `OnPaint` 正序遍历 `m_Docks`，**后画的在上层**（Right 最上 → Top 最下）。
+   - `RouteInput` 也正序遍历、**先到先得**（Top 最先命中）。
+   - 结果：视觉上压在最上面的 Dock 反而最难命中。
+   - **修法**：新增 `DockLayout::HitTestDock()`，**逆序遍历**，与绘制 z 序对齐。
+
+2. **`m_MouseCaptureDockIndex` 用指针减法当下标**
+   ```cpp
+   m_MouseCaptureDockIndex = static_cast<std::size_t>(dock - m_Docks.front());
+   ```
+   依赖"`dock` 确实在 `m_Docks` 里"这一脆弱前提。
+   **修法**：改为直接存 `Dock *m_MouseCaptureDock`。
+
+3. **tab 栏事件会穿透到 Panel**
+   `Dock::RouteInput` 的 tab 命中只在 `Press` 且命中具体 tab 时设 `Handled`；
+   落在 tab 栏**空白处**、或 `Move`/`Release` 时会落到下面的 Panel。
+   **修法**：tab 栏条带内的事件**一律吞掉**（UI chrome 区域不穿透）。
+
+4. **tab 宽度三处各写一份 `120`**
+   `Dock::OnPaint`、`Dock::RouteInput`、`TabDock::RouteInput` 各一份 → 改一处漏一处就"画的和点的对不上"。
+   **修法**：收敛为 `Dock::kTabWidth` + `TabBarTotalWidth()` + `TabIndexAt()`，
+   绘制与命中**同源**；`TabDock` 删掉自己的 `kTabWidth`。
+
+**顺带**：`TabDock::DropPanel` 的落点判定原本也是正序遍历，同样改为复用 `HitTestDock` ——
+使「**绘制 z 序 / 事件命中 / 拖放落点**」三处顺序彻底统一（一处定义，三处跟随）。
+
+- **涉及文件**：`UI/dock/Dock.h`、`UI/dock/tabdock.h`、`UI/DockLayout/DockLayout.h`、
+  `UI/src/Dock.cpp`、`UI/src/DockLayout.cpp`、`UI/src/tabdock.cpp`。
+
 ### 已知问题（下一轮）
-- `DockLayout` 的**绘制 z 序与命中优先级相反**：`OnPaint` 遍历 `m_Docks` 后画的在上层
-  （Right 最上），而 `RouteInput` 命中是**先到先得**（Top 最先）。视觉上压在最上的
-  Dock 反而最难命中 → 砚台报"右侧/底部 Dock 吃不到交互（滑动无效）"。
-  需统一：命中顺序应改为**逆序遍历**（与绘制 z 序一致，最上层优先命中）。
+- `Dock` 的 tab 栏仍不绘制标题文字（只画色块），宽度固定 `kTabWidth = 120`，
+  未按标题测宽。字体绘制需接 `FontLibrary`。
+- `DockLayout::TakePanel` 逻辑存疑（代码内有作者批注"这个行为貌似是错的"）：
+  它找第一个"有激活面板"的 Dock 塞进去，按设计应找**空 Dock** 或**按落点**选。
+  `AddPanelAt` 才是按落点的那个。
 
 ### 已知限制（本次未处理，非本次引入）
 - `Canvas::SetClip` 只对**图形**（`BlitPixel` 路径）生效；**文字**经 `Font` 直写像素/桥 DC，
