@@ -209,12 +209,27 @@ dock#4 (Right)  rect=(550,134 135x551) panelArea=(0,0 135x551)   panels=0
 - **涉及文件**：`UI/dock/Dock.h`、`UI/dock/tabdock.h`、`UI/DockLayout/DockLayout.h`、
   `UI/src/Dock.cpp`、`UI/src/DockLayout.cpp`、`UI/src/tabdock.cpp`。
 
+### 追加 — 清理 DockLayout::TakePanel（死代码 + 语义错）
+> 砚台确认后删除。`TakePanel(panel, title)` 的五个问题：
+> 1. **无人调用** —— UI 重构交接文档预埋的接口，实际落地时走的是 `AddPanelAt`（按落点），从未接线；
+> 2. **语义方向错** —— 它找"第一个 `GetActivePanel()` 非空的 Dock"塞进去；
+>    该找的恰恰是"**能收容**"的 Dock，有没有激活面板跟能不能收容无关。
+>    代码里原有作者批注 `// 这个行为貌似是错的`，核对属实；
+> 3. **`new Dock()` 裸 Dock** —— 没有 tab 栏（与刚修的 `TopLayout` 同类问题），且无人 `delete`，是泄漏；
+> 4. **正序遍历** —— 又一处没跟绘制 z 序统一的顺序；
+> 5. **与 `AddPanelAt` 职责重叠**。
+>
+> **修法**：删除 `TakePanel`（声明 + 定义），按落点收容统一走 `AddPanelAt`；
+> `AddPanelAt` 改为**复用 `HitTestDock`**（逆序 = 上层优先，与绘制/事件命中同一套顺序），
+> 并补 `CanAddPanel()` 检查。
+> 两个调用方（`tabcontainer` / `tabhostcontainer`）本就是 `if (AddPanelAt(...))` 的用法，
+> 返回 `nullptr` 会正常回退到"新建独立窗口"分支，行为安全。
+> 另在 `AddPanelAt` 处留注释说明 `TakePanel` 的来龙去脉，避免以后有人从交接文档里又把它捡回来。
+- **涉及文件**：`UI/DockLayout/DockLayout.h`、`UI/src/DockLayout.cpp`。
+
 ### 已知问题（下一轮）
 - `Dock` 的 tab 栏仍不绘制标题文字（只画色块），宽度固定 `kTabWidth = 120`，
   未按标题测宽。字体绘制需接 `FontLibrary`。
-- `DockLayout::TakePanel` 逻辑存疑（代码内有作者批注"这个行为貌似是错的"）：
-  它找第一个"有激活面板"的 Dock 塞进去，按设计应找**空 Dock** 或**按落点**选。
-  `AddPanelAt` 才是按落点的那个。
 
 ### 已知限制（本次未处理，非本次引入）
 - `Canvas::SetClip` 只对**图形**（`BlitPixel` 路径）生效；**文字**经 `Font` 直写像素/桥 DC，
