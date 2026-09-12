@@ -124,6 +124,39 @@
 - **test 同步清理**：去掉无用的旧拖动模拟残留，补进坐标系/绘制约定注释，
   加 `XY_DEBUG_DOCK_RECTS` 开关（打印各 Dock 矩形 + 面板区，定位布局问题用）。
 
+### 追加 — tab 栏看不见的真正原因：TopLayout 用的是裸 Dock，没有 tab 栏
+> 上一节把 `SetActiveSize` 从未被调用修掉后，矩形正常了（砚台贴的打印为证），
+> 但 **tab 栏仍然看不见**。用打印数据定位到最终原因。
+
+**打印数据（layout size = 685×662）**：
+```
+dock#0 (Top)    rect=(0,0 685x130)     panelArea=(0,0 685x130)   panels=0
+dock#1 (Bottom) rect=(139,531 407x154) panelArea=(0,0 407x154)   panels=0
+dock#2 (Left)   rect=(0,134 135x551)   panelArea=(0,0 135x551)   panels=0
+dock#3 (Center) rect=(139,134 407x393) panelArea=(0,0 407x393)   panels=1
+dock#4 (Right)  rect=(550,134 135x551) panelArea=(0,0 135x551)   panels=0
+```
+- **矩形全部正确**：与边界换算吻合（TopLine=132 / BottomLine=529 / LeftLine=137 /
+  RightLine=548，各 Dock 让出 `width/2=2` 的缝），**无重叠、无超出**。
+  这排除了"整个 Dock 大过预留位置"的猜测。
+- **但 `panelArea.y` 全是 0**（带面板的 dock#3 也是 `(0,0 407x393)`），
+  本该是 `m_MenuBarHeight = 30` → 说明 **`m_MenuBarHeight == 0`**。
+
+**根因**：`TopLayout` 的五个成员声明为 **`X_Y::Dock`（裸 Dock）**，
+而 `SetMenuBarHeight(30)` 是在 **`TabDock` 的构造函数**里做的。
+裸 Dock 的 `m_MenuBarHeight` 保持默认 0，于是：
+1. `m_PanelY = 0` → 面板区占满整个 Dock 高度（"面板盖住 tab 栏位置 / 超出预留区"）；
+2. `Dock::OnPaint` 里 `FillRect(x, 0, tabW, m_MenuBarHeight=0)` → **高度 0，画不出来**。
+
+**这也最终解释了"独立窗口能看到 tab、拖进 Dock 看不到"**：
+- 独立窗口走 `TabContainer::CreateSinglePanelDock()` → `new TabDock()`（有 30px 栏）
+- `TopLayout` 用的是裸 `Dock`（没有栏）
+
+**修法**：`UI/DockLayout/toplayout.h` 五个成员改为 `X_Y::TabDock`，并加注释说明原因。
+**附带效果**：`TabHostContainer::ConfigureTabDocks()` 用 `dynamic_cast<TabDock*>`
+挂"拖出成独立窗口"的回调 —— 之前五区域 dock 是裸 Dock，**该回调从未挂上**；现在会正常生效。
+- **涉及文件**：`UI/DockLayout/toplayout.h`。
+
 ### 已知问题（下一轮）
 - `DockLayout` 的**绘制 z 序与命中优先级相反**：`OnPaint` 遍历 `m_Docks` 后画的在上层
   （Right 最上），而 `RouteInput` 命中是**先到先得**（Top 最先）。视觉上压在最上的
