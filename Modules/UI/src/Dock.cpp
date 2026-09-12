@@ -226,22 +226,20 @@ namespace X_Y
             if (me->action == MouseAction::Press)
                 m_MouseCapturePanel = nullptr;
 
-            if (me->action == MouseAction::Press && e.y >= 0 && e.y < m_MenuBarHeight)
+            // ★ tab 栏是 UI chrome：落在这一条带内的鼠标事件【一律吞掉】，
+            //   绝不穿透到下面的 Panel（否则点 tab 会把点击也送给内容）。
+            const bool inTabBar = (e.y >= 0 && e.y < m_MenuBarHeight &&
+                                   e.x >= 0 && e.x < TabBarTotalWidth());
+            if (inTabBar)
             {
-                const int tabW = 120;
-                int x0 = 0;
-                const int n = (int)m_Panels.size();
-                for (int i = 0; i < n; ++i)
+                if (me->action == MouseAction::Press)
                 {
-                    if (e.x >= x0 && e.x < x0 + tabW)
-                    {
-                        if (i != m_ActiveIndex)
-                            ActivatePanel(i);
-                        e.Handled = true;
-                        return;
-                    }
-                    x0 += tabW;
+                    const int idx = TabIndexAt(e.x);
+                    if (idx >= 0 && idx != m_ActiveIndex)
+                        ActivatePanel(idx);
                 }
+                e.Handled = true; // 无论命中哪个 tab，这一条带都归 tab 栏
+                return;
             }
         }
 
@@ -432,13 +430,11 @@ namespace X_Y
             canvas.PopOrigin();
         }
 
-        // ② tab 栏（最后画，最上层；带自己的裁剪）
+        // ② tab 栏（最后画，最上层；几何走 TabBarTotalWidth/TabIndexAt，与命中同源）
         for (int i = 0; i < (int)m_Panels.size(); ++i)
         {
             const bool isActive = (i == m_ActiveIndex);
-            const int tabW = 120;
-            const int tabX = i * tabW;
-            canvas.FillRect(tabX, 0, tabW, m_MenuBarHeight,
+            canvas.FillRect(i * kTabWidth, 0, kTabWidth, m_MenuBarHeight,
                             isActive ? 0xFF007ACC : 0xFF3E3E42);
             // (字体绘制后续接 FontLibrary；先只画色块+索引)
         }

@@ -421,8 +421,9 @@ namespace X_Y
         {
             if (me->action == MouseAction::Press)
             {
-                m_MouseCaptureDockIndex = static_cast<std::size_t>(-1);
+                m_MouseCaptureDock = nullptr;
                 // 按下：命中分割线 → 进入拖拽（拦截，不下传）
+                // 分割线优先于所有 Dock（它画在最上层，也该最先被命中）。
                 for (Dock *dock : m_Docks)
                 {
                     if (!dock)
@@ -440,18 +441,10 @@ namespace X_Y
                 }
                 m_DraggingBoundary = InvalidBoundary;
 
-                for (Dock *dock : m_Docks)
-                {
-                    if (!dock)
-                        continue;
-                    if (e.x >= dock->GetX() && e.x < dock->GetX() + dock->GetWidth() &&
-                        e.y >= dock->GetY() && e.y < dock->GetY() + dock->GetHeight())
-                    {
-                        m_MouseCaptureDockIndex = static_cast<std::size_t>(
-                            dock - m_Docks.front());
-                        break;
-                    }
-                }
+                // 未命中分割线 → 记下命中的 Dock，从按下到抬起都用它。
+                // ★ 逆序遍历：与 OnPaint 的绘制 z 序对齐（后画的在上层，命中优先）。
+                //   正序会让"画在最上面"的 Dock 反而最难命中（右侧/底部 Dock 吃不到事件）。
+                m_MouseCaptureDock = HitTestDock(e.x, e.y);
             }
             else if (me->action == MouseAction::Move)
             {
@@ -509,40 +502,43 @@ namespace X_Y
             return;
         }
 
-        // 非拖拽（或键盘）：下传给命中的 Dock（平移坐标）
-        Dock *targetDock = nullptr;
-        if (m_MouseCaptureDockIndex < m_Docks.size())
-            targetDock = m_Docks[m_MouseCaptureDockIndex];
+        // 非拖拽：下传给命中的 Dock（平移成 Dock 局部坐标）
+        // 优先用按下时锁定的 Dock（拖动中指针可能移出该 Dock，仍应继续喂给它）；
+        // 没有锁定（如按下发生在布局外）则现算一次命中。
+        Dock *targetDock = m_MouseCaptureDock;
+        if (!targetDock)
+            targetDock = HitTestDock(e.x, e.y);
+
+        if (me && me->action == MouseAction::Release)
+            m_MouseCaptureDock = nullptr;
 
         if (targetDock)
         {
             const int dx = targetDock->GetX(), dy = targetDock->GetY();
-            if (me && me->action == MouseAction::Release)
-                m_MouseCaptureDockIndex = static_cast<std::size_t>(-1);
             e.x -= dx;
             e.y -= dy;
             targetDock->RouteInput(e);
-            e.x += dx;
+            e.x += dx; // 还原坐标，供上层保持视角
             e.y += dy;
             return;
         }
+    }
 
-        for (Dock *dock : m_Docks)
+    // 命中哪个 Dock（入参为布局绝对坐标）。
+    // ★ 逆序遍历：与 OnPaint 的绘制 z 序一致 —— 后画的 Dock 在上层，应优先命中。
+    //   若将来 DexLayout 支持把某个 Dock 提到最前，这里自然跟随 m_Docks 顺序。
+    Dock *DockLayout::HitTestDock(int x, int y) const
+    {
+        for (auto it = m_Docks.rbegin(); it != m_Docks.rend(); ++it)
         {
+            Dock *dock = *it;
             if (!dock)
                 continue;
-            const int dx = dock->GetX(), dy = dock->GetY();
-            const int dw = dock->GetWidth(), dh = dock->GetHeight();
-            if (e.x >= dx && e.x < dx + dw && e.y >= dy && e.y < dy + dh)
-            {
-                e.x -= dx;
-                e.y -= dy;
-                dock->RouteInput(e);
-                e.x += dx; // 还原坐标，供上层保持视角
-                e.y += dy;
-                return;
-            }
+            if (x >= dock->GetX() && x < dock->GetX() + dock->GetWidth() &&
+                y >= dock->GetY() && y < dock->GetY() + dock->GetHeight())
+                return dock;
         }
+        return nullptr;
     }
 
     Panel *DockLayout::GetActivePanel() const

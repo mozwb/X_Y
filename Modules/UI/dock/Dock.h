@@ -117,6 +117,17 @@ namespace X_Y
         void SetMenuBarHeight(int height);
         int GetMenuBarHeight() const { return m_MenuBarHeight; }
 
+        // ── Tab 栏几何（绘制与命中必须共用，避免两处各写一份导致对不上）──
+        static constexpr int kTabWidth = 120; // 单个 tab 的宽度
+        int TabBarTotalWidth() const { return (int)m_Panels.size() * kTabWidth; }
+        // 命中哪个 tab（x 为 Dock 局部坐标）；未命中返回 -1
+        int TabIndexAt(int x) const
+        {
+            if (x < 0 || x >= TabBarTotalWidth())
+                return -1;
+            return x / kTabWidth;
+        }
+
         // ── 面板管理（tab）──
         Panel *AddPanel(Panel *panel, const std::string &title = "");
         bool RemovePanel(Panel *panel);

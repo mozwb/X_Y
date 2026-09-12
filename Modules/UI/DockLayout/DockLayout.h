@@ -79,6 +79,8 @@ namespace X_Y
 
         // ── 命中 + 拖分割线 ──
         BoundaryId HitTestBoundary(int x, int y, int thickness = 4) const;
+        // 命中哪个 Dock（布局绝对坐标）。逆序遍历，与 OnPaint 的 z 序一致。
+        Dock *HitTestDock(int x, int y) const;
         bool IsDraggingBoundary() const { return m_DraggingBoundary != InvalidBoundary; }
 
         // ── 输入（事件对象全链路）：e.x/e.y 为相对本布局的局部坐标。
@@ -108,7 +110,10 @@ namespace X_Y
 
         BoundaryId m_DraggingBoundary = InvalidBoundary;
         int m_LastDragX = 0, m_LastDragY = 0;
-        std::size_t m_MouseCaptureDockIndex = static_cast<std::size_t>(-1);
+        // 鼠标按下时锁定的 Dock（从按下到抬起，事件都发给它，避免拖出边界时丢失）。
+        // ⚠️ 存【指针】而不是下标：早先用 `dock - m_Docks.front()` 算下标，
+        //    依赖"dock 确实在 m_Docks 里"这个前提，脆弱且易错。
+        Dock *m_MouseCaptureDock = nullptr;
         Panel *m_FileDropPanel = nullptr;
 
         std::function<void()> m_HostRepaint;

@@ -16,7 +16,8 @@ namespace X_Y
         void RouteInput(UIInputEvent &e) override;
 
     private:
-        static constexpr int kTabWidth = 120;
+        // ⚠️ tab 宽度用基类 Dock::kTabWidth（绘制与命中必须同源），
+        //    这里不再重复定义，避免两处各写一份导致对不上。
         static constexpr int kDragThreshold = 4;
 
         void DropPanel(int localX, int localY);
