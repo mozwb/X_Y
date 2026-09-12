@@ -573,13 +573,16 @@ namespace X_Y
         }
 
         // 分割线
-        constexpr int thickness = 2;
+        // ★ 线宽必须用 boundary 自己的 width（= 缝隙总宽），不能用写死的 thickness：
+        //   Dock::RecalcRect 是让出 width/2 的缝，若这里只画 2px，剩下的缝就是"真空"，
+        //   露出背景色，看着像线被 Dock 压扁。让多少缝就画多宽 —— 两边同一个值。
         for (BoundaryId id = 0; id < m_Boundaries.size(); ++id)
         {
             const auto &b = m_Boundaries[id];
             if (b.removed)
                 continue;
             const int pos = BoundaryPosition(id);
+            const int lineW = std::max(1, b.width); // 与 Dock 让缝同源
             float start = 0.0f;
             float end = 1.0f;
             GetBoundarySize(id, start, end);
@@ -588,13 +591,13 @@ namespace X_Y
             {
                 const int s = static_cast<int>(start * m_LayoutH);
                 const int e = static_cast<int>(end * m_LayoutH);
-                canvas.FillRect(pos - thickness / 2, s, thickness, std::max(1, e - s), color);
+                canvas.FillRect(pos - lineW / 2, s, lineW, std::max(1, e - s), color);
             }
             else
             {
                 const int s = static_cast<int>(start * m_LayoutW);
                 const int e = static_cast<int>(end * m_LayoutW);
-                canvas.FillRect(s, pos - thickness / 2, std::max(1, e - s), thickness, color);
+                canvas.FillRect(s, pos - lineW / 2, std::max(1, e - s), lineW, color);
             }
         }
     }

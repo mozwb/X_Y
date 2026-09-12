@@ -62,6 +62,17 @@
 - `Dock::HitTestEdge` **保持绝对语义**（由 DockLayout 用未平移坐标调用），加注释钉死，
   防止以后被误"统一"成局部坐标。
 
+### 追加 — 分割线绘制漏用 boundary width（砚台报"压着线绘制"）
+- **现象**：分割线看着被 Dock 压扁 / 缝里露出背景色。
+- **根因**：`Boundary::width` 是**缝隙总宽**，`Dock::RecalcRect` 确实让出了 `width/2`
+  （`left = pos + width/2`、`right = pos - width/2`），但 `DockLayout::OnPaint`
+  画线用的是**写死的 `constexpr int thickness = 2`** —— 完全没读 `b.width`。
+  于是 `width = 14` 时 Dock 让了 7px 的缝、只画了 2px 的线，剩下 5px 是"真空"露背景。
+- **修法**：`DockLayout::OnPaint` 改用 `const int lineW = std::max(1, b.width)`，
+  居中 `pos - lineW / 2`。**让多少缝就画多宽**，两边同源。
+- 未动 `Dock::RecalcRect`（让缝逻辑本来是对的）、未动 `HitTestEdge`
+  （命中厚度已用 `std::max(thickness, b->width / 2)`，本来就没问题）。
+
 ### 已知限制（本次未处理，非本次引入）
 - `Canvas::SetClip` 只对**图形**（`BlitPixel` 路径）生效；**文字**经 `Font` 直写像素/桥 DC，
   不走裁剪。即超出 clip 的文字仍会画出来。属既有行为，滚动区文字可能溢出。
