@@ -147,7 +147,13 @@ namespace X_Y
         if (m_Layout)
             m_Layout->SetHostRepaint([this]()
                                      { RequestRepaint(); });
-        if (m_Layout && GetNativeHandle())
+
+        // ★ 无条件喂尺寸（不再要求 GetNativeHandle() 非空）。
+        //   setSize() 只是记下逻辑尺寸，窗口要 show() 才建 HWND；若此处因无 HWND
+        //   而跳过，DockLayout 的 m_LayoutW/H 会一直是 0 → 所有 Dock 算出 0×0 矩形
+        //   → 面板区高度 0、tab 栏被裁掉（"拖进 dock 就看不到 tab 栏"）。
+        //   BaseWin::GetActualWidth/Height 无窗口时返回 setSize 存的逻辑值，直接可用。
+        if (m_Layout)
         {
             m_Layout->SetActiveSize(static_cast<int>(get_width()),
                                     static_cast<int>(get_height()));

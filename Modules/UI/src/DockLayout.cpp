@@ -372,8 +372,14 @@ namespace X_Y
     }
 
     // ── 布局重排 ──
+    // ⚠️ 尺寸为 0 时直接返回：此刻还没有真实尺寸（窗口未建/未 resize），
+    //    继续算会把所有 Dock 压成 0×0，连 tab 栏都被裁掉。
+    //    真正的尺寸会在 SetActiveSize（壳 resize / SetDockLayout）时喂进来。
     void DockLayout::RecalcLayout()
     {
+        if (m_LayoutW <= 0 || m_LayoutH <= 0)
+            return;
+
         for (Dock *dock : m_Docks)
         {
             if (!dock)
