@@ -227,6 +227,27 @@ dock#4 (Right)  rect=(550,134 135x551) panelArea=(0,0 135x551)   panels=0
 > 另在 `AddPanelAt` 处留注释说明 `TakePanel` 的来龙去脉，避免以后有人从交接文档里又把它捡回来。
 - **涉及文件**：`UI/DockLayout/DockLayout.h`、`UI/src/DockLayout.cpp`。
 
+### 追加 — 滚轮在底部/右侧 Dock 失效：WM_MOUSEWHEEL 坐标被重复 DPI 缩放
+> 砚台澄清：tab 与分割线交互**都已正常**，问题是"**鼠标在底部/右边的 Dock 面板上滚轮没反应**"。
+
+- **根因**：滚轮坐标被**除了两次 scale**（150% DPI 下多除一次 1.5）。
+  1. `Win32WndProc` 的 `WM_MOUSEWHEEL` 分支调了 `pThis->ScreenToClient()`，
+     而该接口语义是 **"输入物理, 输出逻辑"**（内部 `÷scale`）；
+  2. 但 UI 侧契约是：**所有鼠标 Movement 携带物理客户区坐标**，
+     由 `Container` 统一做**唯一一次** `ClientPhysicalToLogical`（又 `÷scale`）。
+- **表现**：坐标偏小（往左上偏）→ 原本在**右/下** Dock 的鼠标被算到**左/中** Dock →
+  `HitTestDock` 命中错的 Dock → 滚轮事件送错地方。"底部和右边滚不动"即由此而来。
+- **修法**：`WM_MOUSEWHEEL` 改用 **`ScreenToClientPhysical`**（物理→物理，不除 scale），
+  与 `WM_MOUSEMOVE` / `WM_LBUTTONDOWN` / `WM_LBUTTONUP` 等一致
+  （它们都直接传 `lParam` 的原始物理客户区坐标）。
+  ⚠️ 注意 `WM_MOUSEWHEEL` 的 `lParam` 是**屏幕**坐标（不同于 `WM_MOUSEMOVE` 的客户区坐标），
+  所以仍必须先转客户区，不能直接传 `lParam`。
+- **防御**：在 `Container` 构造函数顶部写明**坐标契约**（产出侧必须给物理坐标），
+  避免以后又有 Movement 产出侧提前转逻辑坐标导致重复缩放。
+- **核查**：其余 `ScreenToClient` 调用（`tabcontainer`/`tabhostcontainer` 跨窗口收养、
+  OLE 文件拖放回调）消费方要的**就是逻辑坐标**，一致，无需改动。
+- **涉及文件**：`Widget/src/Win32/Win32WndProc.cpp`、`UI/src/Container.cpp`。
+
 ### 已知问题（下一轮）
 - `Dock` 的 tab 栏仍不绘制标题文字（只画色块），宽度固定 `kTabWidth = 120`，
   未按标题测宽。字体绘制需接 `FontLibrary`。
