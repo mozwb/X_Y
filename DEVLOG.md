@@ -157,6 +157,24 @@ dock#4 (Right)  rect=(550,134 135x551) panelArea=(0,0 135x551)   panels=0
 挂"拖出成独立窗口"的回调 —— 之前五区域 dock 是裸 Dock，**该回调从未挂上**；现在会正常生效。
 - **涉及文件**：`UI/DockLayout/toplayout.h`。
 
+### 追加 — 筛选栏被覆盖：Panel::OnPaint 缺组件级 PushOrigin（坐标统一漏的一环）
+> tab 栏修好、裁剪生效后，砚台报 **LogViewer 自己的筛选栏（关键词输入框 / tag 条）看不见了**，
+> **悬浮窗口里同样看不到** → 两边都看不到，说明问题在 `LogViewer`/`Panel` 层，与 Dock 无关。
+
+- **根因**：`Panel::OnPaint` 只给每个组件 `SetClip`，**没有 `PushOrigin`**。
+  而前面"坐标体系统一"那一批已经把各组件内部全改成按 `(0,0)` 起画
+  （`Label`/`Button`/`TextInput`/`ListBox`/`Overlay`/`ScrollArea`…）。
+  于是**组件的 `(0,0)` 落在了 Panel 的 `(0,0)`**，而不是组件自己的位置。
+- **表现**：`ScrollArea` 被 `OnLayout` 放在 `y=26`，但它的内容画到了 Panel 的 `y=0` ——
+  正好盖住上方的 `TagStrip` 和关键词输入框（= 筛选栏）。
+- **修法**：`Panel::OnPaint` 对每个组件补齐
+  `PushOrigin(comp->GetX(), comp->GetY())` / `PopOrigin()`，与 `Dock` 对 `Panel` 的做法一致；
+  裁剪也随之改为组件局部坐标 `SetClip(0, 0, w, h)`。
+- **至此"绘制与输入逐层同构"在每一层都成立**：
+  `绝对 → Dock局部 → Panel局部 → Component局部`
+  （输入链用逐层减偏移，绘制链用逐层压 origin）。
+- **涉及文件**：`UI/src/Panel.cpp`。
+
 ### 已知问题（下一轮）
 - `DockLayout` 的**绘制 z 序与命中优先级相反**：`OnPaint` 遍历 `m_Docks` 后画的在上层
   （Right 最上），而 `RouteInput` 命中是**先到先得**（Top 最先）。视觉上压在最上的
