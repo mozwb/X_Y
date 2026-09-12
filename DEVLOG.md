@@ -73,6 +73,38 @@
 - 未动 `Dock::RecalcRect`（让缝逻辑本来是对的）、未动 `HitTestEdge`
   （命中厚度已用 `std::max(thickness, b->width / 2)`，本来就没问题）。
 
+### 追加 — 内容溢出容器（滚动时盖住 tab 栏 / 越过边界）：补裁剪三处
+> 砚台报：Panel 放进左侧/中间 Dock 后刚放进去就超出底部，往下滚动会盖住 tab 栏；
+> 左栏最窄所以最明显（150% DPI）。
+
+- **根因（两层）**：
+  1. **Panel 没有外层裁剪**：`Panel::OnPaint` 只对每个组件设 clip，没给整个 Panel 设一次。
+     `ScrollArea` 里滚动的内容超出 Panel 矩形就直接画到外面 → 盖住 tab 栏。
+  2. **`SetClip` 对文字无效**：文字走 `Font` 直写像素/桥 DC，绕过 `CanvasImpl::BlitPixel`
+     的裁剪检查。所以滚动中的日志文字**根本裁不掉** —— 这是溢出的主因。
+- **修法（A + B + C2，砚台定）**：
+  - **A** `Panel::OnPaint`：加外层 `SetClip(0,0,m_W,m_H)`，画完每个组件后恢复外层裁剪。
+  - **B** `Dock::OnPaint`：改为**先画 Panel 内容（带 `SetClip(0,0,m_EffPanelW,m_EffPanelH)`）、
+    最后画 tab 栏** —— tab 栏压在最上层，任何内容都盖不住它。
+    另 `DockLayout::OnPaint` 给每个 Dock 加自己的裁剪，避免相邻 Dock 互相覆盖。
+  - **C2（精确裁剪）**：`CanvasTarget` 加 `clipEnabled/clipX/clipY/clipW/clipH`（物理像素）；
+    `CanvasImpl` 加 `GetClipRect()`；`Canvas::MakeTarget()` 把当前裁剪区填进去；
+    两个文字后端各自遵守：
+      - `FontWin32`（GDI，**当前实际在用**）：`DcClipScope` RAII 对桥 DC 做
+        `IntersectClipRect`（TextOutW 自动遵守，抗锯齿边缘也正确），
+        `ForceAlpha`/`FillRectIntoBuffer` 走 `InClip()` 逐像素判断。
+      - `FontFreeType`：`BlendBitmap`/`FillRectIntoBuffer` 走同一套 clip 判断。
+- **影响文件**：`Widget/CanvasImpl.h`、`Widget/Canvas.h`、`Widget/Win32/FontWin32.h`、
+  `Widget/Win32/FontFreeType.h`、`Widget/src/Win32/FontWin32.cpp`、
+  `Widget/src/Win32/FontFreeType.cpp`、`UI/src/Panel.cpp`、`UI/src/Dock.cpp`、
+  `UI/src/DockLayout.cpp`。
+
+### 已知问题（下一轮）
+- `DockLayout` 的**绘制 z 序与命中优先级相反**：`OnPaint` 遍历 `m_Docks` 后画的在上层
+  （Right 最上），而 `RouteInput` 命中是**先到先得**（Top 最先）。视觉上压在最上的
+  Dock 反而最难命中 → 砚台报"右侧/底部 Dock 吃不到交互（滑动无效）"。
+  需统一：命中顺序应改为**逆序遍历**（与绘制 z 序一致，最上层优先命中）。
+
 ### 已知限制（本次未处理，非本次引入）
 - `Canvas::SetClip` 只对**图形**（`BlitPixel` 路径）生效；**文字**经 `Font` 直写像素/桥 DC，
   不走裁剪。即超出 clip 的文字仍会画出来。属既有行为，滚动区文字可能溢出。

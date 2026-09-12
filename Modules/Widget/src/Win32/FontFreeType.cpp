@@ -1,4 +1,4 @@
-﻿#include "Widget/Font.h"
+#include "Widget/Font.h"
 #include "Win32/FontFreeType.h"
 #include "Dpi.h"
 #include <ft2build.h>
@@ -118,7 +118,7 @@ namespace X_Y {
         if (!text || !*text) return;
         FillRectIntoBuffer(target.pixels, target.width, target.height,
             (int)(x*m_Scale+0.5f),(int)(y*m_Scale+0.5f),
-            (int)(w*m_Scale+0.5f),(int)(h*m_Scale+0.5f), bgColor);
+            (int)(w*m_Scale+0.5f),(int)(h*m_Scale+0.5f), bgColor, &target);
         DrawCodepoints(target, tx, ty, Utf8ToCodepoints(text), textColor);
     }
 
@@ -128,7 +128,7 @@ namespace X_Y {
         if (!text || !*text) return;
         FillRectIntoBuffer(target.pixels, target.width, target.height,
             (int)(x*m_Scale+0.5f),(int)(y*m_Scale+0.5f),
-            (int)(w*m_Scale+0.5f),(int)(h*m_Scale+0.5f), bgColor);
+            (int)(w*m_Scale+0.5f),(int)(h*m_Scale+0.5f), bgColor, &target);
         DrawCodepoints(target, tx, ty, Utf16ToCodepoints(text), textColor);
     }
 
@@ -167,14 +167,15 @@ namespace X_Y {
             int gx = penX + slot->bitmap_left;
             int gy = baselineY - slot->bitmap_top;
             BlendBitmap(target.pixels, target.width, target.height,
-                        bm, gx, gy, a0, r0, g0, b0);
+                        bm, gx, gy, a0, r0, g0, b0, &target);
             penX += (slot->advance.x) >> 6;   // 26.6 fixed → 像素
         }
     }
 
     void FontFreeType::BlendBitmap(uint32_t* out, int bw, int bh,
                                    const FT_Bitmap* bm, int ox, int oy,
-                                   uint32_t a0, uint32_t r0, uint32_t g0, uint32_t b0) {
+                                   uint32_t a0, uint32_t r0, uint32_t g0, uint32_t b0,
+                                   const CanvasTarget* target) {
         if (!bm->buffer) return;
         unsigned char* src = bm->buffer;
         int rows = (int)bm->rows, cols = (int)bm->width, pitch = (int)bm->pitch;
@@ -186,6 +187,10 @@ namespace X_Y {
                 if (g == 0) continue;
                 int X = ox + cx, Y = oy + ry;
                 if (X < 0 || X >= bw || Y < 0 || Y >= bh) continue;
+                if (target && target->clipEnabled &&
+                    (X < target->clipX || X >= target->clipX + target->clipW ||
+                     Y < target->clipY || Y >= target->clipY + target->clipH))
+                    continue; // 遵守裁剪
                 uint32_t* d = &out[(size_t)Y * bw + X];
                 uint32_t sa = a0 * g / 255;
                 if (sa >= 255) {
@@ -220,12 +225,17 @@ namespace X_Y {
     }
 
     void FontFreeType::FillRectIntoBuffer(uint32_t* pixels, int bw, int bh,
-                                          int x, int y, int w, int h, uint32_t color) {
+                                          int x, int y, int w, int h, uint32_t color,
+                                          const CanvasTarget* target) {
         if (!pixels) return;
         for (int yy = 0; yy < h; ++yy) {
             for (int xx = 0; xx < w; ++xx) {
                 int X = x + xx, Y = y + yy;
                 if (X < 0 || X >= bw || Y < 0 || Y >= bh) continue;
+                if (target && target->clipEnabled &&
+                    (X < target->clipX || X >= target->clipX + target->clipW ||
+                     Y < target->clipY || Y >= target->clipY + target->clipH))
+                    continue; // 遵守裁剪
                 uint32_t* d = &pixels[(size_t)Y * bw + X];
                 uint32_t sa = (color >> 24) & 0xFF;
                 if (sa >= 255) { *d = color; continue; }

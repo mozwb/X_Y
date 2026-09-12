@@ -563,12 +563,16 @@ namespace X_Y
         canvas.Clear(m_BackgroundColor);
 
         // 各 Dock
+        // 每个 Dock 前压 origin + 设自己的裁剪区：Dock 内容（含 Panel 溢出）
+        // 不许画到本 Dock 矩形之外，避免相邻 Dock 互相覆盖。
         for (Dock *dock : m_Docks)
         {
             if (!dock)
                 continue;
             canvas.PushOrigin(dock->GetX(), dock->GetY());
+            canvas.SetClip(0, 0, dock->GetWidth(), dock->GetHeight());
             dock->OnPaint(canvas);
+            canvas.ResetClip();
             canvas.PopOrigin();
         }
 

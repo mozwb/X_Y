@@ -166,6 +166,11 @@ namespace X_Y
     //   组件也不需要知道自己在哪个 Panel/Dock/窗口里。
     void Panel::OnPaint(Canvas &canvas)
     {
+        // ★ 外层裁剪：整个 Panel 的内容不许画到自己矩形之外。
+        //   没有这道裁剪时，滚动中的内容（尤其 ScrollArea 里的列表/文字）
+        //   会溢出到 Panel 外，盖住 Dock 的 tab 栏、越过分割线。
+        canvas.SetClip(0, 0, m_W, m_H);
+
         for (auto *comp : m_Components)
         {
             if (comp->IsVisible())
@@ -175,8 +180,11 @@ namespace X_Y
                     comp->GetWidth(), comp->GetHeight());
                 comp->OnPaint(canvas);
                 canvas.ResetClip();
+                canvas.SetClip(0, 0, m_W, m_H); // 恢复外层裁剪
             }
         }
+
+        canvas.ResetClip();
     }
 
     void Panel::FocusNext()

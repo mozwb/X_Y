@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Widget/Font.h"
 #include <windows.h>
 
@@ -40,11 +40,14 @@ namespace X_Y {
         int MeasureText(const wchar_t* text) const override;
 
     private:
+        // target 可空；非空时遵守 target 的裁剪区（文字绕过 BlitPixel，必须自裁）
         void ForceAlpha(uint32_t* pixels, int bw, int bh,
-                        int px, int py, const wchar_t* text) const;
+                        int px, int py, const wchar_t* text,
+                        const CanvasTarget* target = nullptr) const;
         int  MeasureTextPhys(const wchar_t* text) const;
         static void FillRectIntoBuffer(uint32_t* pixels, int bw, int bh,
-                                       int x, int y, int w, int h, uint32_t color);
+                                       int x, int y, int w, int h, uint32_t color,
+                                       const CanvasTarget* target = nullptr);
         static std::wstring Utf8ToWide(const std::string& s);
 
         FontDesc m_Desc;

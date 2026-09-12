@@ -1,4 +1,4 @@
-﻿#include "Widget/Font.h"
+#include "Widget/Font.h"
 #include "Win32/FontWin32.h"
 #include "Dpi.h"
 #include <windows.h>
@@ -9,6 +9,42 @@
 #endif
 
 namespace X_Y {
+
+    // ── 裁剪辅助 ──
+    // 文字后端不经过 CanvasImpl::BlitPixel，必须自己遵守 CanvasTarget 的裁剪区，
+    // 否则滚动区/小容器里的文字会溢出到容器外（盖住 tab 栏、越过分割线）。
+    namespace {
+
+        // GDI 侧：把裁剪矩形挂到 DC 上（TextOutW 自身会遵守，抗锯齿边缘也正确）
+        struct DcClipScope {
+            HDC dc = nullptr;
+            bool applied = false;
+
+            DcClipScope(HDC d, const CanvasTarget& t) : dc(d) {
+                if (!dc || !t.clipEnabled || t.clipW <= 0 || t.clipH <= 0)
+                    return;
+                ::SaveDC(dc);
+                ::IntersectClipRect(dc, t.clipX, t.clipY,
+                                    t.clipX + t.clipW, t.clipY + t.clipH);
+                applied = true;
+            }
+            ~DcClipScope() {
+                if (applied && dc)
+                    ::RestoreDC(dc, -1);
+            }
+            DcClipScope(const DcClipScope&) = delete;
+            DcClipScope& operator=(const DcClipScope&) = delete;
+        };
+
+        // CPU 侧：像素是否落在裁剪区内（供 ForceAlpha / FillRectIntoBuffer 用）
+        inline bool InClip(const CanvasTarget& t, int x, int y) {
+            if (!t.clipEnabled)
+                return true;
+            return x >= t.clipX && x < t.clipX + t.clipW &&
+                   y >= t.clipY && y < t.clipY + t.clipH;
+        }
+
+    } // namespace
 
     // 把枚举质量映射到 Win32 LOGFONT.lfQuality
 
@@ -99,12 +135,13 @@ namespace X_Y {
         if (!text || !*text) return;
         HDC dc = (HDC)target.dc;
         if (!dc) return;
+        DcClipScope clip(dc, target);   // TextOutW 遵守裁剪
         HFONT old = (HFONT)::SelectObject(dc, m_Font);
         ::SetTextColor(dc, RGB((color>>16)&0xFF,(color>>8)&0xFF,color&0xFF));
         ::SetBkMode(dc, TRANSPARENT);
         int px = (int)(x * m_Scale + 0.5f), py = (int)(y * m_Scale + 0.5f);
         ::TextOutW(dc, px, py, text, (int)wcslen(text));
-        ForceAlpha(target.pixels, target.width, target.height, px, py, text);
+        ForceAlpha(target.pixels, target.width, target.height, px, py, text, &target);
         ::SelectObject(dc, old);
     }
 
@@ -122,16 +159,17 @@ namespace X_Y {
         if (!text || !*text) return;
         FillRectIntoBuffer(target.pixels, target.width, target.height,
             (int)(x*m_Scale+0.5f),(int)(y*m_Scale+0.5f),
-            (int)(w*m_Scale+0.5f),(int)(h*m_Scale+0.5f), bgColor);
+            (int)(w*m_Scale+0.5f),(int)(h*m_Scale+0.5f), bgColor, &target);
         HDC dc = (HDC)target.dc;
         if (!dc) return;
+        DcClipScope clip(dc, target);   // TextOutW 遵守裁剪
         HFONT old = (HFONT)::SelectObject(dc, m_Font);
         ::SetTextColor(dc, RGB((textColor>>16)&0xFF,(textColor>>8)&0xFF,textColor&0xFF));
         ::SetBkMode(dc, OPAQUE);
         ::SetBkColor(dc, RGB((bgColor>>16)&0xFF,(bgColor>>8)&0xFF,bgColor&0xFF));
         int px = (int)(tx*m_Scale+0.5f), py = (int)(ty*m_Scale+0.5f);
         ::TextOutW(dc, px, py, text, (int)wcslen(text));
-        ForceAlpha(target.pixels, target.width, target.height, px, py, text);
+        ForceAlpha(target.pixels, target.width, target.height, px, py, text, &target);
         ::SetBkMode(dc, TRANSPARENT);
         ::SelectObject(dc, old);
     }
@@ -154,7 +192,8 @@ namespace X_Y {
     }
 
     void FontWin32::ForceAlpha(uint32_t* pixels, int bw, int bh,
-                               int px, int py, const wchar_t* text) const {
+                               int px, int py, const wchar_t* text,
+                               const CanvasTarget* target) const {
         if (!pixels) return;
         int w = MeasureTextPhys(text);
         HDC dc = ::GetDC(nullptr);
@@ -167,11 +206,11 @@ namespace X_Y {
             for (int xx = 0; xx < w; ++xx) {
                 int X = px + xx, Y = py + yy;
                 if (X < 0 || X >= bw || Y < 0 || Y >= bh) continue;
+                if (target && !InClip(*target, X, Y)) continue; // 遵守裁剪
                 pixels[(size_t)Y * bw + X] |= 0xFF000000;
             }
         }
     }
-
     int FontWin32::MeasureTextPhys(const wchar_t* text) const {
         HDC dc = ::GetDC(nullptr);
         HFONT old = (HFONT)::SelectObject(dc, m_Font);
@@ -183,12 +222,14 @@ namespace X_Y {
     }
 
     void FontWin32::FillRectIntoBuffer(uint32_t* pixels, int bw, int bh,
-                                       int x, int y, int w, int h, uint32_t color) {
+                                       int x, int y, int w, int h, uint32_t color,
+                                       const CanvasTarget* target) {
         if (!pixels) return;
         for (int yy = 0; yy < h; ++yy) {
             for (int xx = 0; xx < w; ++xx) {
                 int X = x + xx, Y = y + yy;
                 if (X < 0 || X >= bw || Y < 0 || Y >= bh) continue;
+                if (target && !InClip(*target, X, Y)) continue; // 遵守裁剪
                 uint32_t* d = &pixels[(size_t)Y * bw + X];
                 uint32_t sa = (color >> 24) & 0xFF;
                 if (sa >= 255) { *d = color; continue; }

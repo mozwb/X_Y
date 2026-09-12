@@ -78,6 +78,10 @@ namespace X_Y {
         virtual int GetOriginX() const = 0;
         virtual int GetOriginY() const = 0;
 
+        // 当前裁剪区（物理像素）。Canvas 的文字转发壳把它填进 CanvasTarget，
+        // 让 Font 后端也能遵守裁剪（文字绕过 BlitPixel，否则会溢出容器）。
+        virtual bool GetClipRect(int &x, int &y, int &w, int &h) const = 0;
+
         // ── 软件 ARGB 缓冲访问（供 Font 文字绘制拼目标 / 特殊上层直读）──
         // 32bpp ARGB 物理像素指针（布局为 width*height，每像素 0xAARRGGBB）。
         // 后端若不暴露（非软件后端）返回 nullptr。
@@ -89,7 +93,7 @@ namespace X_Y {
     };
 
     // ── 文字目标 ──
-    // 描述"把字画到哪"：程序集软件 ARGB 缓冲 + 尺寸 + 可选 GDI 桥梁 DC。
+    // 描述"把字画到哪"：程序集软件 ARGB 缓冲 + 尺寸 + 可选 GDI 桥梁 DC + 裁剪区。
     // Font::DrawText/FillText 用它拼目标。后端自由选择：FreeType 写 pixels；
     // GDI 经 dc (=bridgeDC) 画（alpha 截断）。POD，无逻辑。
     struct CanvasTarget {
@@ -97,6 +101,14 @@ namespace X_Y {
         int  width  = 0;             // 物理宽
         int  height = 0;             // 物理高
         void* dc = nullptr;          // GDI 桥梁 DC（可选）
+
+        // ── 裁剪区（物理像素）──
+        // 文字后端必须遵守：超出此矩形的像素不落。语义与 CanvasImpl::SetClip 一致。
+        // clipEnabled=false 时不裁剪（整幅可画）。
+        // ⚠️ 之所以要把裁剪传到文字层：文字走 Font 直写像素/桥 DC，绕过了
+        //    CanvasImpl 的 BlitPixel 裁剪。不带上它，滚动区文字会溢出到容器外。
+        bool clipEnabled = false;
+        int  clipX = 0, clipY = 0, clipW = 0, clipH = 0;
     };
 
     // 平台工厂

@@ -103,13 +103,16 @@ namespace X_Y {
         void* GetBridgeDC() { return m_Impl->GetBridgeDC(); }
 
     private:
-        // 组装文字绘制目标（本画布软件缓冲 + 尺寸 + GDI 桥 DC）
+        // 组装文字绘制目标（本画布软件缓冲 + 尺寸 + GDI 桥 DC + 当前裁剪区）
+        // 裁剪区必须带上：文字走 Font 直写像素/桥 DC，绕过了 CanvasImpl 的
+        // BlitPixel 裁剪；不带的话滚动区文字会溢出到容器外（盖住 tab 栏/边界）。
         CanvasTarget MakeTarget() {
             CanvasTarget t;
             t.pixels = m_Impl->GetPixelBuffer();
             t.width  = m_Impl->GetPhysicalWidth();
             t.height = m_Impl->GetPhysicalHeight();
             t.dc     = m_Impl->GetBridgeDC();
+            t.clipEnabled = m_Impl->GetClipRect(t.clipX, t.clipY, t.clipW, t.clipH);
             return t;
         }
 

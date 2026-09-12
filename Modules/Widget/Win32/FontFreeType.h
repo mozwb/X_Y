@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Widget/Font.h"
 #include <ft2build.h>
 #include FT_FREETYPE_H
@@ -45,11 +45,14 @@ namespace X_Y {
                             const std::vector<unsigned>& cps,
                             uint32_t color) const;
         int  MeasureCodepoints(const std::vector<unsigned>& cps) const;
+        // target 可空；非空时遵守其裁剪区（文字绕过 BlitPixel，必须自裁）
         static void BlendBitmap(uint32_t* out, int bw, int bh,
                                 const FT_Bitmap* bm, int ox, int oy,
-                                uint32_t a0, uint32_t r0, uint32_t g0, uint32_t b0);
+                                uint32_t a0, uint32_t r0, uint32_t g0, uint32_t b0,
+                                const CanvasTarget* target);
         static void FillRectIntoBuffer(uint32_t* pixels, int bw, int bh,
-                                       int x, int y, int w, int h, uint32_t color);
+                                       int x, int y, int w, int h, uint32_t color,
+                                       const CanvasTarget* target = nullptr);
 
         FontDesc m_Desc;
         FT_Face m_Face = nullptr;

@@ -92,6 +92,17 @@ namespace X_Y
         int GetOriginX() const override { return m_OriginX; }
         int GetOriginY() const override { return m_OriginY; }
 
+        bool GetClipRect(int &x, int &y, int &w, int &h) const override
+        {
+            if (!m_ClipSet)
+                return false;
+            x = m_ClipX;
+            y = m_ClipY;
+            w = m_ClipW;
+            h = m_ClipH;
+            return true;
+        }
+
         // 逻辑 ↔ 物理 互译（基于后端自持 m_Scale，与 S() 同一份换算）
         float GetScale() const override { return m_Scale; }
         int LToP(int logical) const override { return S(logical); }

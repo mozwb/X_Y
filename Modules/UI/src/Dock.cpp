@@ -410,33 +410,37 @@ namespace X_Y
         active->SetLayoutRect(m_EffPanelX, m_EffPanelY, m_EffPanelW, m_EffPanelH);
     }
 
-    // ── 绘制：tab 栏 + 激活 Panel 内容 ──
+    // ── 绘制：Panel 内容 + tab 栏 ──
     // 坐标约定：本函数收到的是【Dock 局部坐标】canvas —— DockLayout 已压过
     //           PushOrigin(dock->GetX(), dock->GetY())。所以这里一律按 (0,0) 起画，
     //           不再自己加 m_X/m_Y（与输入链 DockLayout 减 dock->GetX() 对称）。
+    //
+    // ★ 绘制顺序：先 Panel 内容、后 tab 栏。tab 栏【最后画 = 压在最上层】，
+    //   这样任何内容（含滚动溢出）都盖不住它。
     void Dock::OnPaint(Canvas &canvas)
     {
         canvas.FillRect(0, 0, m_W, m_H, 0xFF232527);
 
-        // tab 栏（Dock 局部坐标）
-        int tabX = 0;
-        for (int i = 0; i < (int)m_Panels.size(); ++i)
-        {
-            const bool active = (i == m_ActiveIndex);
-            const int tabW = 120;
-            canvas.FillRect(tabX, 0, tabW, m_MenuBarHeight,
-                            active ? 0xFF007ACC : 0xFF3E3E42);
-            // (字体绘制后续接 FontLibrary；先只画色块+索引)
-            tabX += tabW;
-        }
-
-        // 激活 Panel 内容：压入 Panel 在 Dock 内的偏移，Panel 及以下全程 (0,0) 起画
+        // ① 激活 Panel 内容：裁到面板区，绝不允许画到 tab 栏/边界上
         Panel *active = GetActivePanel();
         if (active)
         {
             canvas.PushOrigin(m_EffPanelX, m_EffPanelY);
+            canvas.SetClip(0, 0, m_EffPanelW, m_EffPanelH);
             active->OnPaint(canvas);
+            canvas.ResetClip();
             canvas.PopOrigin();
+        }
+
+        // ② tab 栏（最后画，最上层；带自己的裁剪）
+        for (int i = 0; i < (int)m_Panels.size(); ++i)
+        {
+            const bool isActive = (i == m_ActiveIndex);
+            const int tabW = 120;
+            const int tabX = i * tabW;
+            canvas.FillRect(tabX, 0, tabW, m_MenuBarHeight,
+                            isActive ? 0xFF007ACC : 0xFF3E3E42);
+            // (字体绘制后续接 FontLibrary；先只画色块+索引)
         }
     }
 
