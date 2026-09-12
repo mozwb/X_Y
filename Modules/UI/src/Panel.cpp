@@ -175,11 +175,15 @@ namespace X_Y
         {
             if (comp->IsVisible())
             {
-                canvas.SetClip(
-                    comp->GetX(), comp->GetY(),
-                    comp->GetWidth(), comp->GetHeight());
+                // ★ 每个组件都要压自己的 origin：组件内部一律按 (0,0) 起画，
+                //   位置由宿主压 origin 提供（与 Dock 对 Panel 的做法一致）。
+                //   少了这一步，组件的 (0,0) 会落在 Panel 的 (0,0) ——
+                //   例如 ScrollArea 会把内容画到 Panel 顶部，盖住上方的筛选栏。
+                canvas.PushOrigin(comp->GetX(), comp->GetY());
+                canvas.SetClip(0, 0, comp->GetWidth(), comp->GetHeight());
                 comp->OnPaint(canvas);
                 canvas.ResetClip();
+                canvas.PopOrigin();
                 canvas.SetClip(0, 0, m_W, m_H); // 恢复外层裁剪
             }
         }
