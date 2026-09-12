@@ -165,10 +165,10 @@ namespace X_Y
     //   共用同一份节点描述（绘制与路由同构）。
     void Panel::OnPaint(Canvas &canvas)
     {
-        const UINodeView self = View(*this);
+        const UINodeView panelView = View(*this);
 
         // 外层裁剪：整个 Panel 的内容不许画到自己矩形之外。
-        canvas.SetClip(0, 0, self.content.w, self.content.h);
+        canvas.SetClip(0, 0, panelView.content.w, panelView.content.h);
 
         for (auto *comp : m_Components)
         {
@@ -183,7 +183,7 @@ namespace X_Y
             comp->OnPaint(canvas);
             canvas.ResetClip();
             canvas.PopOrigin();
-            canvas.SetClip(0, 0, self.content.w, self.content.h); // 恢复外层裁剪
+            canvas.SetClip(0, 0, panelView.content.w, panelView.content.h); // 恢复外层裁剪
         }
 
         canvas.ResetClip();
