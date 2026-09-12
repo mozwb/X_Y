@@ -99,6 +99,31 @@
   `Widget/src/Win32/FontFreeType.cpp`、`UI/src/Panel.cpp`、`UI/src/Dock.cpp`、
   `UI/src/DockLayout.cpp`。
 
+### 追加 — 拖进 Dock 后 tab 栏消失（真凶：DockLayout 从未收到尺寸）
+> 砚台澄清：**同一个面板在独立窗口(TabContainer)能看到 tab 栏，拖进 Dock(TopLayout) 就看不到**。
+> 这说明不是裁剪本身画错，而是 Dock 矩形被压成了 0×0。
+
+- **根因链**：
+  1. test 的调用顺序是 `setSize()` → `SetDockLayout()` → `show()`。
+     `setSize` 只记逻辑尺寸，窗口要 `show()` 才创建 HWND。
+  2. 而 `Container::SetDockLayout` 里 `SetActiveSize` 被包在
+     `if (m_Layout && GetNativeHandle())` 内 —— 那一刻 HWND 还是 `nullptr`，
+     **`SetActiveSize` 从未被调用** → `DockLayout::m_LayoutW/m_LayoutH` 一直是 **0**。
+  3. 此后任何 `RecalcLayout()`（含拖入面板时 `AddPanel` → `Layout->RecalcLayout()`）
+     都用 0 尺寸算 → **所有 Dock 的 `m_W/m_H` 被压成 0**。
+  4. 于是 `m_EffPanelH = 0`，我上一轮加的 `SetClip(0,0,w,0)` **把整个 Dock 裁没了**，
+     tab 栏（`FillRect(0,0,tabW,30)`）也被 `DockLayout` 层的
+     `SetClip(0,0,dock->GetWidth(),dock->GetHeight())` = 0 裁掉 → 看不见。
+- **修法**：
+  1. `Container::SetDockLayout` **无条件**喂尺寸（去掉 `GetNativeHandle()` 条件）。
+     `BaseWin::GetActualWidth/Height` 无窗口时返回 `setSize` 存的逻辑值，可直接用；
+     窗口 resize 后仍由 `OnWindowResize` 继续同步。
+  2. `DockLayout::RecalcLayout` 加守卫：`m_LayoutW/H <= 0` 时直接 return，
+     避免真实尺寸到位前把 Dock 压成 0×0（防御性双保险）。
+- **涉及文件**：`UI/src/Container.cpp`、`UI/src/DockLayout.cpp`。
+- **test 同步清理**：去掉无用的旧拖动模拟残留，补进坐标系/绘制约定注释，
+  加 `XY_DEBUG_DOCK_RECTS` 开关（打印各 Dock 矩形 + 面板区，定位布局问题用）。
+
 ### 已知问题（下一轮）
 - `DockLayout` 的**绘制 z 序与命中优先级相反**：`OnPaint` 遍历 `m_Docks` 后画的在上层
   （Right 最上），而 `RouteInput` 命中是**先到先得**（Top 最先）。视觉上压在最上的
