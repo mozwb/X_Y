@@ -64,7 +64,7 @@ namespace X_Y
         Rect Content() const { return content; }
     };
 
-    // ── 坐标原语（绘制链与路由链共用，只有这三个）──
+    // ── 坐标原语（绘制链与路由链共用）──
 
     // 父坐标 → 本节点局部坐标
     inline void ToLocal(const UINodeView &v, int &x, int &y)
@@ -80,11 +80,14 @@ namespace X_Y
         y += v.self.y;
     }
 
-    // 命中：父坐标 (x,y) 是否落在本节点的内容区里
-    inline bool Hits(const UINodeView &v, int x, int y)
-    {
-        return v.ContentInParent().Contains(x, y);
-    }
+    // ⚠️ 刻意【不提供】 Hits(view, x, y) 这种"一把梭"的判定函数：
+    //    self（整节点矩形）与 content（内容区，可能避开 tab 栏等 chrome）
+    //    是两个不同语义，用错会静默产生 bug。历史上就因此出过事故 ——
+    //    用 content 去找"命中哪个 Dock"，导致鼠标按在 tab 栏上时找不到 Dock，
+    //    事件下不去、tab 拖不动。所以这里要求调用方**显式写明**用哪个：
+    //      · 找节点本身（把事件交给它）      → View(n).self.Contains(x, y)
+    //      · 找节点内的内容（如 Dock 的面板）→ View(n).Content().Contains(x, y)
+    //    两处都直接用 Rect::Contains，读代码时一眼能看出用的是哪个矩形。
 
     // ── 四层各自的 View() 重载 ──
     // 放在各层 .cpp 里定义（需完整类型），此处仅声明。

@@ -504,13 +504,18 @@ namespace X_Y
 
     // 命中哪个 Dock（入参为布局绝对坐标）。
     // ★ 逆序遍历：与 OnPaint 的绘制 z 序一致 —— 后画的 Dock 在上层，应优先命中。
-    // ★ 判定走共用的 Hits(UINodeView)，与绘制/输入的矩形描述同源。
+    // ★ 判定用 self（【整个 Dock 矩形】），不能用 Hits()/content：
+    //   content 是"面板内容区"（避开 tab 栏），若拿它找 Dock，
+    //   鼠标按在 tab 栏上时就找不到任何 Dock → 事件下不去 → tab 拖不动。
+    //   「命中哪个 Dock」和「命中 Dock 内的面板内容」是两件事：
+    //     外层用 self（Dock 全矩形，含 tab 栏）
+    //     内层用 content（Dock::HitTestPanel）
     Dock *DockLayout::HitTestDock(int x, int y) const
     {
         for (auto it = m_Docks.rbegin(); it != m_Docks.rend(); ++it)
         {
             Dock *dock = *it;
-            if (dock && Hits(View(*dock), x, y))
+            if (dock && View(*dock).self.Contains(x, y))
                 return dock;
         }
         return nullptr;
