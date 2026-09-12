@@ -248,6 +248,41 @@ dock#4 (Right)  rect=(550,134 135x551) panelArea=(0,0 135x551)   panels=0
   OLE 文件拖放回调）消费方要的**就是逻辑坐标**，一致，无需改动。
 - **涉及文件**：`Widget/src/Win32/Win32WndProc.cpp`、`UI/src/Container.cpp`。
 
+### 追加 — 路由/绘制坐标统一落地（UINodeView 契约，不再是预留）
+> 砚台指出：前面只**预留**了 `UiCore/UINode.h` 的 `UINodeView`/`ToLocal`/`ToParent`/`Hits`，
+> **一处未用**。本次真正接线，四层全部改用。
+
+**统一方式**：C++ 跨类型泛型递归走不通（已确认），所以统一的是「**节点描述 + 坐标原语**」，
+不是单一递归函数。每层保留自己的薄路由方法，但：
+- 矩形一律取自 `View()`；
+- 层间转换一律走 `ToLocal` / `ToParent`；
+- 命中判定一律走 `Hits` / `Rect::Contains`。
+
+**各层改动**：
+| 位置 | 改动 |
+|---|---|
+| `DockLayout::HitTestDock` | `Hits(View(*dock))` 判定，逆序（与绘制 z 序一致） |
+| `DockLayout::OnPaint` | `View(*dock)` 取 `self` 压 origin/裁剪 |
+| `DockLayout::RouteInput` | `ToLocal`/`ToParent` 下钻 Dock |
+| `Dock::HitTestPanel` | `View(*this).Content()` 判定 |
+| `Dock::OnPaint` | `View(*this).content` 作面板区（压 origin/裁剪） |
+| `Dock::RouteInput` | `ToLocal`/`ToParent` 下钻 Panel |
+| `Panel::HitTest` | `View(*comp).self.Contains()` |
+| `Panel::OnPaint` | `View(*this)` / `View(*comp)` 的 `self`/`content` |
+| `Panel::OnInput` | `ToLocal`/`ToParent` 下钻 Component |
+| `Horizontal`/`Vertical` | 同上（容器型 Component 也纳入） |
+
+**关键点**：`View(Dock).content` **直接引用 `m_EffPanel*`**（生效面板区），
+而不是用 `m_MenuBarHeight` 另算一份 —— 避免又引入第二份"面板区真相"
+（过去 `m_Panel*` / `m_EffPanel*` / `Panel::GetX()` 三份数据打架正是根因）。
+新增 `Dock::GetEffPanelX/Y/W/H` 访问器供 `View` 使用。
+
+**结果**：UI 模块内**手写坐标算术全部清零**（`grep "e.x -=|e.x +="` 只剩注释）。
+唯一保留的特例是 `ScrollArea::PushOrigin(0, -m_ScrollOffset)` —— 那是滚动**变换**而非节点位置，语义不同。
+
+- **涉及文件**：`UI/UiCore/UINode.h`、`UI/dock/Dock.h`、`UI/src/Dock.cpp`、
+  `UI/src/DockLayout.cpp`、`UI/src/Panel.cpp`、`UI/src/horizontal.cpp`、`UI/src/vertical.cpp`。
+
 ### 已知问题（下一轮）
 - `Dock` 的 tab 栏仍不绘制标题文字（只画色块），宽度固定 `kTabWidth = 120`，
   未按标题测宽。字体绘制需接 `FontLibrary`。
