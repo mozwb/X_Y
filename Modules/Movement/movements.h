@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "XCore/XYCore.h"
 #include <functional>
 #include <vector>
@@ -178,19 +178,48 @@ namespace X_Y
 		}
 		// -------------------------------------------------------------------------
 		// ✅ Dispatch：接收事件，自动匹配【枚举类型+值】
+		//
+		// ⚠️⚠️ 必须先快照再执行 —— 这是本函数唯一容易踩死的地方：
+		//   回调（handler）里很可能调 disConnect / Connect（例如
+		//   XWidget::destroy() 里就有 disConnect(this)，而它正是被
+		//   WindowClose 的 handler 调起来的）。若直接 `for (auto& bind : m_Bindings)`
+		//   边遍历边让回调改 m_Bindings：
+		//     · erase 让后续元素前移 → 范围 for 的迭代器失效
+		//     · bind 是引用，指向的元素可能已被搬移/销毁
+		//   实测会抛 std::bad_function_call / 崩（同一 sender 挂多个 handler 时必现）。
+		//
+		//   修法：派发前把【命中的 handler】拷贝进本地快照，只遍历快照。
+		//   于是回调里对 m_Bindings 的任何增删都只作用于真实表，不影响本轮遍历。
+		//
+		// 语义（有意如此）：快照 = 派发开始那一刻在场的监听者。
+		//   回调期间新注册的 handler 【不会】收到本次事件（事件发给当时在场的人）；
+		//   回调期间被摘掉的 handler，若在快照里则【仍然】会被调用一次
+		//   （它拷贝出来时还是有效订阅，语义上属于"本轮已受理"）。
 		// -------------------------------------------------------------------------
 		bool DispatchEvent(uint32_t typeId, uint32_t typeVal, XMovement *event)
 		{
 			if (!event)
 				return false;
-			bool handled = false;
-			for (auto &bind : m_Bindings)
+
+			// ① 快照：收集本轮命中的 handler（拷贝，与 m_Bindings 脱钩）
+			std::vector<MovementHandler> pending;
+			for (const auto &bind : m_Bindings)
 			{
 				if (bind.sender == event->sender &&
 					bind.typeId == typeId && // 严格匹配枚举类型
 					bind.type == typeVal)	 // 严格匹配枚举值
 				{
-					bind.handler(*event);
+					pending.push_back(bind.handler);
+				}
+			}
+
+			// ② 执行快照：此刻 m_Bindings 怎么变都无所谓了
+			bool handled = false;
+			for (auto &handler : pending)
+			{
+				if (handler)
+				{
+					handler(*event);
 					handled = true;
 				}
 			}

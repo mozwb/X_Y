@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Component.h"
 #include <string>
 #include <vector>
@@ -31,6 +31,12 @@ namespace X_Y
 
         void AddItem(const char *text, uint32_t textColor = 0xFF000000, uint32_t bgColor = 0xFFFFFFFF);
         void Clear();
+
+        // 淘汰最旧的 n 条（从头部删）。用于"只增列表"封顶：
+        // LogViewer 这类滚动日志只往尾部追加，不封顶会无限涨内存。
+        // n <= 0 或 n >= 条数时按实际条数删（删空了等价于 Clear 的内容部分）。
+        // ⚠️ 会重置折行游标（下标全部前移，旧折行缓存作废）→ 下次 OnPaint 全量重折。
+        void RemoveFirst(int n);
 
         int GetItemCount() const { return (int)m_Items.size(); }
         const ListBoxItem &GetItem(int index) const { return m_Items[index]; }

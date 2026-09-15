@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "UI/Panel/Panel.h"
 #include "UI/Component/ListBox.h"
 #include "UI/Component/ScrollArea.h"
@@ -61,6 +61,7 @@ namespace X_Y
         bool MatchesKeyword(const LogEntry &e) const;             // 命中任一关键词（OR）即通过
         void RebuildAll();                                        // 全量重建（关键词变 / 数据重置时）
         void IncrementalAppend(uint64_t fromSeq, uint64_t toSeq); // 增量喂新条目
+        void TrimStripe();                                        // 淘汰 stripe 头部，封顶 MAX_ENTRIES
         std::unique_ptr<TextInput> m_KeywordInput;
         std::unique_ptr<TagStrip> m_TagStrip;
         std::unique_ptr<ScrollArea> m_ScrollArea;

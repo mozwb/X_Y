@@ -55,6 +55,48 @@ namespace X_Y
         UpdateHeight();
     }
 
+    // 淘汰最旧的 n 条（从头部删）。
+    //
+    // ⚠️ 关键：必须重置折行游标。m_FoldedCount 是"已惰性折叠到第几条"的游标，
+    //    EnsureFold 只从它往后补算 —— 这个设计【只适用于只增不减】。
+    //    头部一删，所有 item 下标前移，m_Fold[i] 与 m_Items[i] 的对应关系整体错位，
+    //    旧的 m_FoldedCount 就指向了错误的条目。
+    //    ⇒ 统一重置成"全部待重折"（m_FoldedCount=0 + m_LastFoldWidth=-1），
+    //      下一次 OnPaint 的 EnsureFold 会全量重折一次。
+    //
+    // ⚠️ 选中项：删的是头部，选中项下标整体前移 n。
+    //    若选中项本身被删掉（下标 < n），收敛到新的第一项（列表非空时）。
+    void ListBox::RemoveFirst(int n)
+    {
+        if (n <= 0)
+            return;
+        const int count = (int)m_Items.size();
+        if (count == 0)
+            return;
+        if (n > count)
+            n = count;
+
+        m_Items.erase(m_Items.begin(), m_Items.begin() + n);
+        m_Fold.erase(m_Fold.begin(), m_Fold.begin() + n);
+
+        // 选中项跟着平移；被删掉则收敛
+        if (m_SelectedIndex >= 0)
+        {
+            m_SelectedIndex -= n;
+            if (m_SelectedIndex < 0)
+                m_SelectedIndex = m_Items.empty() ? -1 : 0;
+        }
+
+        // 折行缓存整体作废 → 下次 OnPaint 全量重折
+        m_FoldedCount = 0;
+        m_LastFoldWidth = -1;
+        m_Fold.resize(m_Items.size()); // 与新条数对齐（尾部补空占位）
+
+        BuildLineIndex();
+        UpdateHeight();
+        RequestRepaint();
+    }
+
     void ListBox::SetWrapMode(WrapMode mode)
     {
         if (m_WrapMode == mode)

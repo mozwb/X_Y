@@ -62,21 +62,31 @@ namespace X_Y
 
         // ② 回退：新建一个独立窗口收容。
         //    走到这里说明还没人接管，panel 仍在本函数手里。
+        //
+        // ⚠️ 窗口一律 new（约定）：它的回收由 XWidget 收到 WindowDestroy 时
+        //    自动完成（→ Application 延迟回收队列 → ProcessEvents 末尾 flush），
+        //    这里【不要】再手动 delete —— 老代码两处 delete 只销毁了 HWND，
+        //    C++ 对象（含它的 m_Layout→Dock→Panel 整棵树）根本没析构，反而更漏。
         auto *window = new TabContainer();
         window->SetWindowTitle(title);
         window->setSize(700, 500);
 
-        // AddSinglePanel 接管 panel；失败则 panel 被释放，window 也要销毁。
+        // AddSinglePanel 接管 panel；失败则 panel 被释放，窗口也该退场。
         if (!window->AddSinglePanel(panel.release(), title))
         {
-            delete window;
+            // destroy() → DestroyWindow → WM_DESTROY → WindowDestroy 事件
+            // → XWidget 自动登记回收。本函数之后不再碰 window。
+            window->destroy();
             return false;
         }
 
         if (!window->show())
         {
-            delete window; // 窗口销毁 → 其 Dock 释放已接管的 panel
-            return true;   // panel 已被安置（随窗口销毁），不算"没接管"
+            // 窗口没建起来（Create 失败），同样走销毁 → 自动回收。
+            // 此时 panel 已被 window 的 Dock 接管，随窗口一起释放。
+            window->destroy();
+            // panel 已随窗口处置（不算"没接管"），返回 true 与旧语义一致。
+            return true;
         }
 
         window->MoveAndResizePhysical(screenX - 120, screenY - 20, 700, 500);

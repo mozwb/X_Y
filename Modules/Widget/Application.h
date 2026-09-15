@@ -3,6 +3,7 @@
 #include "Movement/Movements.h"
 #include <functional>
 #include <memory>
+#include <vector>
 namespace X_Y
 {
 
@@ -23,11 +24,56 @@ namespace X_Y
         std::unique_ptr<class PlatformLoop> m_PlatformLoop;
         MouseRedirectHandler m_MouseRedirectHandler;
 
+        // ============================================================
+        // 延迟回收队列 —— 通用资源回收（不限于窗口）
+        //
+        // 存的是【回收动作】而不是裸指针：
+        //   void* 会丢掉类型 —— 多态对象（Container 等）用基类指针 delete
+        //   走不到派生析构，是 UB + 泄漏。让每个入队者自己写"怎么释放"，
+        //   通用性就落在"怎么回收"这半上：
+        //     窗口  → [this]{ delete this; }
+        //     句柄  → [h]{ ::CloseHandle(h); }
+        //     GL 对象 → [t]{ glDeleteTextures(1, &t); }
+        //   三者都能进同一个队列，且各自类型安全。
+        //
+        // ⚠️ 为什么需要延迟：
+        //   回收动作往往在【对象自己的回调里】产生（如 WindowDestroy 回调里
+        //   要删掉发事件的窗口）。而此刻 dispatcher 正在遍历绑定表、
+        //   ProcessEvents 还在栈上，全都攥着这个对象的指针 ——
+        //   当场 delete 会立刻 迭代器失效 + UAF。
+        //   ⇒ 只登记动作，等这一轮事件派发彻底结束、没有任何栈帧引用它们了，
+        //     再在安全点统一执行。
+        //
+        // ⚠️ 清理责任：队列【由 FlushDeferredRecycle 自己清空】，
+        //   每轮 ProcessEvents 末尾必定 flush 掉，不存在"残留已完成项"。
+        //   所以它不是一个"待监控对象清单"，无需"对象死了要摘除"的逻辑 ——
+        //   动作执行的瞬间就是对象真正死亡的瞬间（动作即死亡证明）。
+        //
+        // ⚠️ 防重复入队：同一对象入队两次 = flush 时 delete 两遍 = 崩溃。
+        //   窗口侧在 XWidget 里用 m_RecycleQueued 门闩自保（见 XWidget.h）。
+        // ============================================================
+        std::vector<std::function<void()>> m_DeferredRecycle;
+
     public:
         // 1.构造、析构放protected，允许子类继承构造，禁止外部new
         Application(int argc, char *argv[]);
 
         virtual ~Application(); // 2.虚析构，多态析构必备
+
+        // ── 延迟回收：把一个回收动作推迟到本轮事件处理结束后的安全点执行 ──
+        // ⚠️ 只对 new 出来的对象用（动作里通常是 delete）。
+        // ⚠️ 别在回调里直接 delete 自己 —— 用这个入队，别自己动手。
+        void DeferRecycle(std::function<void()> action)
+        {
+            if (action)
+                m_DeferredRecycle.push_back(std::move(action));
+        }
+
+        // 执行并清空队列（在 ProcessEvents 一轮末尾调）。
+        // 内部先 swap 取走再逐个执行：动作本身可能又入队新动作，
+        // 这样不会"自己吃自己"（遍历中往同一容器 push 会迭代器失效）。
+        void FlushDeferredRecycle();
+
         // 消息循环
         virtual void exec();
         virtual void pushEvents();

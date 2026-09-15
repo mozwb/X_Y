@@ -302,6 +302,9 @@ namespace X_Y
                 m_LogStripe->AddItem(e.text.c_str(), e.color, e.bgColor);
         }
         m_RenderedSeq = m_AllEntries.TotalPushed();
+        // 全量重建同样按 MAX_ENTRIES 封顶：队列本身最多 5000 条，
+        // 单关键词去掉筛选后最多也就是 5000 —— 这里主要是语义上的对称保险。
+        TrimStripe();
         RequestRepaint();
     }
 
@@ -318,7 +321,26 @@ namespace X_Y
                 m_LogStripe->AddItem(e.text.c_str(), e.color, e.bgColor);
         }
         m_RenderedSeq = toSeq;
+        TrimStripe();
         RequestRepaint();
+    }
+
+    // 淘汰 stripe 头部多余条目，保持它不超过 MAX_ENTRIES。
+    //
+    // ⚠️ 为什么必须有这个：m_AllEntries（LoopQueue<LogEntry,5000>）是环形的、
+    //    满了自动覆盖最旧 —— 它自己内存恒定。但 m_LogStripe 是 std::vector，
+    //    只加不删：上游封顶、下游不封顶。
+    //    ⇒ 程序开几小时，stripe 累积到几十万条，内存全在这儿；
+    //      且 RebuildAll 全量重建时峰值翻倍 + 明显卡顿。
+    //    MAX_ENTRIES 过去只管住了 m_AllEntries，管不到 stripe —— 这里补上。
+    //
+    // 淘汰放在【关键词过滤之后】：stripe 里存的是"已通过筛选的那部分"，
+    // 所以按 stripe 自己的条数封顶，与 m_AllEntries 的 5000 是两个独立上限。
+    void LogViewer::TrimStripe()
+    {
+        const int overflow = m_LogStripe->GetItemCount() - static_cast<int>(MAX_ENTRIES);
+        if (overflow > 0)
+            m_LogStripe->RemoveFirst(overflow);
     }
 
     // ════════════════════════════════════════════════════════════

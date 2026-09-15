@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "Movement/movements.h"
 #include "Movement/AppMovement.h"
 #include "Application.h"
@@ -63,12 +63,30 @@ namespace X_Y {
         XWidget(const XWidget&) = delete;
         XWidget& operator=(const XWidget&) = delete;
 
+    protected:
+        // ── 窗口原生销毁 → 对象退场（自毁）──
+        // 由构造函数连到 MovementType::WindowDestroy（平台消息泵在 WM_DESTROY
+        // 时发出）。⚠️ 语义放在 XWidget 而不是各平台实现里：
+        //   将来接 X11 / Cocoa，只要它的消息泵也发 WindowDestroy，
+        //   自毁自动生效，不用改任何平台代码。
+        //
+        // ⚠️ 不能当场 delete this：本函数跑在 dispatcher 的绑定遍历中，
+        //    ProcessEvents 也还在栈上，都持有 this。所以只向 Application
+        //    登记一个延迟回收动作，等本轮事件派发结束后的安全点执行。
+        void OnNativeDestroyed();
+
     private:
         XWidget* m_parent = nullptr;
         Scope<GraphicsContext> m_Context;
         const char* m_title = "X_Y";
         WindowStyleFlag m_WindowStyle = WindowStyleFlag::None;
         void* m_ParentHwnd = nullptr;
+
+        // ── 回收门闩：保证同一个对象只被 delete 一次 ──
+        // WindowDestroy 只发一次，正常不会重复入队；但若将来有别的路径也调
+        // OnNativeDestroyed，重复入队的动作会在 flush 时 delete 两遍 → 崩溃。
+        // 这个标志位就是"我已经排过回收队了"的死亡证明。
+        bool m_RecycleQueued = false;
     };
 
 }

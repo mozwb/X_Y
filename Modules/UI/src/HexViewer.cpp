@@ -182,8 +182,8 @@ namespace X_Y
         tab->SetBgColor(0xFF29313A);
         tab->SetHoverColor(0xFF3B4D5E);
         tab->SetTextColor(0xFFE6EDF3);
-        tab->SetOnClose([this, index]()
-                        { m_PendingClose = index; });
+        tab->SetOnClose([this, self = static_cast<Button *>(tab.get())]()
+                        { m_PendingClose.push_back(self); });
         m_FileBar->AddComponent(tab.get());
         m_FileTabs.push_back(std::move(tab));
 
@@ -194,6 +194,10 @@ namespace X_Y
 
     void HexViewer::ClearFiles()
     {
+        // ⚠️ 先清待关闭队列：下面 m_FileTabs.clear() 会把那些 Button 全析构，
+        //    队列里存的裸指针立刻变悬空 → 下次 ProcessPendingClose 就是 UAF。
+        m_PendingClose.clear();
+
         m_Files.clear();
         m_FileTabs.clear();
         m_FileBar->Clear();
@@ -225,10 +229,14 @@ namespace X_Y
         m_FileTabs.erase(m_FileTabs.begin() + index);
         m_Files.erase(m_Files.begin() + index);
 
-        for (std::size_t i = 0; i < m_FileTabs.size(); ++i)
+        // 重挂剩余 tab 的关闭回调。
+        // ⚠️ 与 AddFile 统一用【指针】捕获（不再捕获下标）：下标在"登记 → 结算"
+        //    这段延迟窗口里会过期。指针稳定，结算时反查下标 —— 见 ProcessPendingClose。
+        for (auto &tab : m_FileTabs)
         {
-            m_FileTabs[i]->SetOnClose([this, i]()
-                                      { CloseFile(i); });
+            Button *self = static_cast<Button *>(tab.get());
+            tab->SetOnClose([this, self]()
+                            { m_PendingClose.push_back(self); });
         }
 
         if (m_Files.empty())
@@ -246,12 +254,32 @@ namespace X_Y
 
     void HexViewer::ProcessPendingClose()
     {
-        if (m_PendingClose == static_cast<std::size_t>(-1))
+        if (m_PendingClose.empty())
             return;
 
-        const std::size_t index = m_PendingClose;
-        m_PendingClose = static_cast<std::size_t>(-1);
-        CloseFile(index);
+        // 取走队列（结算过程中可能又有人登记，用 swap 避免自己吃自己）
+        std::vector<Button *> pending;
+        pending.swap(m_PendingClose);
+
+        for (Button *tab : pending)
+        {
+            if (!tab)
+                continue;
+
+            // ★ 按【指针】反查当前下标：登记到现在可能已经增删过文件，
+            //   下标会过期，指针不会。找不到（已被关掉）就跳过。
+            std::size_t index = m_FileTabs.size();
+            for (std::size_t i = 0; i < m_FileTabs.size(); ++i)
+            {
+                if (m_FileTabs[i].get() == tab)
+                {
+                    index = i;
+                    break;
+                }
+            }
+            if (index < m_FileTabs.size())
+                CloseFile(index);
+        }
     }
 
     void HexViewer::OnLayout()
