@@ -8,7 +8,7 @@
 //     那时门面早已就绪。
 // ═════════════════════════════════════════════════════════════════════════════
 
-#include "XMemStats.h"
+#include "../../Memory/XMemStats.h"
 
 #include <sstream>
 

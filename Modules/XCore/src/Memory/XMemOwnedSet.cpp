@@ -11,7 +11,7 @@
 //        扩容是 O(n) 重哈希，但按 2 倍增长摊还后是 O(1)。
 // ═════════════════════════════════════════════════════════════════════════════
 
-#include "XMemOwnedSet.h"
+#include "../../Memory/XMemOwnedSet.h"
 
 #include <cstdlib>
 

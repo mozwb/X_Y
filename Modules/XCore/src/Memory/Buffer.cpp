@@ -1,6 +1,6 @@
-﻿#include "Memory/Buffer.h"
+﻿#include "../../Memory/Buffer.h"
 
-#include "Memory/XMemory.h"
+#include "../../Memory/XMemory.h"
 #include <cstdio>
 #include <limits>
 

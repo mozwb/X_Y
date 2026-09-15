@@ -33,7 +33,7 @@
 //    → 即"覆盖所有 C++ new，不含 C 的裸 malloc"
 // ═════════════════════════════════════════════════════════════════════════════
 
-#include "XMemFacade.h"
+#include "../../Memory/XMemFacade.h"
 
 #include <cstdio>
 #include <cstdlib>

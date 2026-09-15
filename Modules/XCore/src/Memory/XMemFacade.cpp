@@ -16,7 +16,7 @@
 //     那时门面早已就绪，且不在分配路径上。
 // ═════════════════════════════════════════════════════════════════════════════
 
-#include "XMemFacade.h"
+#include "../../Memory/XMemFacade.h"
 
 #include <cstdio>
 #include <cstdlib>
