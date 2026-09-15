@@ -1,5 +1,68 @@
 # DEVLOG
 
+## 2026-09-13 内存模块 ③-a：全局 new 重载 + 三通道 + 策略 + 统计细化（仍未接入构建）
+
+> 承接同日 ②（后端/统计/门面拆分）。本步加上"必经之路"，实现**统计所有分配**。
+
+### 文件（②的三个文件已按砚台命名偏好改名为 `XMem*`）
+
+| 文件 | 状态 | 职责 |
+|------|------|------|
+| `XCore/Memory/XMemTypes.h` | 🏗️ 新 | 公共枚举：`BackendType` / `OOMAction` / `SizeClass` + 分档函数 |
+| `XCore/Memory/XMemBackend.h` | 🔧 改名 | `IMemoryBackend` + `CrtBackend`（原 MemoryBackend.h） |
+| `XCore/Memory/XMemStats.h` | 🔧 改名+扩 | `MemoryCounter` / `MemoryStats` / `BackendStats` / `SizeClassStats` |
+| `XCore/Memory/XMemFacade.h` | 🔧 改名+扩 | 门面 + `OwnedSet` + 策略 + 三通道（原 Memory.h） |
+| `XCore/Memory/XMemGlobalNew.cpp` | 🏗️ 新 | 全局 `operator new/delete` 全套（含 `new[]`、nothrow、sized） |
+| `XCore/Memory/XMemory.h/.cpp` | ⏸️ 未动 | 旧 slab，待迁进 `SlabBackend` |
+
+### 定案：门面的三条通道（砚台拍板）
+
+| 通道 | API | 用途 |
+|------|-----|------|
+| ① 统一兜底 | 全局 `operator new/delete` | **所有** new（含 STL/第三方）必经之路，没人能绕过 |
+| ② 裸内存 | `X_Y::Malloc` / `X_Y::Free` | 替代 C 的 malloc/free（头文件已写醒目警告：**别混用**） |
+| ③ 显式后端 | `X_Y::AllocFrom` / `X_Y::MallocFrom` / `X_Y::NewFrom<Backend, T>` | 单次指定后端，绕过策略 |
+
+### 关键设计（本步新增的部分）
+
+1. **全局 `operator new/delete` 重载**：默认后端 = CRT ⇒ 效果是"标准库堆 + 一层记账"，
+   不是"换掉标准库"。行为对使用者透明，性能损耗 ≈ 一次调用 + 16B 分配头。
+2. **`OwnedSet`（已分配指针表）**：全局 delete 会把**所有**指针送进门面，
+   要安全回答"这指针是不是我发的"**不能读 ptr-16**（外部指针那里可能未映射 → 段错误），
+   故自管一个开放寻址哈希表（线性探测 + 墓碑）。**只用 `::malloc`/`::free`**，守自举铁律。
+3. **开关与释放解耦**：`setEnabled(false)` 只影响**新分配**；释放**永远**交门面判断归属。
+   ⇒ 运行中切换开关**不会**造成"分配走门面、释放走 CRT"的错配。
+4. **策略注入**：`setPolicy([](uint64_t n){ return n<=512 ? Slab : Crt; })`。
+   策略**只影响分配**，释放始终读分配头 ⇒ 随时换策略、永不错配。
+   ⚠️ 策略的 `std::function` 用 `malloc` 手工安置，避开它自身堆分配触发的自举递归。
+5. **`markBaseline()`（统计去皮）**：解决启动期分配（全局对象 / CRT 自身）污染泄漏自检。
+   含**跨基线释放下溢钳制** + `PreBaselineFrees` 计数。
+6. **统计细化到四个维度**：按后端 / 按大小档（新增，为日后定策略提供数据）/ 峰值 / 未释放块。
+
+### 验证（`g++ -std=c++20`，独立编译；按约定未做工程构建）
+
+| 验证项 | 结果 |
+|--------|------|
+| STL 容器是否进门面 | ✅ `vector`/`string`/`map`/`make_unique` 全部被统计（作用域内 `live=103`） |
+| 分配/释放守恒 | ✅ 2000 轮 `new`/`delete` 后 `live=0 owned=0 used=0` |
+| 归属判定 | ✅ 门面指针 `owns=1`；栈指针 `owns=0`（**不解引用 ptr，不崩**） |
+| 构造/析构配对 | ✅ `Allocate<T>`/`Deallocate<T>` 析构确被调用 |
+| `NewFrom<Backend,T>` | ✅ 编译期后端参数，正常构造 |
+| 策略路由 | ✅ `setPolicy` 后按 size 路由（Slab 未接入 → 返 nullptr，不崩） |
+| 开关 | ✅ 关掉后新分配 `owns=0`（走原生）；释放交门面仍安全 |
+| 对齐 | ✅ 满足 `max_align_t`（`Buffer::As<T>` 依赖） |
+
+### 尚未做（下一步）
+
+- **③-b**：`SlabBackend` 迁入（旧 `XMemory.h` 的 slab 实现搬到 `XMemBackend.h`）
+- **④**：UI 四层所有权显式化 `Container⊃Layout⊃Dock⊃Panel⊃Component`（`unique_ptr`，dock 按砚台定案区分内建/动态）
+- **⑤**：`Shutdown()` 与析构分离（治 `LogViewer::~LogViewer` 里 Join 卡死）
+- **⑥**：借用指针断链（`m_MouseCapturePanel` 等）
+- **⚠️ 未接入 CMake**：新文件尚未进构建（`XCore` 用 `file(GLOB)`，下次 configure 时自动纳入）
+- **⚠️ 多线程**：`OwnedSet` 目前无锁，高频多线程分配需分片或加锁（已记 TODO）
+
+> 审计全文见 `_notes/arch/MemoryAudit.md`。
+
 ## 2026-09-13 内存模块拆分 ②：后端 / 统计 / 门面三件套（纯新增，未接入）
 
 > 起因：砚台发现 Widget/UI 里"一堆裸指针但没有清理代码"。审计后确认根因不是漏 delete，

@@ -1,27 +1,29 @@
 #pragma once
 
 // ═════════════════════════════════════════════════════════════════════════════
-//  MemoryBackend.h — 内存后端接口（第 2 步：只做后端）
+//  XMemBackend.h — 内存后端接口
 //
 //  职责边界（重要）：
 //    本文件【只负责"字节从哪来、怎么还"】。
 //    不认识统计、不认识对象构造、不认识 UI。
-//    统计在 MemoryStats.h，门面在 Memory.h。
+//    统计在 XMemStats.h，门面在 XMemFacade.h，公共枚举在 XMemTypes.h。
 //
 //  铁律（改本文件前必读）：
 //    1. 后端内部【只能】使用 ::malloc / ::free（或 OS 原语）拿内存，
-//       绝对不许调用 Memory 门面、更不许用 std::vector / std::string。
-//       理由：门面首次使用时要"懒创建"后端，若后端自己又回调门面，
+//       绝对不许调用门面、更不许用 std::vector / std::string。
+//       理由：门面首次使用时要让后端就位，若后端自己又回调门面，
 //             就是自举递归（bootstrap recursion）→ 死循环 / UB。
 //       将来 SlabBackend 的元数据（chunk 表、free list）也必须走 malloc。
 //    2. 后端不保存任何需要"运行期构造"的全局状态。
 //    3. 每个后端必须能回答 own(ptr)：这个指针是不是我发的？
-//       —— 因为 deallocate(ptr) 不带后端参数，只能靠它判断归属。
+//       —— 供"靠地址判断归属"的实现使用（当前门面走分配头方案）。
 //
 //  当前进度：
 //    ✅ CrtBackend   —— 标准库堆（默认后端，标准库兜底）
-//    ⏳ SlabBackend  —— 待迁移（旧 Memory/XMemory.h 里的 slab 实现搬过来）
+//    ⏳ SlabBackend  —— 待迁移（旧 XMemory.h 里的 slab 实现搬过来）
 // ═════════════════════════════════════════════════════════════════════════════
+
+#include "XMemTypes.h"
 
 #include <cstdint>
 #include <cstddef>
@@ -29,42 +31,6 @@
 
 namespace X_Y
 {
-
-    // ── OOM 处理策略 ─────────────────────────────────────────────────────────
-    // 放在这里（而不是门面）是因为"分配不到内存怎么办"属于分配层策略；
-    // 门面与后端都要引用它，放上游避免循环依赖。
-    // （从旧 XMemory.h 迁来，语义不变）
-    enum class OOMAction
-    {
-        Abort,      // 开发期：超限直接 terminate，尽早暴露问题
-        ReturnNull, // 发布版：超限返回 nullptr，调用方自己处理
-        Expand,     // 调试期：突破预算继续分配，在统计中标记为超限
-    };
-
-    // ── 后端类型标签 ─────────────────────────────────────────────────────────
-    // 用于 allocate(size, type) 选择后端，也是"哪个后端"的可读名字。
-    enum class BackendType : uint8_t
-    {
-        Default = 0, // 走门面配置的默认后端（当前 = Crt）
-        Crt = 1,     // 标准库堆（malloc/free）
-        Slab = 2,    // 预留：自研 slab 分配器（未接入）
-        Count
-    };
-
-    inline const char *BackendName(BackendType t)
-    {
-        switch (t)
-        {
-        case BackendType::Default:
-            return "Default";
-        case BackendType::Crt:
-            return "Crt";
-        case BackendType::Slab:
-            return "Slab";
-        default:
-            return "Unknown";
-        }
-    }
 
     // ── 后端接口 ─────────────────────────────────────────────────────────────
     // 纯抽象：门面持有 IMemoryBackend*，外界永远看不到具体后端。
@@ -108,6 +74,7 @@ namespace X_Y
     //
     // ⚠️ 本后端只用 ::malloc / ::free，且【不保存任何运行期状态】，
     //    因此它是平凡类：可以在静态初始化期安全使用，无自举问题。
+    //    —— 这一点对"全局 operator new 重载"至关重要（见 XMemGlobalNew.cpp）。
     class CrtBackend final : public IMemoryBackend
     {
     public:
