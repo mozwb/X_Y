@@ -537,10 +537,8 @@ namespace X_Y
         // 同宗：新 Dock 记我是它父亲
         newDock->SetDockFather(this);
 
-        // 入布局并重排。
-        // ⚠️ 用 AddOwnedDock：这个 Dock 是本函数 new 出来的，
-        //    所有权交给布局，由布局在析构 / RemoveAndDestroyDock 时释放。
-        m_Layout->AddOwnedDock(newDock);
+        // 入布局并重排。新 Dock 归布局所有（有父 Dock，宗族负责日后归还区域）。
+        m_Layout->AddDock(newDock);
         m_Layout->RecalcLayout();
         RequestRepaint();
         return newDock;
@@ -552,12 +550,12 @@ namespace X_Y
         //
         // ⚠️⚠️ 极其重要：本函数【会销毁 this】。所以：
         //   1. 调用它之后【绝不能再碰 this 的任何成员】（包括调用 RequestRepaint）；
-        //   2. 必须走 RemoveAndDestroyDock —— 它会做三件事：
+        //   2. 走 RemoveDock —— 它会一次性做完三件事：
         //        摘掉布局里指向我的借用指针（m_MouseCaptureDock 等）
         //        → 从 Dock 列表移除
-        //        → 释放我（仅当我是动态 Dock）
-        //      老代码用 RemoveDock 然后"等别人释放"，结果既没人释放（泄漏），
-        //      而且函数继续往下跑就踩到了已失效的 this。
+        //        → 释放我
+        //      老代码用 RemoveDock 之后还继续访问成员（use-after-free），
+        //      而且那时 RemoveDock 只摘不删（额外泄漏）。
         if (!m_Layout || m_MergedBoundaryId == InvalidBoundary)
             return;
 
@@ -581,7 +579,7 @@ namespace X_Y
         }
 
         // 移除并释放自己。⚠️ 这一行之后不能再访问任何成员变量/调用成员函数。
-        layout->RemoveAndDestroyDock(this);
+        layout->RemoveDock(this);
     }
 
     // 内部：不移面板版本（Split 用，用于把活跃面板移到新 Dock）

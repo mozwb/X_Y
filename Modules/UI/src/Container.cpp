@@ -120,45 +120,39 @@ namespace X_Y
 
     Container::~Container()
     {
-        // ⚠️ 顺序很重要：
+        // ⚠️ 顺序：
         //  1. 先断开事件连接（免得析构期间还有回调进来）
-        //  2. 再释放自建布局（m_LayoutOwned 的 unique_ptr 自动做）
+        //  2. 让布局与壳脱钩（清掉指向本壳的重绘回调）
+        //  3. 释放布局（unique_ptr 自动做）
         //
-        // ⚠️ 为什么这里绝对不能 delete m_Layout：
-        //    m_Layout 可能是【外部传入】的（如 test 里栈上的 TopLayout）。
-        //    delete 栈对象 = 立即崩溃。所有权只认 m_LayoutOwned。
+        // ⚠️ 释放布局必须在 disConnect 之后：布局及其 Dock/Panel 的重绘回调
+        //    都捕获了 this（RequestRepaint），壳先死而回调还在就会野指针。
         disConnect(this);
 
-        // 让布局先与壳脱钩（清掉指向本壳的重绘回调），再释放。
         if (m_Layout)
             m_Layout->SetHostRepaint(nullptr);
-        m_Layout = nullptr;
-
-        m_LayoutOwned.reset(); // 只释放自建的；外部传入的天然是 nullptr
+        m_Layout.reset();
     }
 
     void Container::EnsureLayout()
     {
         if (m_Layout)
             return;
-        m_LayoutOwned = std::make_unique<DockLayout>();
-        m_Layout = m_LayoutOwned.get();
+        m_Layout = std::make_unique<DockLayout>();
         m_Layout->SetHostRepaint([this]()
                                  { RequestRepaint(); });
     }
 
     void Container::SetDockLayout(DockLayout *layout)
     {
-        // 若此前有【自建】的布局，先释放（外部传入的不会被删）
-        if (m_LayoutOwned)
+        // 释放此前的布局（若有），并先摘掉指向本壳的回调
+        if (m_Layout)
         {
-            m_LayoutOwned->SetHostRepaint(nullptr);
-            m_LayoutOwned.reset();
+            m_Layout->SetHostRepaint(nullptr);
+            m_Layout.reset();
         }
 
-        // ⚠️ 这里是【借用】：layout 的生命周期由调用方负责
-        //    （可以是栈对象，如 test 里的 TopLayout）。
-        m_Layout = layout;
+        m_Layout.reset(layout); // 接管所有权
         if (m_Layout)
             m_Layout->SetHostRepaint([this]()
                                      { RequestRepaint(); });
@@ -186,11 +180,9 @@ namespace X_Y
         if (!dock)
             return nullptr;
         dock->SetMaxPanelCount(1); // 单面板
-        // ⚠️ 这里 new 出来的 Dock 交给布局接管所有权（AddOwnedDock）。
-        //    不能用 AddDock —— 那是【借用】语义，用于 TopLayout 的值成员；
-        //    用错会导致这个 Dock 永不释放。
-        m_Layout->AddOwnedDock(dock);
-        // 占满布局（DockBind 内部会再调一次 AddDock，已登记故幂等）
+        // 一次到位：DockBind 内部走 AddDock，接管所有权 + 设好四条边界。
+        // （不再先 AddDock 再 DockBind —— 那会重复登记一次，虽被幂等挡住，
+        //   但读起来像是有意为之，实际只是历史遗留。）
         m_Layout->DockBind(*dock, InvalidBoundary, InvalidBoundary,
                            InvalidBoundary, InvalidBoundary);
         return dock->AddPanel(panel, title);

@@ -28,19 +28,12 @@ namespace X_Y
     // Container 自身【不再管理组件】——组件只能在 Panel 里。DockLayout/Dock 也只
     // 是宿主，不含组件。HexViewer/LogViewer 等旧 composite 后续迁到 Panel 形态。
     //
-    // ── ⚠️ 所有权模型（2026-09-13 显式化，改代码前必读）──
+    // ── ⚠️ 所有权模型（2026-09-13，改代码前必读）──
     //
-    //   DockLayout 有两种来源，必须分清：
-    //
-    //   ① 自建（拥有）—— AddSinglePanel 里 EnsureLayout() new 出来的。
-    //      存在 m_LayoutOwned 里，Container 析构时自动释放。
-    //
-    //   ② 外部传入（借用）—— SetDockLayout(&externalLayout) 传进来的。
-    //      典型：test/src/main.cpp 传的是【栈上】的 TopLayout。
-    //      Container 绝不能 delete 它，它由调用方管理。
-    //
-    //   区分由 m_LayoutOwned 是否为空来表达 —— 而不是原来那个
-    //   m_OwnLayout 布尔标志（标志与实际状态可能不一致，unique_ptr 不会）。
+    //   【一窗口一 layout】：Container 拥有唯一一个 DockLayout。
+    //   TopLayout 只是 DockLayout 的便利子类（预设五区域），
+    //   它【就是这个窗口的 layout】，不是"外部传进来的第三方对象"。
+    //   所以这里只有一个 unique_ptr，没有"自建/外部"之分。
     // ─────────────────────────────────────────────────────────────
     class Container : public XWidget
     {
@@ -49,8 +42,7 @@ namespace X_Y
         ~Container() override;
 
         // ── 统一模型：总是挂一个纯逻辑 DockLayout ──
-        // ⚠️ 传入的 layout 是【借用】：Container 不接管所有权（可以是栈对象）。
-        //    若此前有自建的布局，会先被释放。
+        // ⚠️ 接管所有权：传入的 layout 由本壳负责释放。
         virtual void SetDockLayout(DockLayout *layout); // 复杂场景：塞整个布局
 
         // 便捷：一行造一个"单面板工具窗"。内部自动 DockLayout → Dock → Panel。
@@ -58,7 +50,7 @@ namespace X_Y
         //    调用方不要再 delete 它。
         virtual Panel *AddSinglePanel(Panel *panel, const std::string &title = "");
 
-        DockLayout *GetDockLayout() const { return m_Layout; }
+        DockLayout *GetDockLayout() const { return m_Layout.get(); }
 
         // 让渡：把一个 Panel 交出去（拖进别的 Dock / 摘成独立窗）
         // 从本壳的 DockLayout 里脱出，返回 panel；调用方随后接管所有权。
@@ -78,13 +70,8 @@ namespace X_Y
         void OnWindowResize();
         void EnsureLayout(); // 懒建默认 DockLayout
 
-        // ⚠️ 两个成员语义不同，别混：
-        //   m_LayoutOwned —— 我 new 的布局（独占；析构自动释放）
-        //   m_Layout      —— 借用指针，永远指向"当前生效的布局"
-        //                    （要么是 m_LayoutOwned.get()，要么是外部传进来的）
-        //   这样外部传入的栈对象布局不会被误删，自建的也不会泄漏。
-        std::unique_ptr<DockLayout> m_LayoutOwned;
-        DockLayout *m_Layout = nullptr;
+        // ★ 拥有：本壳唯一的布局。析构自动释放。
+        std::unique_ptr<DockLayout> m_Layout;
     };
 
 } // namespace X_Y

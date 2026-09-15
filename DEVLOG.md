@@ -1,5 +1,79 @@
 # DEVLOG
 
+## 2026-09-13 UI 所有权显式化（④ 修正：模型定了，我上一条写错了）
+
+> ⚠️ **本条修正同日上一条 ④ 的所有权模型描述。** 我上一轮照着自己臆想的 UML 图
+> 改了代码，引入了根本不存在的"借用 layout / 借用 dock"概念。砚台指出后重做。
+
+### 我错在哪（记下来，免得再犯）
+
+| 我臆想的 | 实际 |
+|---|---|
+| `TopLayout` 是"外部传进来的栈对象" → Container 只能**借用**它 | `TopLayout` 是 `DockLayout` 的**便利子类，它就是这个窗口的 layout**（一窗口一 layout） |
+| Dock 分"内建（借用）/动态（拥有）"，要两套列表 | Dock **全部归 layout**，不分来源 |
+| `Container` 需要 `m_LayoutOwned` + 借用 `m_Layout` 两个成员 | 只需要一个 `unique_ptr<DockLayout>` |
+
+**根因**：把"谁拥有"和"谁在管布局"混成一件事，于是造出多余的抽象。
+
+### 正确模型（砚台确认）
+
+```
+窗口 (Container)
+  └── 一个 DockLayout                ← 一窗口一 layout，唯一
+        ├── 无宗 Dock（初始五区域）    ┐ 全部归 layout，无借用概念
+        └── 有父 Dock（Split 切出）    ┘ （区别只在"相对位置固定 / 归还方式"）
+              └── Panel               ← 唯一会"搬家"的东西
+```
+
+- **Dock 不会搬家**（只在宗族内 Split/Merge），所以 Dock 层不存在借用。
+- **只有 Panel 会转移**（在 Dock 之间拖拽）→ **借用只存在于 Panel 这一层**。
+- 无宗 Dock = 窗口最初始的区域划分，相对位置不可变更。
+- 有父 Dock 由 `DockFather` 记录宗族；归还由宗族处理（`Merge`，已实现，本次未动逻辑）。
+
+### 本次改动
+
+| 文件 | 从（我上一轮写错的） | 到（正确模型） |
+|------|---------------------|---------------|
+| `DockLayout` | `m_Docks`（借用）+ `m_OwnedDocks`（拥有） | `m_OwnedDocks`（全拥有）+ `m_Docks`（借用视图） |
+| `DockLayout` | `AddDock`（借用）/ `AddOwnedDock`（拥有）两个入口 | **统一 `AddDock`（接管所有权）**；删 `AddOwnedDock` |
+| `DockLayout` | `RemoveDock`（只摘）+ `RemoveAndDestroyDock`（摘+删） | **统一 `RemoveDock`（摘 + 释放）**；删 `RemoveAndDestroyDock` |
+| `Container` | `unique_ptr m_LayoutOwned` + 借用 `m_Layout` | **单个 `unique_ptr<DockLayout> m_Layout`** |
+| `TopLayout` | 五个 `TabDock` **值成员** | 五个 `new TabDock()`，**所有权归基类**；成员改指针（借用视图），`TopDock()` 返回引用 |
+| `Container::AddSinglePanel` | `AddDock` 后再 `DockBind`（重复登记） | 只调 `DockBind`（内部走 AddDock，一次到位） |
+
+### 保留的上轮修复（这些是真 BUG，与模型无关）
+
+- **`Dock::Merge()` 自毁后继续访问 `this`**：老代码 `RemoveDock(this)` 后又调
+  `RequestRepaint()`（访问成员），而注释说"随后由布局释放"却没人释放
+  —— use-after-free + 泄漏。现在先抄下 `layout` 指针，最后一行 `RemoveDock(this)`，
+  并注明此后不得再碰任何成员。
+- **借用指针断链**：`Dock::TakeEntry` 清 `m_MouseCapturePanel`；
+  `TabDock::DropPanel` 在 `DetachPanel` 后立刻 `ResetPanelDrag`；
+  `Panel::RemoveComponent` 先断焦点/拖拽目标再释放；
+  `DockLayout::RemoveDock` 清 `m_MouseCaptureDock` / `m_FileDropPanel`。
+- **`Dock::TakeEntry`**：三处重复的下标维护收敛成一份。
+
+### 验证
+
+- **20 个 UI 源文件全部编译通过**（含 imgui 两个）
+- 运行时（独立测试程序）：
+  | 场景 | 结果 |
+  |------|------|
+  | layout 析构释放全部 Dock | ✅ `dockDead=2` |
+  | **`TopLayout` 五个区域 Dock 由 layout 释放** | ✅ 全局 new/delete 计数 **`net=0`**（无泄漏） |
+  | `Dock` / `TabDock` 有虚析构，经基类指针 delete 正确 | ✅ `has_virtual_destructor = 1` |
+  | Dock 析构释放全部 Panel | ✅ `panelDead=2` |
+  | Panel 跨 Dock 转移 | ✅ `panelDead=1`（恰好一次，无双重释放） |
+  | Panel 拥有 Component | ✅ 无泄漏 |
+
+### ⚠️ 破坏性变更（需同步）
+
+- `test/src/main.cpp`：`TopLayout topLayout;` 是**栈对象** + `SetDockLayout(&topLayout)`，
+  现在 `SetDockLayout` **接管所有权**、`Container` 析构会 `delete` 它
+  → **栈对象被 delete，会崩**。该文件在 `D:\workbench\test`（不在本仓库），未改。
+  正确写法：`topWindow.SetDockLayout(new X_Y::TopLayout());`
+- 同文件结尾的 `delete logViewer; delete hexViewer;` 也是**双重释放**（所有权已归 Dock）。
+
 ## 2026-09-13 UI 所有权显式化（④：Container ⊃ Layout ⊃ Dock ⊃ Panel ⊃ Component）
 
 > 承接内存审计（`_notes/arch/MemoryAudit.md`）。审计结论：UI 的隐患根因不是"漏了 delete"，
