@@ -1,5 +1,67 @@
 # DEVLOG
 
+## 2026-09-13 内存模块拆分 ②：后端 / 统计 / 门面三件套（纯新增，未接入）
+
+> 起因：砚台发现 Widget/UI 里"一堆裸指针但没有清理代码"。审计后确认根因不是漏 delete，
+> 而是**所有权从未在代码里落地**；同时决定先把 Memory 模块拆开（本文），再补所有权（后续）。
+
+### 本次范围（只做 ②，不碰 UI、不碰旧 XMemory.h）
+
+| 文件 | 状态 | 职责 |
+|------|------|------|
+| `XCore/Memory/MemoryBackend.h` | 🏗️ 新 | 后端接口 `IMemoryBackend` + `CrtBackend`（默认后端，标准库兜底） |
+| `XCore/Memory/MemoryStats.h` | 🏗️ 新 | 统计独立：`MemoryCounter`（活计数器）+ `MemoryStats`（只读快照） |
+| `XCore/Memory/Memory.h` | 🏗️ 新 | 门面：外界唯一入口，分配头 + 后端选择 + 记账 |
+| `XCore/Memory/XMemory.h` / `.cpp` | ⏸️ 未动 | 旧 slab 实现原样保留，待迁进 `SlabBackend` |
+
+### 关键设计决定（砚台拍板）
+
+1. **分配 ≠ 所有权**：`Memory` 只管"字节从哪来"，不负责"谁在何时调析构"。
+   所有权交给 `unique_ptr`（后续 ③）。上层因此**不负责分配**，只负责构造对象。
+2. **默认后端 = CRT（标准库兜底）**：不抢全局堆。自研 slab 只在热点按需启用，
+   效果不好随时切回 —— 打消"怕自己写的不如标准库""怕断了别人用标准库的路"两个顾虑。
+3. **不做全局 `operator new` 重载**（风险太高）；改由 UI 四层**类作用域**重载（后续 ③/④）。
+4. **分配头（`AllocHeader`）方案**：`delete p` 时语言**不传回**构造参数，
+   所以"该还给哪个后端"必须记在指针前面。这解决混用：**分配时选后端，释放时不用记**。
+5. **门面必须平凡（POD）**：只持指针 + 固定数组，无需分配成员 → 静态初始化期安全，
+   不存在构造顺序问题。后端/统计器懒就位，均为零堆分配。
+6. **自举铁律**：后端与统计器内部**只用 `::malloc`/`::free`**，绝不回调门面，否则首次
+   `allocate` 死循环。
+7. **命名贴 STL**（砚台偏好，降低学习成本）：
+   `allocate` / `deallocate` / `Allocate<T>` / `Deallocate<T>`；
+   旧名 `Alloc` / `Free` / `AllocT` / `FreeT` **保留为 inline 转发**，现有调用点零改动。
+8. **统计分维度**：`UsedBytes`（验收泄漏看这个）≠ `Capacity`（池容量，不归零正常）
+   ≠ `Overhead`（header/元数据）；且**按后端分开记**。
+
+### 顺带查出的旧 BUG（本次未修，待迁 SlabBackend 时处理）
+
+- 旧 `XMemory.cpp` 的 `Free()`：>64KB 的大块走 `std::free(ptr)` 后
+  **没有扣减 `m_UsedBytes` / `m_UsedCapacity`**（`malloc` 指针无法反查大小），
+  于是大块分配的**计数只增不减** —— 计数器层面的"泄漏"。
+  新门面用 header 记录 size，已从根上解决。
+
+### 验证
+
+按约定琉璃不编译工程，但新文件**未接入构建**，故对三个新头文件做了独立语法/运行自检：
+
+- `g++ -std=c++20 -fsyntax-only` → exit 0
+- 运行自检覆盖：旧名兼容、显式后端、`Allocate<T>/Deallocate<T>`（析构确被调用 1 次）、
+  对齐满足 `max_align_t`（Buffer 的 `reinterpret_cast<T*>` 依赖它）、
+  100 轮分配/释放后 `live=0 / used=0`、门面与 CRT `new` 混用互不干扰、
+  误传外部指针被 magic 挡下（不崩、不破坏别的堆）
+- 输出确认：`live=0 leaks=0`、`used=0`、`overhead=2640 allocs=165 frees=165`（守恒）
+
+### 下一步（待办）
+
+- **③**：给 UI 四层加类作用域 `operator new/delete`，接到门面上（`static constexpr kBackend` 形态）
+- **④**：所有权显式化 `Container⊃Layout⊃Dock⊃Panel⊃Component`（`unique_ptr`），
+  按砚台定案：(b) 区分内建 dock / 动态 dock
+- **⑤**：`Shutdown()` 与析构分离（治 `LogViewer::~LogViewer` 里 Join 卡死）
+- **⑥**：借用指针断链（`m_MouseCapturePanel` 等）
+- **⑦**：`SlabBackend` 迁入 + `Buffer` 适配（当前 `Buffer` 走旧名转发即可，无需改）
+
+> 审计全文见 `_notes/arch/MemoryAudit.md`。
+
 ## 2026-09-12 — UI 坐标体系统一（修正非顶部 Dock 的 Panel 绘制错位）
 
 > 砚台报的 bug：TabHostContainer 里把 Panel 拖进**除 TopDock 以外的** Dock 会错位，
