@@ -1,7 +1,7 @@
 #pragma once
 
 // ═════════════════════════════════════════════════════════════════════════════
-//  XMemStats.h — 内存统计
+//  XMemStats.h — 内存统计（声明）
 //
 //  职责边界（重要）：
 //    本文件【只记账】，不认识后端、不认识分配、不认识对象。
@@ -9,6 +9,7 @@
 //      onAllocate(size, backend)   —— 有人分配了，记一笔
 //      onDeallocate(size, backend) —— 有人释放了，销一笔
 //    内存从哪来、怎么还，全是 XMemBackend.h 的事。
+//    实现见 XMemStats.cpp。
 //
 //  三个必须分清的数字（别混成一个，这是验收泄漏的关键）：
 //    UsedBytes  用户用量：真正 allocate 出去的字节。
@@ -33,7 +34,6 @@
 #include <atomic>
 #include <cstdint>
 #include <string>
-#include <sstream>
 
 namespace X_Y
 {
@@ -58,10 +58,10 @@ namespace X_Y
     struct SizeClassStats
     {
         SizeClass Class = SizeClass::Tiny;
-        uint64_t AllocCount = 0;    // 该区间累计分配次数
-        uint64_t FreeCount = 0;     // 该区间累计释放次数
-        uint64_t CurrentBytes = 0;  // 该区间当前占用字节
-        uint64_t PeakBytes = 0;     // 该区间峰值占用字节
+        uint64_t AllocCount = 0;   // 该区间累计分配次数
+        uint64_t FreeCount = 0;    // 该区间累计释放次数
+        uint64_t CurrentBytes = 0; // 该区间当前占用字节
+        uint64_t PeakBytes = 0;    // 该区间峰值占用字节
     };
 
     // ── MemoryStats：只读快照（POD，与 Counter 分离）──────────────────────
@@ -79,9 +79,9 @@ namespace X_Y
 
         // ── 基线（可选）：调过 markBaseline() 后，上面各值已是"相对基线"的 ──
         bool HasBaseline = false;
-        uint64_t EarlyAllocs = 0;         // 基线之前发生的分配次数（开机成本）
-        uint64_t PreBaselineFrees = 0;    // 跨基线释放次数（会导致基线前内存被回收）
-        uint64_t BaselineUsedBytes = 0;   // 基线当时的累计用量
+        uint64_t EarlyAllocs = 0;       // 基线之前发生的分配次数（开机成本）
+        uint64_t PreBaselineFrees = 0;  // 跨基线释放次数（基线前内存被回收）
+        uint64_t BaselineUsedBytes = 0; // 基线当时的累计用量
 
         BackendStats Backends[static_cast<uint32_t>(BackendType::Count)];
         SizeClassStats SizeClasses[static_cast<uint32_t>(SizeClass::Count)];
@@ -104,102 +104,42 @@ namespace X_Y
     // ── MemoryCounter：统计器 ───────────────────────────────────────────────
     // 线程安全（原子计数）。★ 自身零堆分配（固定数组 + 原子），
     // 因此可以在自举期（门面首次 allocate）安全使用，不会递归。
+    //
+    // 声明与实现分离：所有方法在 XMemStats.cpp。
     class MemoryCounter
     {
     public:
+        MemoryCounter() = default;
+
+        MemoryCounter(const MemoryCounter &) = delete;
+        MemoryCounter &operator=(const MemoryCounter &) = delete;
+
         // ── 记账（门面在 allocate/deallocate 成功后调用）──
         // size 传【用户请求的字节数】，不是后端块大小。
-        void onAllocate(uint64_t size, BackendType backend)
-        {
-            slotOf(backend).UsedBytes.fetch_add(size, std::memory_order_relaxed);
-            slotOf(backend).AllocCount.fetch_add(1, std::memory_order_relaxed);
-            m_TotalAllocs.fetch_add(1, std::memory_order_relaxed);
-            m_UsedTotal.fetch_add(size, std::memory_order_relaxed);
-
-            // 大小档维度（定策略的数据依据）
-            SizeSlot &sc = sizeSlotOf(ClassifySize(size));
-            sc.AllocCount.fetch_add(1, std::memory_order_relaxed);
-            const uint64_t curBytes =
-                sc.CurrentBytes.fetch_add(size, std::memory_order_relaxed) + size;
-            uint64_t scPeak = sc.PeakBytes.load(std::memory_order_relaxed);
-            while (curBytes > scPeak &&
-                   !sc.PeakBytes.compare_exchange_weak(scPeak, curBytes,
-                                                       std::memory_order_relaxed))
-                ;
-
-            // peak：只在总量上记（比较交换，容忍竞态下轻微低估）
-            uint64_t cur = m_UsedTotal.load(std::memory_order_relaxed);
-            uint64_t peak = m_PeakTotal.load(std::memory_order_relaxed);
-            while (cur > peak &&
-                   !m_PeakTotal.compare_exchange_weak(peak, cur,
-                                                      std::memory_order_relaxed))
-                ;
-        }
-
-        void onDeallocate(uint64_t size, BackendType backend)
-        {
-            slotOf(backend).UsedBytes.fetch_sub(size, std::memory_order_relaxed);
-            slotOf(backend).FreeCount.fetch_add(1, std::memory_order_relaxed);
-            m_TotalFrees.fetch_add(1, std::memory_order_relaxed);
-            m_UsedTotal.fetch_sub(size, std::memory_order_relaxed);
-
-            SizeSlot &sc = sizeSlotOf(ClassifySize(size));
-            sc.FreeCount.fetch_add(1, std::memory_order_relaxed);
-            // 钳制：跨基线/异常情况下不让它下溢成天文数字
-            uint64_t cur = sc.CurrentBytes.load(std::memory_order_relaxed);
-            sc.CurrentBytes.store(cur > size ? cur - size : 0,
-                                  std::memory_order_relaxed);
-        }
+        void onAllocate(uint64_t size, BackendType backend);
+        void onDeallocate(uint64_t size, BackendType backend);
 
         // 后端容量上报（后端扩容时调；不可知的后端不调）
-        void onCapacityChange(uint64_t capacity, BackendType backend)
-        {
-            slotOf(backend).CapacityBytes.store(capacity, std::memory_order_relaxed);
-        }
+        void onCapacityChange(uint64_t capacity, BackendType backend);
 
-        void onOverhead(uint64_t bytes) // header / 元数据
-        {
-            m_Overhead.fetch_add(bytes, std::memory_order_relaxed);
-        }
+        void onOverhead(uint64_t bytes); // header / 元数据
+        void onOOM();
 
-        void onOOM() { m_OOMCount.fetch_add(1, std::memory_order_relaxed); }
+        // ── 读取（绝对累计值，不含基线偏移）──
+        uint64_t UsedBytes() const;
+        uint64_t PeakBytes() const;
+        uint64_t OverheadBytes() const;
+        uint64_t TotalAllocs() const;
+        uint64_t TotalFrees() const;
+        uint64_t OOMCount() const;
 
-        // ── 读取 ──
-        uint64_t UsedBytes() const { return m_UsedTotal.load(std::memory_order_relaxed); }
-        uint64_t PeakBytes() const { return m_PeakTotal.load(std::memory_order_relaxed); }
-        uint64_t OverheadBytes() const { return m_Overhead.load(std::memory_order_relaxed); }
-        uint64_t TotalAllocs() const { return m_TotalAllocs.load(std::memory_order_relaxed); }
-        uint64_t TotalFrees() const { return m_TotalFrees.load(std::memory_order_relaxed); }
-        uint64_t OOMCount() const { return m_OOMCount.load(std::memory_order_relaxed); }
+        BackendStats Get(BackendType t) const;
+        SizeClassStats Get(SizeClass c) const;
 
-        BackendStats Get(BackendType t) const
-        {
-            BackendStats s;
-            const Slot &slot = slotOf(t);
-            s.UsedBytes = slot.UsedBytes.load(std::memory_order_relaxed);
-            s.CapacityBytes = slot.CapacityBytes.load(std::memory_order_relaxed);
-            s.AllocCount = slot.AllocCount.load(std::memory_order_relaxed);
-            s.FreeCount = slot.FreeCount.load(std::memory_order_relaxed);
-            s.LiveCount = s.AllocCount - s.FreeCount;
-            return s;
-        }
+        // 未释放块总数（绝对；>0 说明有对象没回收）
+        uint64_t LiveBlocks() const;
 
-        // 未释放块总数（>0 说明有对象没回收）
-        uint64_t LiveBlocks() const
-        {
-            uint64_t blocks = 0;
-            for (uint32_t i = 0; i < kSlots; ++i)
-            {
-                const Slot &slot = m_Slots[i];
-                blocks += slot.AllocCount.load(std::memory_order_relaxed) -
-                          slot.FreeCount.load(std::memory_order_relaxed);
-            }
-            return blocks;
-        }
-
-        // ═════════════════════════════════════════════════════════════════════
-        //  基线（统计零点校准 / "去皮"）
-        // ═════════════════════════════════════════════════════════════════════
+        // ── 基线（统计零点校准 / "去皮"）──
         // 为什么需要：全局 operator new 重载后，程序启动期的分配（全局对象、
         // CRT 自身的环境/locale/stdio 缓冲）也会被统计进来，导致
         //   - main 刚进去 UsedBytes 就不是 0（懵）
@@ -207,177 +147,33 @@ namespace X_Y
         // 解法：在 main 开头调一次 markBaseline()，之后所有读取都减去基线。
         //
         // ⚠️ 基线【只影响读取】，不影响分配行为。
-        // ⚠️ 跨基线释放（基线前分配、基线后释放）会做钳制，不让数字下溢；
-        //    同时记 PreBaselineFrees 让你知道发生过这种情况。
-        void markBaseline()
-        {
-            m_BaselineUsed = m_UsedTotal.load(std::memory_order_relaxed);
-            m_BaselineAllocs = m_TotalAllocs.load(std::memory_order_relaxed);
-            m_BaselineFrees = m_TotalFrees.load(std::memory_order_relaxed);
-            m_BaselinePeak = m_PeakTotal.load(std::memory_order_relaxed);
-            m_EarlyAllocs = m_BaselineAllocs;
-            m_HasBaseline.store(true, std::memory_order_relaxed);
-        }
+        // ⚠️ 跨基线释放（基线前分配、基线后释放）会做钳制，不让数字下溢。
+        void markBaseline();
+        void clearBaseline();
+        bool hasBaseline() const;
 
-        bool hasBaseline() const { return m_HasBaseline.load(std::memory_order_relaxed); }
+        // ── 基线相对读取 ──
+        uint64_t UsedBytesRelative() const;
+        uint64_t PeakBytesRelative() const;
+        uint64_t LiveBlocksRelative() const;
 
-        void clearBaseline() { m_HasBaseline.store(false, std::memory_order_relaxed); }
+        uint64_t EarlyAllocs() const;
+        uint64_t PreBaselineFrees() const;
 
-        // ── 基线相对读取（供门面 stats() 用）──
-        uint64_t UsedBytesRelative() const
-        {
-            const uint64_t now = m_UsedTotal.load(std::memory_order_relaxed);
-            if (!hasBaseline())
-                return now;
-            return now > m_BaselineUsed ? now - m_BaselineUsed : 0; // 钳到下溢
-        }
-
-        uint64_t PeakBytesRelative() const
-        {
-            const uint64_t now = m_PeakTotal.load(std::memory_order_relaxed);
-            if (!hasBaseline())
-                return now;
-            return now > m_BaselinePeak ? now - m_BaselinePeak : 0;
-        }
-
-        uint64_t LiveBlocksRelative() const
-        {
-            const uint64_t allocs = m_TotalAllocs.load(std::memory_order_relaxed);
-            const uint64_t frees = m_TotalFrees.load(std::memory_order_relaxed);
-            if (!hasBaseline())
-                return allocs - frees;
-            // 跨基线释放会让 (allocs - allocs0) < (frees - frees0)，
-            // 此时按 0 处理并单独计数，避免出现天文数字。
-            const uint64_t dAllocs = allocs - m_BaselineAllocs;
-            const uint64_t dFrees = frees - m_BaselineFrees;
-            return dAllocs > dFrees ? dAllocs - dFrees : 0;
-        }
-
-        uint64_t EarlyAllocs() const { return m_EarlyAllocs; }
-
-        uint64_t PreBaselineFrees() const
-        {
-            if (!hasBaseline())
-                return 0;
-            const uint64_t frees = m_TotalFrees.load(std::memory_order_relaxed);
-            const uint64_t dAllocs = m_TotalAllocs.load(std::memory_order_relaxed) -
-                                     m_BaselineAllocs;
-            const uint64_t dFrees = frees - m_BaselineFrees;
-            return dFrees > dAllocs ? dFrees - dAllocs : 0;
-        }
-
-        // ── 快照：拍下当前状态成 POD，之后可自由传阅 ──
-        MemoryStats Snapshot() const
-        {
-            MemoryStats s;
-            s.UsedBytes = UsedBytesRelative();
-            s.PeakBytes = PeakBytesRelative();
-            s.OverheadBytes = OverheadBytes();
-            s.TotalAllocs = TotalAllocs();
-            s.TotalFrees = TotalFrees();
-            s.LiveBlocks = LiveBlocksRelative();
-            s.OOMCount = OOMCount();
-
-            s.HasBaseline = hasBaseline();
-            s.EarlyAllocs = m_EarlyAllocs;
-            s.PreBaselineFrees = PreBaselineFrees();
-            s.BaselineUsedBytes = m_BaselineUsed;
-
-            for (uint32_t i = 0; i < kSlots; ++i)
-                s.Backends[i] = Get(static_cast<BackendType>(i));
-            for (uint32_t i = 0; i < kSizeSlots; ++i)
-                s.SizeClasses[i] = getSizeClass(static_cast<SizeClass>(i));
-            return s;
-        }
-
-        void Reset()
-        {
-            for (uint32_t i = 0; i < kSlots; ++i)
-            {
-                Slot &slot = m_Slots[i];
-                slot.UsedBytes.store(0, std::memory_order_relaxed);
-                slot.CapacityBytes.store(0, std::memory_order_relaxed);
-                slot.AllocCount.store(0, std::memory_order_relaxed);
-                slot.FreeCount.store(0, std::memory_order_relaxed);
-            }
-            for (uint32_t i = 0; i < kSizeSlots; ++i)
-            {
-                SizeSlot &sc = m_SizeSlots[i];
-                sc.AllocCount.store(0, std::memory_order_relaxed);
-                sc.FreeCount.store(0, std::memory_order_relaxed);
-                sc.CurrentBytes.store(0, std::memory_order_relaxed);
-                sc.PeakBytes.store(0, std::memory_order_relaxed);
-            }
-            m_UsedTotal.store(0, std::memory_order_relaxed);
-            m_PeakTotal.store(0, std::memory_order_relaxed);
-            m_Overhead.store(0, std::memory_order_relaxed);
-            m_TotalAllocs.store(0, std::memory_order_relaxed);
-            m_TotalFrees.store(0, std::memory_order_relaxed);
-            m_OOMCount.store(0, std::memory_order_relaxed);
-            m_HasBaseline.store(false, std::memory_order_relaxed);
-            m_EarlyAllocs = 0;
-            m_BaselineUsed = 0;
-            m_BaselinePeak = 0;
-            m_BaselineAllocs = 0;
-            m_BaselineFrees = 0;
-        }
-
-        std::string ToString() const
-        {
-            std::ostringstream oss;
-            oss << "=== Memory Stats ===\n";
-            if (hasBaseline())
-            {
-                oss << "(baseline applied; early allocs before baseline = "
-                    << m_EarlyAllocs << ")\n";
-            }
-            oss << "Used:     " << UsedBytesRelative() << " bytes\n";
-            oss << "Peak:     " << PeakBytesRelative() << " bytes\n";
-            oss << "Overhead: " << OverheadBytes() << " bytes\n";
-            oss << "Allocs:   " << TotalAllocs() << "  Frees: " << TotalFrees() << "\n";
-            oss << "Live:     " << LiveBlocksRelative() << " blocks\n";
-            if (hasBaseline() && PreBaselineFrees() > 0)
-                oss << "PreBaselineFrees: " << PreBaselineFrees() << "\n";
-            oss << "OOM:      " << OOMCount() << "\n";
-
-            oss << "-- per backend --\n";
-            const BackendType kinds[] = {BackendType::Default, BackendType::Crt,
-                                         BackendType::Slab};
-            for (BackendType t : kinds)
-            {
-                const BackendStats s = Get(t);
-                if (s.AllocCount == 0 && s.CapacityBytes == 0)
-                    continue;
-                oss << "  " << BackendName(t) << ": used=" << s.UsedBytes
-                    << " cap=" << s.CapacityBytes
-                    << " alloc=" << s.AllocCount << " free=" << s.FreeCount
-                    << " live=" << s.LiveCount << "\n";
-            }
-
-            // 大小档：定策略的数据依据（看程序到底在分配什么尺寸）
-            oss << "-- by size class (alloc count) --\n";
-            for (uint32_t i = 0; i < kSizeSlots; ++i)
-            {
-                const SizeClassStats sc = getSizeClass(static_cast<SizeClass>(i));
-                if (sc.AllocCount == 0)
-                    continue;
-                oss << "  " << SizeClassName(sc.Class) << ": alloc=" << sc.AllocCount
-                    << " free=" << sc.FreeCount
-                    << " cur=" << sc.CurrentBytes << " peak=" << sc.PeakBytes << "\n";
-            }
-            oss << "=====================\n";
-            return oss.str();
-        }
+        // ── 快照 / 重置 / 打印 ──
+        MemoryStats Snapshot() const;
+        void Reset();
+        std::string ToString() const;
 
     private:
-        // 槽位按 BackendType 大小固定开。用固定数组而非 vector，
+        // 槽位按枚举大小固定开。用固定数组而非 vector，
         // 保证统计器本身零堆分配 —— 它要在自举期就能用。
         static constexpr uint32_t kSlots = static_cast<uint32_t>(BackendType::Count);
         static constexpr uint32_t kSizeSlots = static_cast<uint32_t>(SizeClass::Count);
 
         // ⚠️ Slot 是嵌套类型，所以下面的访问器【不能】也叫 Slot()：
         //    类作用域内 Slot 会先解析成函数名 → "Slot does not name a type"。
-        //    故访问器取名 slotOf。
+        //    故访问器取名 slotOf / sizeSlotOf。
         struct Slot
         {
             std::atomic<uint64_t> UsedBytes{0};
@@ -386,7 +182,6 @@ namespace X_Y
             std::atomic<uint64_t> FreeCount{0};
         };
 
-        // 大小档计数（同上，访问器叫 sizeSlotOf 避免同名冲突）
         struct SizeSlot
         {
             std::atomic<uint64_t> AllocCount{0};
@@ -395,35 +190,14 @@ namespace X_Y
             std::atomic<uint64_t> PeakBytes{0};
         };
 
-        static uint32_t Idx(BackendType t)
-        {
-            const uint32_t i = static_cast<uint32_t>(t);
-            return i < kSlots ? i : 0;
-        }
-
-        static uint32_t SizeIdx(SizeClass c)
-        {
-            const uint32_t i = static_cast<uint32_t>(c);
-            return i < kSizeSlots ? i : 0;
-        }
+        static uint32_t Idx(BackendType t);
+        static uint32_t SizeIdx(SizeClass c);
 
         Slot &slotOf(BackendType t) { return m_Slots[Idx(t)]; }
         const Slot &slotOf(BackendType t) const { return m_Slots[Idx(t)]; }
 
         SizeSlot &sizeSlotOf(SizeClass c) { return m_SizeSlots[SizeIdx(c)]; }
         const SizeSlot &sizeSlotOf(SizeClass c) const { return m_SizeSlots[SizeIdx(c)]; }
-
-        SizeClassStats getSizeClass(SizeClass c) const
-        {
-            SizeClassStats s;
-            const SizeSlot &slot = sizeSlotOf(c);
-            s.Class = c;
-            s.AllocCount = slot.AllocCount.load(std::memory_order_relaxed);
-            s.FreeCount = slot.FreeCount.load(std::memory_order_relaxed);
-            s.CurrentBytes = slot.CurrentBytes.load(std::memory_order_relaxed);
-            s.PeakBytes = slot.PeakBytes.load(std::memory_order_relaxed);
-            return s;
-        }
 
         Slot m_Slots[kSlots];
         SizeSlot m_SizeSlots[kSizeSlots];
@@ -437,11 +211,11 @@ namespace X_Y
 
         // 基线
         std::atomic<bool> m_HasBaseline{false};
-        uint64_t m_EarlyAllocs = 0;
         uint64_t m_BaselineUsed = 0;
         uint64_t m_BaselinePeak = 0;
         uint64_t m_BaselineAllocs = 0;
         uint64_t m_BaselineFrees = 0;
+        uint64_t m_EarlyAllocs = 0;
     };
 
 } // namespace X_Y

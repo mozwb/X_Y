@@ -1,5 +1,47 @@
 # DEVLOG
 
+## 2026-09-13 内存模块：实现与声明分离（可读性重构）
+
+> 砚台反馈："`.h` 写了所有实现读起来有点困难了"。确实 —— 上一步 ③-a 把门面
+> 和统计的实现全内联在头文件里，`XMemFacade.h` 一度 608 行、`XMemStats.h` 396 行，
+> 接口被实现细节淹没。本步做分离，**行为零变化**。
+
+### 改动
+
+| 文件 | 前 | 后 | 说明 |
+|------|----|----|------|
+| `XMemFacade.h` | 608 行 | **329 行** | 只留接口 + 常量 + 命名空间级 inline 便捷函数 |
+| `XMemFacade.cpp` | — | **183 行**（新） | `allocate` / `deallocate` / `ResolveWithSize` / `backendFor` / `Shutdown` |
+| `XMemStats.h` | 396 行 | **177 行** | 只留 POD 快照 + `MemoryCounter` 声明 |
+| `XMemStats.cpp` | — | **319 行**（新） | 计数、基线、快照、打印 |
+| `XMemOwnedSet.h` | — | **53 行**（新） | 已分配指针表声明（从 Facade 抽出） |
+| `XMemOwnedSet.cpp` | — | **144 行**（新） | 哈希表实现（纯实现细节，读门面时不必看） |
+
+### 分离原则（写进各文件头注释）
+
+- **留头文件**：类声明、常量、模板（语言要求）、以及**必须在静态初始化期就能调用**
+  的极小路（`Instance()` / `enabled()` / 命名空间级 `Malloc`/`Free` 等 inline 转发）。
+- **移到 .cpp**：分配头维护、预算检查、归属判定、后端分发、哈希表、统计与打印。
+
+### 顺带修的问题
+
+- `XMemFacade.h` 缺 `<exception>`（`std::terminate`）—— 之前靠别的头间接引入，
+  分离后立刻暴露。已补。
+- 顺手清掉 Facade 头里 `cstdio`/`cstdlib`/`cstring`/`exception` 等只在 .cpp 需要的包含。
+
+### 验证
+
+- `g++ -std=c++20` 全量编译（5 个 cpp：GlobalNew / Stats / OwnedSet / Facade + 测试）
+- 行为对比前一步**完全一致**：
+  - STL 容器全部进门面（作用域内 `live=103 owned=103`）
+  - 2000 轮 `new`/`delete` 后 `live=0 owned=0 used=0`
+  - 归属判定：门面指针 `owns=1`，栈指针 `owns=0`（不解引用外部指针）
+  - 开关关闭后新分配走原生，释放仍安全
+  - 统计四维度输出正常（按后端 / 按大小档 / 峰值 / 未回收块）
+
+> 仍未接入 CMake（`XCore` 用 `file(GLOB)`，下次 configure 自动纳入）。
+> 下一步待定：③-b（SlabBackend 迁入）或 ④（UI 四层所有权显式化）。
+
 ## 2026-09-13 内存模块 ③-a：全局 new 重载 + 三通道 + 策略 + 统计细化（仍未接入构建）
 
 > 承接同日 ②（后端/统计/门面拆分）。本步加上"必经之路"，实现**统计所有分配**。

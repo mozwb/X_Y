@@ -74,14 +74,12 @@
 // ═════════════════════════════════════════════════════════════════════════════
 
 #include "XMemBackend.h"
+#include "XMemOwnedSet.h"
 #include "XMemStats.h"
 
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
 #include <functional>
 #include <new>
 #include <utility>
@@ -113,154 +111,8 @@ namespace X_Y
     inline constexpr uint64_t kHeaderSize =
         (kHeaderRaw + 15) & ~static_cast<uint64_t>(15);
 
-    // ── OwnedSet：门面自管的"已分配指针"集合 ────────────────────────────────
-    //
-    //  用途：让 deallocate 能安全回答"这个指针是不是我发的"，
-    //        而不需要解引用 ptr（外部指针的 ptr-16 可能未映射）。
-    //
-    //  ⚠️ 自举铁律：本结构【只用 ::malloc / ::free】，绝不用 STL 容器、
-    //     绝不用门面自己的 allocate —— 否则递归自举。
-    //
-    //  实现：开放寻址哈希表（线性探测），容量按 2 的幂增长。
-    //        键 = 用户指针；值不需要（只是集合）。
-    //        删除用墓碑标记（否则线性探测会断链）。
-    class OwnedSet
-    {
-    public:
-        // 墓碑标记：用一个不可能作为合法用户指针的值。
-        // ⚠️ 不能写成 constexpr（C++ 不允许整数→指针的常量表达式），
-        //    故用函数返回；运行期会被常量折叠，无开销。
-        static void *Tomb()
-        {
-            return reinterpret_cast<void *>(static_cast<std::uintptr_t>(1));
-        }
-
-        ~OwnedSet() { std::free(m_Slots); }
-
-        bool contains(void *ptr) const
-        {
-            if (!m_Slots || m_Count == 0 || !ptr)
-                return false;
-            std::size_t i = Hash(ptr) & (m_Cap - 1);
-            for (std::size_t probe = 0; probe < m_Cap; ++probe)
-            {
-                void *slot = m_Slots[i];
-                if (slot == nullptr)
-                    return false; // 空位 = 探测链结束
-                if (slot == ptr)
-                    return true;
-                i = (i + 1) & (m_Cap - 1);
-            }
-            return false;
-        }
-
-        bool insert(void *ptr)
-        {
-            if (!ptr)
-                return false;
-            // 负载因子 0.7 → 扩容
-            if (m_Cap == 0 || (m_Count + 1) * 10 >= m_Cap * 7)
-            {
-                if (!Grow())
-                    return false;
-            }
-            return InsertNoGrow(ptr);
-        }
-
-        bool erase(void *ptr)
-        {
-            if (!m_Slots || !ptr)
-                return false;
-            std::size_t i = Hash(ptr) & (m_Cap - 1);
-            for (std::size_t probe = 0; probe < m_Cap; ++probe)
-            {
-                void *slot = m_Slots[i];
-                if (slot == nullptr)
-                    return false;
-                if (slot == ptr)
-                {
-                    m_Slots[i] = Tomb(); // 墓碑：不断探测链
-                    --m_Count;
-                    return true;
-                }
-                i = (i + 1) & (m_Cap - 1);
-            }
-            return false;
-        }
-
-        std::size_t size() const { return m_Count; }
-
-    private:
-        static std::size_t Hash(void *p)
-        {
-            // 指针通常对齐到 16 字节，低位信息少 → 先右移再混淆
-            std::size_t x = reinterpret_cast<std::size_t>(p) >> 4;
-            x ^= x >> 33;
-            x *= 0xff51afd7ed558ccdULL;
-            x ^= x >> 33;
-            return x;
-        }
-
-        bool InsertNoGrow(void *ptr)
-        {
-            std::size_t i = Hash(ptr) & (m_Cap - 1);
-            std::size_t firstTomb = SIZE_MAX;
-            for (std::size_t probe = 0; probe < m_Cap; ++probe)
-            {
-                void *slot = m_Slots[i];
-                if (slot == ptr)
-                    return true; // 已存在
-                if (slot == Tomb() && firstTomb == SIZE_MAX)
-                    firstTomb = i;
-                else if (slot == nullptr)
-                {
-                    const std::size_t target =
-                        (firstTomb != SIZE_MAX) ? firstTomb : i;
-                    m_Slots[target] = ptr;
-                    ++m_Count;
-                    return true;
-                }
-                i = (i + 1) & (m_Cap - 1);
-            }
-            if (firstTomb != SIZE_MAX)
-            {
-                m_Slots[firstTomb] = ptr;
-                ++m_Count;
-                return true;
-            }
-            return false;
-        }
-
-        bool Grow()
-        {
-            const std::size_t newCap = m_Cap ? m_Cap * 2 : 1024;
-            void **newSlots =
-                static_cast<void **>(std::calloc(newCap, sizeof(void *)));
-            if (!newSlots)
-                return false;
-
-            void **oldSlots = m_Slots;
-            const std::size_t oldCap = m_Cap;
-
-            m_Slots = newSlots;
-            m_Cap = newCap;
-            m_Count = 0;
-
-            // 重新插入旧元素（跳过空位与墓碑）
-            for (std::size_t i = 0; i < oldCap; ++i)
-            {
-                void *p = oldSlots[i];
-                if (p && p != Tomb())
-                    InsertNoGrow(p);
-            }
-            std::free(oldSlots);
-            return true;
-        }
-
-        void **m_Slots = nullptr;
-        std::size_t m_Cap = 0;   // 2 的幂
-        std::size_t m_Count = 0; // 有效元素数（不含墓碑）
-    };
+    // OwnedSet（已分配指针表）声明见 XMemOwnedSet.h，实现在 XMemOwnedSet.cpp。
+    // 它是纯实现细节，读门面逻辑时不必关心它的哈希表怎么写的。
 
     // ── Memory：门面 ─────────────────────────────────────────────────────────
     class Memory
@@ -340,78 +192,11 @@ namespace X_Y
         //  核心分配 / 释放（STL 风格命名）
         // ═════════════════════════════════════════════════════════════════════
 
-        // 分配 size 字节。
+        // 分配 size 字节。（实现见 XMemFacade.cpp）
         //   type == Default → 先问策略，策略没意见则用默认后端
         //   type == 具体后端 → 单次覆盖，绕过策略
         // 失败行为由 OOMAction 决定；Abort 之外统一返回 nullptr。
-        void *allocate(uint64_t size, BackendType type = BackendType::Default)
-        {
-            if (size == 0)
-                return nullptr;
-
-            const BackendType resolved = ResolveWithSize(type, size);
-            IMemoryBackend *backend = backendFor(resolved);
-            if (!backend)
-                return nullptr;
-
-            // 预算检查
-            if (s_MaxBytes != 0)
-            {
-                const uint64_t used = m_Counter.UsedBytes();
-                const uint64_t need = size + kHeaderSize;
-                if (used + need > s_MaxBytes)
-                {
-                    m_Counter.onOOM();
-                    if (s_OOMAction == OOMAction::Abort)
-                    {
-                        std::fprintf(stderr,
-                                     "[XMem] OOM: budget %llu exceeded "
-                                     "(used=%llu, need=%llu)\n",
-                                     (unsigned long long)s_MaxBytes,
-                                     (unsigned long long)used,
-                                     (unsigned long long)need);
-                        std::terminate();
-                    }
-                    if (s_OOMAction == OOMAction::ReturnNull)
-                        return nullptr;
-                    // Expand：继续分配（已记 OOM）
-                }
-            }
-
-            // ① 多要一块 header 的空间
-            void *raw = backend->allocate(size + kHeaderSize);
-            if (!raw)
-            {
-                m_Counter.onOOM();
-                if (s_OOMAction == OOMAction::Abort)
-                    std::terminate();
-                return nullptr;
-            }
-
-            // ② 在头部写清"我是谁"
-            auto *hdr = static_cast<AllocHeader *>(raw);
-            hdr->magic = kAllocMagic;
-            hdr->backend = static_cast<uint8_t>(resolved);
-            hdr->size = size;
-
-            // ③ 返回 header 之后的用户区
-            void *user = static_cast<uint8_t *>(raw) + kHeaderSize;
-
-            // ④ 登记到"已分配表"（供 deallocate 安全判定归属）
-            if (!m_OwnedTable.insert(user))
-            {
-                // 登记失败（内存不足）→ 退回，不能返回一个"不认识的"指针
-                backend->deallocate(raw, size + kHeaderSize);
-                m_Counter.onOOM();
-                if (s_OOMAction == OOMAction::Abort)
-                    std::terminate();
-                return nullptr;
-            }
-
-            m_Counter.onAllocate(size, resolved);
-            m_Counter.onOverhead(kHeaderSize);
-            return user;
-        }
+        void *allocate(uint64_t size, BackendType type = BackendType::Default);
 
         // 归还。★ 不需要传后端、不需要传大小 —— 全靠 header / 归属表。
         //
@@ -419,57 +204,7 @@ namespace X_Y
         //    全局 operator delete 重载后，delete 会把【所有】指针交到这里，
         //    包括 CRT 自己分配的、或开关关闭期间分配的。
         //    所以：是门面发的 → 读头归还；不是 → 交回 ::free。
-        void deallocate(void *ptr, uint64_t size = 0)
-        {
-            if (!ptr)
-                return;
-
-            // 先做安全探测：只有确认是门面发的，才去读分配头。
-            // ⚠️ 不能直接读 ptr-16：外部指针那里可能是未映射内存，
-            //    甚至正好在页边界上 → 段错误。故先查 OwnedSet。
-            if (!m_OwnedTable.contains(ptr))
-            {
-                std::free(ptr); // 不是门面发的：交回标准库
-                return;
-            }
-
-            void *raw = static_cast<uint8_t *>(ptr) - kHeaderSize;
-            auto *hdr = static_cast<AllocHeader *>(raw);
-
-            if (hdr->magic != kAllocMagic)
-            {
-                // 在册但头不对 —— 重复释放或指针被改过。报告并兜底。
-                std::fprintf(stderr,
-                             "[XMem] deallocate: corrupt header %p "
-                             "(double free?)\n",
-                             ptr);
-                m_OwnedTable.erase(ptr);
-                std::free(raw);
-                return;
-            }
-
-            const uint64_t realSize = hdr->size;
-            if (size != 0 && size != realSize)
-            {
-                std::fprintf(stderr,
-                             "[XMem] deallocate: size mismatch %p "
-                             "(given=%llu, actual=%llu)\n",
-                             ptr, (unsigned long long)size,
-                             (unsigned long long)realSize);
-            }
-
-            const BackendType bt = static_cast<BackendType>(hdr->backend);
-            IMemoryBackend *backend = backendFor(bt);
-
-            hdr->magic = 0;          // 防重复释放时误判
-            m_OwnedTable.erase(ptr); // 从"已分配表"摘除
-
-            m_Counter.onDeallocate(realSize, bt);
-            if (backend)
-                backend->deallocate(raw, realSize + kHeaderSize);
-            else
-                std::free(raw); // 理论到不了；兜底不泄漏
-        }
+        void deallocate(void *ptr, uint64_t size = 0);
 
         // 归属判定（deallocate 的安全前提，也可对外用于自检）
         bool owns(void *ptr) const { return m_OwnedTable.contains(ptr); }
@@ -579,37 +314,10 @@ namespace X_Y
             return m_Backends[i].load(std::memory_order_acquire) != nullptr;
         }
 
-        IMemoryBackend *backendFor(BackendType t)
-        {
-            const uint32_t i = static_cast<uint32_t>(t);
-            if (i >= kBackendSlots)
-                return nullptr;
+        IMemoryBackend *backendFor(BackendType t);
 
-            // Crt 后端是平凡类（只有 ::malloc/::free，无状态无构造），
-            // 放在函数内 static：首次取用时已就绪，多线程安全。
-            static CrtBackend s_Crt;
-
-            if (t == BackendType::Crt && m_Backends[i] == nullptr)
-            {
-                // 原子发布：多线程同时首次 allocate 时都写同一个值，无害。
-                m_Backends[i].store(&s_Crt, std::memory_order_release);
-            }
-            return m_Backends[i].load(std::memory_order_acquire);
-        }
-
-        // 关闭（程序收尾调用；报告未回收块）
-        void Shutdown()
-        {
-            const uint64_t live = liveBlocks();
-            if (live != 0)
-            {
-                std::fprintf(stderr,
-                             "[XMem] Shutdown: %llu blocks still alive "
-                             "(leak suspected)\n",
-                             (unsigned long long)live);
-            }
-            m_Shutdown = true;
-        }
+        // 关闭（程序收尾调用；报告未回收块）。实现见 XMemFacade.cpp
+        void Shutdown();
 
     private:
         Memory() = default;
@@ -618,21 +326,7 @@ namespace X_Y
         Memory &operator=(const Memory &) = delete;
 
         // 解析"这次该走哪个后端"（带 size，让策略能按大小决策）
-        BackendType ResolveWithSize(BackendType t, uint64_t size) const
-        {
-            // 显式指定 → 单次覆盖，绕过策略
-            if (t != BackendType::Default && t != BackendType::Count)
-                return t;
-
-            AllocPolicy *policy = m_Policy.load(std::memory_order_acquire);
-            if (policy && *policy)
-            {
-                const BackendType chosen = (*policy)(size);
-                if (chosen != BackendType::Default && chosen != BackendType::Count)
-                    return chosen;
-            }
-            return m_DefaultBackend;
-        }
+        BackendType ResolveWithSize(BackendType t, uint64_t size) const;
 
         static constexpr uint32_t kBackendSlots =
             static_cast<uint32_t>(BackendType::Count);
