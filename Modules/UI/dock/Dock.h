@@ -2,6 +2,7 @@
 
 #include "../Panel/Panel.h"
 #include <algorithm>
+#include <memory>
 #include <string>
 #include <vector>
 #include <functional>
@@ -64,6 +65,20 @@ namespace X_Y
     //   - 4 个边界槽（DockBoundary）→ 由自己边界定位
     //   - 绘制自己（tab 栏 + 激活 Panel）→ 画到宿主给的 Canvas&
     // 所有窗口能力（Canvas/尺寸/鼠标）由外层宿主（Container 壳 → DockLayout）驱动。
+    //
+    // ── ⚠️ 所有权模型（2026-09-13 显式化，改代码前必读）──
+    //
+    //   Dock 【拥有】它持有的 Panel：m_Panels 是 unique_ptr 容器。
+    //   这与 DockLayout→Dock 的"两种来源"不同 —— Panel 一律是堆对象，
+    //   没有值成员的情况，所以统一独占，没有借用/拥有之分。
+    //
+    //   面板的"换主人"（拖拽）走 std::move：从 A 的 unique_ptr 转移到 B，
+    //   转移期间【不能有任何人持有它】—— 见下面各级借用指针的断链约定。
+    //
+    //   借用（不拥有，但会在对象消失时被清空）：
+    //     m_MouseCapturePanel —— 按下到抬起期间锁定的事件目标
+    //   这两个必须在 AddPanel/RemovePanel/DetachPanel 时维护，
+    //   否则会对着已经搬走的 Panel 调 OnInput（use-after-free）。
     // ============================================================
     class Dock
     {
@@ -135,9 +150,19 @@ namespace X_Y
         }
 
         // ── 面板管理（tab）──
+        // ⚠️ 所有权：AddPanel 接管 panel 的所有权（存进 unique_ptr）。
+        //    调用方【不要】再 delete 它 —— 那是重复释放。
         Panel *AddPanel(Panel *panel, const std::string &title = "");
+
+        // 移除并【释放】该 Panel（析构 + 删除）。
         bool RemovePanel(Panel *panel);
+
+        // 摘出：把 Panel 交给调用方（不再拥有），返回同一指针；找不到返回 nullptr。
+        // 典型用途：拖到别的 Dock / 摘成独立窗口。
+        // ★ 调用方拿到后要立刻接管（另一个 Dock 的 AddPanel，或自己 delete），
+        //   中间不要让任何借用指针指着它。
         Panel *DetachPanel(Panel *panel, std::string *title = nullptr);
+
         bool ContainsPanel(const Panel *panel) const;
         void ActivatePanel(int idx);
         bool ActivatePanel(Panel *panel);
@@ -182,6 +207,9 @@ namespace X_Y
     protected:
         void ShowActivePanel();
         void UpdatePanelRects();
+        // 内部：按索引摘下一条记录（不释放、不重排），返回其所有权并维护
+        // 激活下标 + 清理借用指针。Remove/Detach/RemovePanelInternal 共用。
+        std::unique_ptr<Panel> TakeEntry(int idx, std::string *title);
         // 内部：移除面板但不触发合并（Split 时需要把活跃面板切给新 Dock）
         void RemovePanelInternal(Panel *panel);
 
@@ -201,8 +229,14 @@ namespace X_Y
         float m_MinWidth = 0.05f;
         float m_MinHeight = 0.05f;
         int m_MaxPanelCount = -1; // 最大面板数，为负数表示不限制
-        std::vector<Panel *> m_Panels;
-        std::vector<std::string> m_Titles;
+
+        // ★ 拥有：Dock 独占这些 Panel，析构时自动释放。
+        struct PanelEntry
+        {
+            std::unique_ptr<Panel> Panel_;
+            std::string Title;
+        };
+        std::vector<PanelEntry> m_Panels;
         int m_ActiveIndex = -1;
 
         DockLayout *m_Layout = nullptr;

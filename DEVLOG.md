@@ -1,5 +1,71 @@
 # DEVLOG
 
+## 2026-09-13 UI 所有权显式化（④：Container ⊃ Layout ⊃ Dock ⊃ Panel ⊃ Component）
+
+> 承接内存审计（`_notes/arch/MemoryAudit.md`）。审计结论：UI 的隐患根因不是"漏了 delete"，
+> 而是**所有权从未在代码里落地** —— 四层全是裸指针 + 不拥有，而真正的所有者
+> 付不起 delete 的代价（重活都在析构里）。本步把所有权写进类型。
+
+### 改动（按砚台定案的链路逐层落地）
+
+| 层 | 改动 | 关键点 |
+|----|------|--------|
+| **Component** | 不改 | 叶子，无子节点 |
+| **Panel** | `m_Components`：`vector<Component*>` → `vector<unique_ptr<Component>>` | **Panel 拥有组件**；`AddComponent` 即接管 |
+| **Dock** | `m_Panels`/`m_Titles` → `vector<PanelEntry{unique_ptr<Panel>, string}>` | **Dock 拥有 Panel**；一个容器管住指针+标题，不再两处同步下标 |
+| **DockLayout** | `m_Docks`（借用）+ 新增 `m_OwnedDocks`（拥有） | **区分内建/动态 dock**（砚台定案 (b)） |
+| **Container** | `m_Layout` + `bool m_OwnLayout` → `unique_ptr<DockLayout> m_LayoutOwned` + 借用 `m_Layout` | 自建才释放；**外部传入（栈对象）绝不删** |
+
+### 关键设计
+
+1. **两套 Dock 列表（方案 b）**：`TopLayout` 的五个 Dock 是**值成员**，
+   若混进拥有列表会被 delete 栈对象 → 立即崩。故：
+   - `DockBind(dock&, ...)` → **借用**（引用传入 = 调用方持有）
+   - `AddOwnedDock(dock*)` → **拥有**（指针传入 = 接管）
+   - `Container::AddSinglePanel` / `Dock::Split` 一律走 `AddOwnedDock`。
+
+2. **借用指针必须显式断链**（审计里的 [B]/[G]）：
+   - `Dock`：`TakeEntry()` 统一维护下标 + **清 `m_MouseCapturePanel`**；
+     拖拽转移时 `TabDock::DropPanel` 在 `DetachPanel` 后立刻 `ResetPanelDrag()`
+     （否则 `m_DragPanel` 在两步之间悬空）
+   - `Panel`：`RemoveComponent` 先断 `m_FocusedComponent`/`m_DragTarget` 再释放
+   - `DockLayout::RemoveAndDestroyDock` 顺手清 `m_MouseCaptureDock`/`m_FileDropPanel`
+
+3. **三处重复的下标维护收敛成一个 `Dock::TakeEntry(idx, title*)`**：
+   `RemovePanel`/`DetachPanel`/`RemovePanelInternal` 原先各写一遍下标修正
+   （三份都略有差异），现在共用一份，返回 `unique_ptr` 表达所有权转移。
+
+### 顺带修掉的两个真 BUG
+
+- **`Dock::Merge()` 自毁后继续访问 `this`**：老代码 `RemoveDock(this)` 之后又调
+  `RequestRepaint()`（访问成员），而注释写着"随后由布局释放本 Dock"却**没人释放**
+  —— 既是 use-after-free 又是泄漏。改为先抄下 `layout` 指针，最后一行
+  `RemoveAndDestroyDock(this)`，并注明**此后不得再碰任何成员**。
+- **`DockLayout::RemoveDock` 只摘不删**：动态 Dock（`Split` 产生的）从此无人释放。
+  新增 `RemoveAndDestroyDock`（只释放自己拥有的；内建 Dock 会被跳过）。
+
+### 验证（`g++ -std=c++20 -fsyntax-only`，按约定未做工程构建）
+
+- **全部 20 个 UI 源文件编译通过**（含 imgui 两个）
+- 运行时所有权行为（独立测试程序连 Panel/Dock/DockLayout）：
+  | 场景 | 结果 |
+  |------|------|
+  | Panel 析构 → 释放全部组件 | ✅ `dead=3` |
+  | Dock 析构 → 释放全部 Panel | ✅ 2 个面板恰好各死一次 |
+  | **内建 dock（栈对象）未被 layout 删除** | ✅ `mixed ownership: survived, no crash` |
+  | **`DetachPanel` 跨 Dock 转移 → 恰好死一次** | ✅ `dead=1`（无双重释放、无泄漏） |
+  | `RemovePanel` 恰好释放一次 | ✅ `dead=1` |
+  | `RemoveComponent` 断焦点借用后释放 | ✅ 不崩 |
+
+### 尚未做（下一轮）
+
+- **⑤**：`Shutdown()` 与析构分离（治 `LogViewer::~LogViewer` 里 `Join()` 卡死）
+- **⑥**：回调链弱引用（`m_HostRepaint`/`m_RepaintCallback` 的断链时机）
+- **⑦**：`Component` 内部反向借用（`TagStrip::m_Owner`、`ScrollArea::m_Content`）的清理约定
+- ⚠️ **`test/src/main.cpp` 需同步**：`new LogViewer` 传给 `AddSinglePanel` 后
+  所有权已归 Dock，结尾那两行 `delete logViewer/hexViewer` **现在是双重释放**
+  （该文件在 `D:\workbench\test`，不在本仓库，未改）
+
 ## 2026-09-13 内存模块：实现与声明分离（可读性重构）
 
 > 砚台反馈："`.h` 写了所有实现读起来有点困难了"。确实 —— 上一步 ③-a 把门面

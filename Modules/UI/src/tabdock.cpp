@@ -101,6 +101,9 @@ namespace X_Y
             {
                 std::string title;
                 Panel *panel = DetachPanel(m_DragPanel, &title);
+                // ⚠️ DetachPanel 之后 m_DragPanel 已经不属于本 Dock 了，
+                //    必须立刻清掉（否则它在两步之间是悬空的借用指针）。
+                ResetPanelDrag();
                 if (panel && !m_DetachToWindow(panel, title, x, y))
                     AddPanel(panel, title); // 摘出失败：放回自己，别丢面板
             }
@@ -109,8 +112,9 @@ namespace X_Y
 
         std::string title;
         Panel *panel = DetachPanel(m_DragPanel, &title);
+        ResetPanelDrag(); // 同上：所有权已转出，借用指针立刻清
         if (panel)
-            target->AddPanel(panel, title);
+            target->AddPanel(panel, title); // 新主人接管（unique_ptr）
     }
 
     void TabDock::ResetPanelDrag()

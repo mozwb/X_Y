@@ -6,6 +6,7 @@
 #include "XCore/FilesSystem/FilesSystem.h"
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <vector>
 #include <functional>
 
@@ -20,6 +21,27 @@ namespace X_Y
     //   - 提供拖分割线的纯逻辑驱动（OnMouse*），由壳(Container)喂坐标。
     //   - 提供 OnPaint(Canvas&) 画背景 + 分割线 + 各 Dock。
     // 所有窗口能力（Canvas/尺寸/鼠标）由外层 Container 壳驱动，本类只算。
+    //
+    // ── ⚠️ 所有权模型（2026-09-13 显式化，改代码前必读）──
+    //
+    //   Dock 有【两种】来源，所有权必须分清（砚台定案 (b)）：
+    //
+    //   ① 内建 Dock（借用，不拥有）
+    //      形如 TopLayout 的五个 Dock —— 它们是 TopLayout 的【值成员】，
+    //      生命周期由 C++ 自动管理，随 TopLayout 一起生灭。
+    //      DockLayout 只通过 m_Docks 观察它们，【绝不 delete】。
+    //
+    //   ② 动态 Dock（拥有）
+    //      Dock::Split() 里 new 出来的，以及 AddDock 传入的堆对象。
+    //      登记在 m_OwnedDocks 里，由 DockLayout 负责 delete。
+    //
+    //   为什么必须区分：m_Docks 里两种混着放。若无脑 delete，
+    //   会把 TopLayout 的值成员 delete 掉 → 立即崩溃。
+    //
+    //   登记规则：
+    //     DockBind(dock&, ...)  → 内建语义（引用传入=调用方持有）→ 借用
+    //     AddOwnedDock(dock*)   → 动态语义（指针传入=接管）→ 拥有
+    //     Container 里 `new Dock()` 后必须用 AddOwnedDock。
     // ============================================================
     class DockLayout
     {
@@ -61,10 +83,23 @@ namespace X_Y
         int GetBoundaryPosition(BoundaryId id) const; // 布局坐标（像素）
 
         // ── dock 管理 ──
+        // 登记一个【内建】Dock：借用语义，不接管所有权。
+        // 用于 TopLayout 那种"Dock 是值成员"的场景（见文件头所有权说明）。
         void AddDock(Dock *dock);
+
+        // 登记一个【动态】Dock：接管所有权，析构时由 DockLayout 释放。
+        // 用于 `new Dock()` / `Dock::Split()` 产生的 Dock。
+        void AddOwnedDock(Dock *dock);
+
         bool DockBind(Dock &dock, BoundaryId top, BoundaryId bottom,
                       BoundaryId left, BoundaryId right);
+
+        // 从布局中移除（不释放；调用方决定后续）。
         void RemoveDock(Dock *dock);
+
+        // 从布局中移除【并释放】（仅对动态 Dock 有效；内建 Dock 会被忽略并告警）。
+        void RemoveAndDestroyDock(Dock *dock);
+
         // 按落点收容一个已脱离宿主的 Panel；不销毁也不复制 Panel。
         // 落点命中哪个 Dock 就交给它，落空/不可加返回 nullptr（调用方负责回退）。
         Panel *AddPanelAt(Panel *panel, int x, int y,
@@ -105,7 +140,14 @@ namespace X_Y
 
         int m_LayoutW = 0, m_LayoutH = 0;
         std::vector<Boundary> m_Boundaries;
+
+        // ⚠️ 两套列表，语义完全不同（见文件头所有权说明）：
+        //   m_Docks      —— 【全部】Dock 的观察列表（内建 + 动态），绘制/命中使用。
+        //                   里面的指针一律【借用】，本类绝不据此 delete。
+        //   m_OwnedDocks —— 仅【动态】Dock（我 new/接管的），析构时逐个释放。
         std::vector<Dock *> m_Docks;
+        std::vector<std::unique_ptr<Dock>> m_OwnedDocks;
+
         uint32_t m_BackgroundColor = 0xFF202124;
 
         BoundaryId m_DraggingBoundary = InvalidBoundary;

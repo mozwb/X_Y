@@ -120,27 +120,44 @@ namespace X_Y
 
     Container::~Container()
     {
+        // ⚠️ 顺序很重要：
+        //  1. 先断开事件连接（免得析构期间还有回调进来）
+        //  2. 再释放自建布局（m_LayoutOwned 的 unique_ptr 自动做）
+        //
+        // ⚠️ 为什么这里绝对不能 delete m_Layout：
+        //    m_Layout 可能是【外部传入】的（如 test 里栈上的 TopLayout）。
+        //    delete 栈对象 = 立即崩溃。所有权只认 m_LayoutOwned。
         disConnect(this);
+
+        // 让布局先与壳脱钩（清掉指向本壳的重绘回调），再释放。
+        if (m_Layout)
+            m_Layout->SetHostRepaint(nullptr);
+        m_Layout = nullptr;
+
+        m_LayoutOwned.reset(); // 只释放自建的；外部传入的天然是 nullptr
     }
 
     void Container::EnsureLayout()
     {
         if (m_Layout)
             return;
-        m_Layout = new DockLayout();
-        m_OwnLayout = true;
+        m_LayoutOwned = std::make_unique<DockLayout>();
+        m_Layout = m_LayoutOwned.get();
         m_Layout->SetHostRepaint([this]()
                                  { RequestRepaint(); });
     }
 
     void Container::SetDockLayout(DockLayout *layout)
     {
-        // 若此前有自建布局，先交出
-        if (m_OwnLayout)
+        // 若此前有【自建】的布局，先释放（外部传入的不会被删）
+        if (m_LayoutOwned)
         {
-            delete m_Layout;
-            m_OwnLayout = false;
+            m_LayoutOwned->SetHostRepaint(nullptr);
+            m_LayoutOwned.reset();
         }
+
+        // ⚠️ 这里是【借用】：layout 的生命周期由调用方负责
+        //    （可以是栈对象，如 test 里的 TopLayout）。
         m_Layout = layout;
         if (m_Layout)
             m_Layout->SetHostRepaint([this]()
@@ -169,8 +186,11 @@ namespace X_Y
         if (!dock)
             return nullptr;
         dock->SetMaxPanelCount(1); // 单面板
-        m_Layout->AddDock(dock);
-        // 占满布局
+        // ⚠️ 这里 new 出来的 Dock 交给布局接管所有权（AddOwnedDock）。
+        //    不能用 AddDock —— 那是【借用】语义，用于 TopLayout 的值成员；
+        //    用错会导致这个 Dock 永不释放。
+        m_Layout->AddOwnedDock(dock);
+        // 占满布局（DockBind 内部会再调一次 AddDock，已登记故幂等）
         m_Layout->DockBind(*dock, InvalidBoundary, InvalidBoundary,
                            InvalidBoundary, InvalidBoundary);
         return dock->AddPanel(panel, title);

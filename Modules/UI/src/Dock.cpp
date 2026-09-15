@@ -24,8 +24,11 @@ namespace X_Y
 
     Dock::~Dock()
     {
+        // m_Panels 是 unique_ptr 容器 → clear() 会自动析构并释放每个 Panel。
+        // 这是"所有权写进类型"的直接好处：不需要手写 delete 循环。
+        //
+        // ⚠️ 借用指针（m_MouseCapturePanel）无需清理：它随对象一起消亡。
         m_Panels.clear();
-        m_Titles.clear();
     }
 
     // ── 布局：由自己的边界槽 + 布局总尺寸换算位置矩形 ──
@@ -277,13 +280,16 @@ namespace X_Y
     }
 
     // ── 面板管理 ──
+    //
+    // ★ 所有权：AddPanel 接管 panel（存进 unique_ptr）；DetachPanel 交出去；
+    //   RemovePanel 释放。三者都会顺手清理指向被搬走 Panel 的借用指针。
     Panel *Dock::AddPanel(Panel *panel, const std::string &title)
     {
         if (!panel || !CanAddPanel())
             return nullptr;
+
         panel->SetHostRepaint(m_HostRepaint);
-        m_Panels.push_back(panel);
-        m_Titles.push_back(title);
+        m_Panels.push_back(PanelEntry{std::unique_ptr<Panel>(panel), title});
         m_ActiveIndex = (int)m_Panels.size() - 1;
         if (m_Layout)
             m_Layout->RecalcLayout();
@@ -291,49 +297,72 @@ namespace X_Y
         return panel;
     }
 
-    bool Dock::RemovePanel(Panel *panel)
+    // 内部：按索引摘除一条记录（不释放、不重排），返回被摘下的 unique_ptr。
+    // 三个公开接口（Remove/Detach/RemovePanelInternal）共用这一份下标维护逻辑，
+    // 免得三处各写一遍、各错一遍。
+    std::unique_ptr<Panel> Dock::TakeEntry(int idx, std::string *title)
     {
-        auto it = std::find(m_Panels.begin(), m_Panels.end(), panel);
-        if (it == m_Panels.end())
-            return false;
-        const int idx = (int)(it - m_Panels.begin());
-        m_Panels.erase(it);
-        m_Titles.erase(m_Titles.begin() + idx);
-        if (m_ActiveIndex >= (int)m_Panels.size())
-            m_ActiveIndex = (int)m_Panels.size() - 1;
-        if (m_Panels.empty())
-            m_ActiveIndex = -1;
-        RequestRepaint();
-        return true;
-    }
-
-    Panel *Dock::DetachPanel(Panel *panel, std::string *title)
-    {
-        auto it = std::find(m_Panels.begin(), m_Panels.end(), panel);
-        if (it == m_Panels.end())
+        if (idx < 0 || idx >= (int)m_Panels.size())
             return nullptr;
 
-        const int idx = static_cast<int>(it - m_Panels.begin());
         if (title)
-            *title = m_Titles[idx];
+            *title = m_Panels[idx].Title;
 
-        m_Panels.erase(it);
-        m_Titles.erase(m_Titles.begin() + idx);
+        std::unique_ptr<Panel> owned = std::move(m_Panels[idx].Panel_);
+        m_Panels.erase(m_Panels.begin() + idx);
+
+        // 维护激活下标：删的是它之前 → 前移；删的是它 → 收敛到合法范围
         if (m_Panels.empty())
             m_ActiveIndex = -1;
         else if (m_ActiveIndex > idx)
             --m_ActiveIndex;
-        else if (m_ActiveIndex >= static_cast<int>(m_Panels.size()))
-            m_ActiveIndex = static_cast<int>(m_Panels.size()) - 1;
+        else if (m_ActiveIndex >= (int)m_Panels.size())
+            m_ActiveIndex = (int)m_Panels.size() - 1;
 
-        ShowActivePanel();
-        RequestRepaint();
-        return panel;
+        // ★ 断借用：这个 Panel 已经不在我这儿了，绝不能让它继续被我引用。
+        //   （否则后续 Move/Release 会对着它裸调 OnInput —— use-after-free）
+        if (m_MouseCapturePanel == owned.get())
+            m_MouseCapturePanel = nullptr;
+
+        return owned;
+    }
+
+    bool Dock::RemovePanel(Panel *panel)
+    {
+        for (int i = 0; i < (int)m_Panels.size(); ++i)
+        {
+            if (m_Panels[i].Panel_.get() != panel)
+                continue;
+            // 取出 unique_ptr → 离开作用域即析构 + 释放
+            std::unique_ptr<Panel> owned = TakeEntry(i, nullptr);
+            ShowActivePanel();
+            RequestRepaint();
+            return true;
+        }
+        return false;
+    }
+
+    Panel *Dock::DetachPanel(Panel *panel, std::string *title)
+    {
+        for (int i = 0; i < (int)m_Panels.size(); ++i)
+        {
+            if (m_Panels[i].Panel_.get() != panel)
+                continue;
+            // 交出所有权：release() 让 unique_ptr 放手，调用方接管
+            std::unique_ptr<Panel> owned = TakeEntry(i, title);
+            ShowActivePanel();
+            RequestRepaint();
+            return owned.release();
+        }
+        return nullptr;
     }
 
     bool Dock::ContainsPanel(const Panel *panel) const
     {
-        return std::find(m_Panels.begin(), m_Panels.end(), panel) != m_Panels.end();
+        for (const PanelEntry &entry : m_Panels)
+            if (entry.Panel_.get() == panel)
+                return true;
+        return false;
     }
 
     void Dock::ActivatePanel(int idx)
@@ -350,7 +379,7 @@ namespace X_Y
     bool Dock::ActivatePanel(Panel *panel)
     {
         for (int i = 0; i < (int)m_Panels.size(); ++i)
-            if (m_Panels[i] == panel)
+            if (m_Panels[i].Panel_.get() == panel)
             {
                 ActivatePanel(i);
                 return true;
@@ -362,22 +391,22 @@ namespace X_Y
     {
         if (m_ActiveIndex < 0 || m_ActiveIndex >= (int)m_Panels.size())
             return nullptr;
-        return m_Panels[m_ActiveIndex];
+        return m_Panels[m_ActiveIndex].Panel_.get();
     }
 
     Panel *Dock::GetPanel(int idx) const
     {
         if (idx < 0 || idx >= (int)m_Panels.size())
             return nullptr;
-        return m_Panels[idx];
+        return m_Panels[idx].Panel_.get();
     }
 
     const std::string &Dock::GetPanelTitle(int idx) const
     {
         static const std::string s_Empty;
-        if (idx < 0 || idx >= (int)m_Titles.size())
+        if (idx < 0 || idx >= (int)m_Panels.size())
             return s_Empty;
-        return m_Titles[idx];
+        return m_Panels[idx].Title;
     }
 
     void Dock::ShowActivePanel()
@@ -508,8 +537,10 @@ namespace X_Y
         // 同宗：新 Dock 记我是它父亲
         newDock->SetDockFather(this);
 
-        // 入布局并重排
-        m_Layout->AddDock(newDock);
+        // 入布局并重排。
+        // ⚠️ 用 AddOwnedDock：这个 Dock 是本函数 new 出来的，
+        //    所有权交给布局，由布局在析构 / RemoveAndDestroyDock 时释放。
+        m_Layout->AddOwnedDock(newDock);
         m_Layout->RecalcLayout();
         RequestRepaint();
         return newDock;
@@ -518,12 +549,22 @@ namespace X_Y
     void Dock::Merge()
     {
         // 被动合并：本 Dock 已空，沿 mergedBoundary 并回对侧邻居并删掉自己。
-        // 由外层（DockLayout 移除临时 dock 前）调用。
+        //
+        // ⚠️⚠️ 极其重要：本函数【会销毁 this】。所以：
+        //   1. 调用它之后【绝不能再碰 this 的任何成员】（包括调用 RequestRepaint）；
+        //   2. 必须走 RemoveAndDestroyDock —— 它会做三件事：
+        //        摘掉布局里指向我的借用指针（m_MouseCaptureDock 等）
+        //        → 从 Dock 列表移除
+        //        → 释放我（仅当我是动态 Dock）
+        //      老代码用 RemoveDock 然后"等别人释放"，结果既没人释放（泄漏），
+        //      而且函数继续往下跑就踩到了已失效的 this。
         if (!m_Layout || m_MergedBoundaryId == InvalidBoundary)
             return;
 
+        DockLayout *layout = m_Layout; // 先抄下来，之后 this 就没了
+
         // 找一个共享 mergedBoundary 的邻居
-        for (Dock *dock : m_Layout->GetDockList())
+        for (Dock *dock : layout->GetDockList())
         {
             if (!dock || dock == this)
                 continue;
@@ -533,33 +574,31 @@ namespace X_Y
                 slots.left == m_MergedBoundaryId ||
                 slots.right == m_MergedBoundaryId)
             {
-                // 拆掉缝合线（邻居侧槽恢复为贴外框/留给布局重排）
-                m_Layout->RemoveBoundary(m_MergedBoundaryId);
-                // 从布局移除并让布局重排；随后由布局释放本 Dock
-                m_Layout->RemoveDock(this);
-                RequestRepaint();
-                return;
+                // 拆掉缝合线（邻居侧槽由 RemoveBoundary 里的槽清理逻辑复位）
+                layout->RemoveBoundary(m_MergedBoundaryId);
+                break;
             }
         }
 
-        // 没找到邻居，仍直接拆线移除自己
-        m_Layout->RemoveBoundary(m_MergedBoundaryId);
-        m_Layout->RemoveDock(this);
+        // 移除并释放自己。⚠️ 这一行之后不能再访问任何成员变量/调用成员函数。
+        layout->RemoveAndDestroyDock(this);
     }
 
     // 内部：不移面板版本（Split 用，用于把活跃面板移到新 Dock）
+    // ⚠️ 会被调用方拿走所有权（Split 里紧跟着 newDock->AddPanel）。
+    //    这里用 TakeEntry 保持与 Remove/Detach 同一套下标维护 + 断借用逻辑。
     void Dock::RemovePanelInternal(Panel *panel)
     {
-        auto it = std::find(m_Panels.begin(), m_Panels.end(), panel);
-        if (it == m_Panels.end())
+        for (int i = 0; i < (int)m_Panels.size(); ++i)
+        {
+            if (m_Panels[i].Panel_.get() != panel)
+                continue;
+            // 取出后立刻 release：所有权马上被 Split 转交给新 Dock。
+            // （中间不会有人碰到它，所以不存在"悬空的借用指针"窗口）
+            std::unique_ptr<Panel> owned = TakeEntry(i, nullptr);
+            owned.release();
             return;
-        const int idx = (int)(it - m_Panels.begin());
-        m_Panels.erase(it);
-        m_Titles.erase(m_Titles.begin() + idx);
-        if (m_ActiveIndex >= (int)m_Panels.size())
-            m_ActiveIndex = (int)m_Panels.size() - 1;
-        if (m_Panels.empty())
-            m_ActiveIndex = -1;
+        }
     }
 
 } // namespace X_Y

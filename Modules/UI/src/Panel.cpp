@@ -47,19 +47,21 @@ namespace X_Y
 
     void Panel::AddComponent(Component *comp)
     {
-        if (comp)
-        {
-            comp->SetRepaintCallback([this]()
-                                     { RequestRepaint(); });
-            m_Components.push_back(comp);
-        }
+        if (!comp)
+            return;
+        comp->SetRepaintCallback([this]()
+                                 { RequestRepaint(); });
+        // ★ 接管所有权：调用方从此不再负责释放
+        m_Components.emplace_back(comp);
     }
 
     void Panel::RemoveComponent(Component *comp)
     {
-        auto it = std::find(m_Components.begin(), m_Components.end(), comp);
-        if (it != m_Components.end())
-            m_Components.erase(it);
+        if (!comp)
+            return;
+
+        // ⚠️ 顺序：先断借用指针，再释放。
+        //    否则若 comp 恰好是焦点/拖拽目标，释放后它们就成悬空指针了。
         if (m_FocusedComponent == comp)
             m_FocusedComponent = nullptr;
         if (m_DragTarget == comp)
@@ -67,10 +69,17 @@ namespace X_Y
             m_DragTarget = nullptr;
             m_DragTargetVisible = false;
         }
+
+        auto it = std::find_if(m_Components.begin(), m_Components.end(),
+                               [comp](const std::unique_ptr<Component> &p)
+                               { return p.get() == comp; });
+        if (it != m_Components.end())
+            m_Components.erase(it); // unique_ptr 析构 → 释放组件
     }
 
     void Panel::ClearComponents()
     {
+        // 全部释放；借用指针一律清空（指向的组件都没了）
         m_Components.clear();
         m_FocusedComponent = nullptr;
         m_DragTarget = nullptr;
@@ -83,7 +92,7 @@ namespace X_Y
     {
         for (auto it = m_Components.rbegin(); it != m_Components.rend(); ++it)
         {
-            Component *comp = *it;
+            Component *comp = it->get();
             if (!comp->IsVisible())
                 continue;
             if (View(*comp).self.Contains(x, y))
@@ -170,8 +179,9 @@ namespace X_Y
         // 外层裁剪：整个 Panel 的内容不许画到自己矩形之外。
         canvas.SetClip(0, 0, panelView.content.w, panelView.content.h);
 
-        for (auto *comp : m_Components)
+        for (const auto &owned : m_Components)
         {
+            Component *comp = owned.get();
             if (!comp->IsVisible())
                 continue;
 
@@ -197,14 +207,16 @@ namespace X_Y
         int start = 0;
         if (m_FocusedComponent)
         {
-            auto it = std::find(m_Components.begin(), m_Components.end(), m_FocusedComponent);
+            auto it = std::find_if(m_Components.begin(), m_Components.end(),
+                                   [this](const std::unique_ptr<Component> &p)
+                                   { return p.get() == m_FocusedComponent; });
             if (it != m_Components.end())
                 start = (int)(it - m_Components.begin()) + 1;
         }
         const int n = (int)m_Components.size();
         for (int k = 0; k < n; ++k)
         {
-            Component *c = m_Components[(start + k) % n];
+            Component *c = m_Components[(start + k) % n].get();
             if (c->IsVisible())
             {
                 SetFocusedComponent(c);

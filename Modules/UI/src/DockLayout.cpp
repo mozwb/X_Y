@@ -15,6 +15,19 @@ namespace X_Y
 
     DockLayout::~DockLayout()
     {
+        // ⚠️ 析构顺序很重要：
+        //   先让所有 Dock 断掉指向本布局的回指（避免 Dock 析构期间回调本布局），
+        //   再释放动态 Dock，最后清借用列表。
+        for (Dock *dock : m_Docks)
+        {
+            if (dock && dock->GetDockLayout() == this)
+                dock->SetDockLayout(nullptr);
+        }
+
+        // 只释放【动态】Dock。内建 Dock（TopLayout 的值成员）不归我们管，
+        // 它们由 C++ 自动析构 —— 这正是要分两套列表的原因。
+        m_OwnedDocks.clear();
+
         m_Docks.clear();
         m_Boundaries.clear();
     }
@@ -207,11 +220,29 @@ namespace X_Y
     // ── dock 管理 ──
     void DockLayout::AddDock(Dock *dock)
     {
+        // 内建 Dock：借用语义（调用方持有，如 TopLayout 的值成员）
         if (!dock)
             return;
         if (std::find(m_Docks.begin(), m_Docks.end(), dock) != m_Docks.end())
             return;
         m_Docks.push_back(dock);
+        dock->SetDockLayout(this);
+        dock->SetHostRepaint(m_HostRepaint);
+        RecalcLayout();
+        RequestRepaint();
+    }
+
+    void DockLayout::AddOwnedDock(Dock *dock)
+    {
+        // 动态 Dock：接管所有权，析构时由本布局释放
+        if (!dock)
+            return;
+        if (std::find(m_Docks.begin(), m_Docks.end(), dock) != m_Docks.end())
+            return;
+
+        m_OwnedDocks.emplace_back(dock); // 登记所有权
+        m_Docks.push_back(dock);         // 登记观察
+
         dock->SetDockLayout(this);
         dock->SetHostRepaint(m_HostRepaint);
         RecalcLayout();
@@ -232,7 +263,7 @@ namespace X_Y
             !checkSide(right, BoundaryOrientation::Vertical))
             return false;
 
-        AddDock(&dock);
+        AddDock(&dock); // 引用传入 = 调用方持有 = 内建（借用）
         auto &slots = dock.GetBoundarySlots();
         slots.top = top;
         slots.bottom = bottom;
@@ -250,6 +281,28 @@ namespace X_Y
         RecalcLayout();
         RequestRepaint();
     }
+
+    void DockLayout::RemoveAndDestroyDock(Dock *dock)
+    {
+        if (!dock)
+            return;
+
+        // 先摘掉借用指针，防止拖拽/悬停状态指向即将销毁的 Dock
+        if (m_MouseCaptureDock == dock)
+            m_MouseCaptureDock = nullptr;
+        if (m_FileDropPanel && dock->ContainsPanel(m_FileDropPanel))
+            m_FileDropPanel = nullptr;
+
+        RemoveDock(dock);
+
+        // 只释放自己拥有的；内建 Dock 不在此列（删了就是删栈上对象）
+        auto it = std::find_if(m_OwnedDocks.begin(), m_OwnedDocks.end(),
+                               [dock](const std::unique_ptr<Dock> &p)
+                               { return p.get() == dock; });
+        if (it != m_OwnedDocks.end())
+            m_OwnedDocks.erase(it); // unique_ptr 析构 → 释放 Dock
+    }
+
     // 按落点收容一个已脱离宿主的 Panel（不销毁/不复制 Panel）。
     // 落点命中哪个 Dock 就交给它；落空返回 nullptr，由调用方决定后续
     // （通常回退成独立窗口，见 TabDock::DropPanel / TabHostContainer）。
