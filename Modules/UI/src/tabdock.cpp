@@ -10,8 +10,7 @@ namespace X_Y
         SetMenuBarHeight(30);
     }
 
-    void TabDock::SetDetachToWindowHandler(
-        std::function<bool(Panel *, const std::string &, int, int)> handler)
+    void TabDock::SetDetachToWindowHandler(DetachToWindowHandler handler)
     {
         m_DetachToWindow = std::move(handler);
     }
@@ -99,22 +98,32 @@ namespace X_Y
                 y >= GetY() && y < GetY() + GetHeight();
             if (!target && !insideThisDock && m_DetachToWindow)
             {
+                Panel *dragPanel = m_DragPanel;
                 std::string title;
-                Panel *panel = DetachPanel(m_DragPanel, &title);
+                // ★ 交出所有权（unique_ptr）。即使回调不接管，owned 析构
+                //   也会正确释放，不会漏。
+                std::unique_ptr<Panel> owned = DetachPanel(dragPanel, &title);
                 // ⚠️ DetachPanel 之后 m_DragPanel 已经不属于本 Dock 了，
                 //    必须立刻清掉（否则它在两步之间是悬空的借用指针）。
                 ResetPanelDrag();
-                if (panel && !m_DetachToWindow(panel, title, x, y))
-                    AddPanel(panel, title); // 摘出失败：放回自己，别丢面板
+
+                if (owned && !m_DetachToWindow(std::move(owned), title, x, y))
+                {
+                    // 回调没接管 → 此刻 owned 已是被 move 走的空壳，收不回来了。
+                    // ⇒ 因此约定：回调返回 false 时必须【自己保证】panel 已被
+                    //    安置或释放（见 TabContainer/TabHostContainer 的实现）。
+                    //    这里不再尝试 AddPanel（那会是重复添加同一个 panel）。
+                }
             }
             return;
         }
 
+        Panel *dragPanel = m_DragPanel;
         std::string title;
-        Panel *panel = DetachPanel(m_DragPanel, &title);
+        std::unique_ptr<Panel> owned = DetachPanel(dragPanel, &title);
         ResetPanelDrag(); // 同上：所有权已转出，借用指针立刻清
-        if (panel)
-            target->AddPanel(panel, title); // 新主人接管（unique_ptr）
+        if (owned)
+            target->AddPanel(std::move(owned), title); // 新主人接管
     }
 
     void TabDock::ResetPanelDrag()

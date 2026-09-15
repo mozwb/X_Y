@@ -53,8 +53,9 @@ namespace X_Y
         DockLayout *GetDockLayout() const { return m_Layout.get(); }
 
         // 让渡：把一个 Panel 交出去（拖进别的 Dock / 摘成独立窗）
-        // 从本壳的 DockLayout 里脱出，返回 panel；调用方随后接管所有权。
-        Panel *DetachPanel(Panel *panel, std::string *title = nullptr);
+        // ★ 返回 unique_ptr = 交出所有权；调用方拿到即拥有。
+        //   若在接管前析构（早退/抛异常），Panel 会被正确释放，不会泄漏。
+        std::unique_ptr<Panel> DetachPanel(Panel *panel, std::string *title = nullptr);
 
     protected:
         virtual Dock *CreateSinglePanelDock();

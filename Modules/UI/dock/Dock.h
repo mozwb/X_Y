@@ -150,18 +150,22 @@ namespace X_Y
         }
 
         // ── 面板管理（tab）──
-        // ⚠️ 所有权：AddPanel 接管 panel 的所有权（存进 unique_ptr）。
-        //    调用方【不要】再 delete 它 —— 那是重复释放。
-        Panel *AddPanel(Panel *panel, const std::string &title = "");
+        // ★ 所有权从签名上就能读出来：
+        //   AddPanel(unique_ptr)     —— 接管所有权（调用点必须显式 std::move）
+        //   DetachPanel -> unique_ptr —— 交出所有权（调用方拿到即拥有）
+        //   没有任何一步经由"无主裸指针"过渡。
+
+        // 接管一个 Panel（存进 unique_ptr）。成功返回非空（= 同一指针的借用视图）。
+        Panel *AddPanel(std::unique_ptr<Panel> panel, const std::string &title = "");
 
         // 移除并【释放】该 Panel（析构 + 删除）。
         bool RemovePanel(Panel *panel);
 
-        // 摘出：把 Panel 交给调用方（不再拥有），返回同一指针；找不到返回 nullptr。
+        // 摘出：交出所有权，返回 unique_ptr；找不到返回 nullptr。
         // 典型用途：拖到别的 Dock / 摘成独立窗口。
-        // ★ 调用方拿到后要立刻接管（另一个 Dock 的 AddPanel，或自己 delete），
-        //   中间不要让任何借用指针指着它。
-        Panel *DetachPanel(Panel *panel, std::string *title = nullptr);
+        // ⚠️ 返回的 unique_ptr 若在接管前析构（早退/抛异常），Panel 会被正确释放，
+        //    不会泄漏 —— 这正是它比"返回裸指针"安全的地方。
+        std::unique_ptr<Panel> DetachPanel(Panel *panel, std::string *title = nullptr);
 
         bool ContainsPanel(const Panel *panel) const;
         void ActivatePanel(int idx);
@@ -208,10 +212,11 @@ namespace X_Y
         void ShowActivePanel();
         void UpdatePanelRects();
         // 内部：按索引摘下一条记录（不释放、不重排），返回其所有权并维护
-        // 激活下标 + 清理借用指针。Remove/Detach/RemovePanelInternal 共用。
+        // 激活下标 + 清理借用指针。Remove/Detach/TakePanelInternal 共用。
         std::unique_ptr<Panel> TakeEntry(int idx, std::string *title);
-        // 内部：移除面板但不触发合并（Split 时需要把活跃面板切给新 Dock）
-        void RemovePanelInternal(Panel *panel);
+        // 内部：摘出指定面板但不重排（Split 用，把活跃面板切给新 Dock）。
+        // 返回所有权，调用方负责交给新 Dock；找不到返回 nullptr。
+        std::unique_ptr<Panel> TakePanelInternal(Panel *panel);
 
         int m_X = 0, m_Y = 0, m_W = 100, m_H = 100;
         int m_LayoutW = 0, m_LayoutH = 0; // 宿主喂的布局总尺寸

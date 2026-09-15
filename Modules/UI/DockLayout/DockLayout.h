@@ -89,9 +89,10 @@ namespace X_Y
         // 从布局中移除并【释放】。这是移除 Dock 的正常入口。
         void RemoveDock(Dock *dock);
 
-        // 按落点收容一个已脱离宿主的 Panel；不销毁也不复制 Panel。
-        // 落点命中哪个 Dock 就交给它，落空/不可加返回 nullptr（调用方负责回退）。
-        Panel *AddPanelAt(Panel *panel, int x, int y,
+        // 按落点收容一个 Panel（接管所有权）。
+        // 落点命中哪个 Dock 就交给它；落空返回 nullptr —— 此时 panel 已被释放
+        // （没有 Dock 接管），调用方若要保住它请自己持有 unique_ptr。
+        Panel *AddPanelAt(std::unique_ptr<Panel> panel, int x, int y,
                           const std::string &title = "");
         const std::vector<Dock *> &GetDockList() const { return m_Docks; }
 

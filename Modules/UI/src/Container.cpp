@@ -185,7 +185,8 @@ namespace X_Y
         //   但读起来像是有意为之，实际只是历史遗留。）
         m_Layout->DockBind(*dock, InvalidBoundary, InvalidBoundary,
                            InvalidBoundary, InvalidBoundary);
-        return dock->AddPanel(panel, title);
+        // ★ panel 的所有权交给 Dock（unique_ptr 接管）
+        return dock->AddPanel(std::unique_ptr<Panel>(panel), title);
     }
 
     Dock *Container::CreateSinglePanelDock()
@@ -193,16 +194,18 @@ namespace X_Y
         return new Dock();
     }
 
-    Panel *Container::DetachPanel(Panel *panel, std::string *title)
+    std::unique_ptr<Panel> Container::DetachPanel(Panel *panel, std::string *title)
     {
         if (!m_Layout)
             return nullptr;
         for (Dock *dock : m_Layout->GetDockList())
         {
-            if (dock && dock->DetachPanel(panel, title))
+            if (!dock)
+                continue;
+            if (auto owned = dock->DetachPanel(panel, title))
             {
                 RequestRepaint();
-                return panel;
+                return owned; // ★ 交出所有权
             }
         }
         return nullptr;

@@ -3,6 +3,7 @@
 #include "UI/Container/Container.h"
 #include "../dock/tabdock.h"
 
+#include <memory>
 #include <string>
 
 namespace X_Y
@@ -21,7 +22,9 @@ namespace X_Y
     private:
         void ConfigureTabDocks();
         void ConfigureTabDock(TabDock &dock);
-        bool HandlePanelDrop(Panel *panel, const std::string &title,
+        // 拖出到窗口的回调（见 TabDock::DetachToWindowHandler）。
+        // ★ 收 unique_ptr：本函数负责接管或释放；返回 true 表示已接管。
+        bool HandlePanelDrop(std::unique_ptr<Panel> panel, const std::string &title,
                              int x, int y);
 
         std::string m_WindowTitle;

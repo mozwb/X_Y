@@ -281,25 +281,25 @@ namespace X_Y
 
     // ── 面板管理 ──
     //
-    // ★ 所有权：AddPanel 接管 panel（存进 unique_ptr）；DetachPanel 交出去；
-    //   RemovePanel 释放。三者都会顺手清理指向被搬走 Panel 的借用指针。
-    Panel *Dock::AddPanel(Panel *panel, const std::string &title)
+    // ★ 所有权：AddPanel 接管 unique_ptr；DetachPanel 交出 unique_ptr。
+    //   两者都会顺手清理指向被搬走 Panel 的借用指针。
+    Panel *Dock::AddPanel(std::unique_ptr<Panel> panel, const std::string &title)
     {
         if (!panel || !CanAddPanel())
-            return nullptr;
+            return nullptr; // panel 是 unique_ptr，此处返回即自动释放
 
-        panel->SetHostRepaint(m_HostRepaint);
-        m_Panels.push_back(PanelEntry{std::unique_ptr<Panel>(panel), title});
+        Panel *raw = panel.get(); // 借用视图（返回值用）
+        raw->SetHostRepaint(m_HostRepaint);
+        m_Panels.push_back(PanelEntry{std::move(panel), title});
         m_ActiveIndex = (int)m_Panels.size() - 1;
         if (m_Layout)
             m_Layout->RecalcLayout();
         RequestRepaint();
-        return panel;
+        return raw;
     }
 
-    // 内部：按索引摘除一条记录（不释放、不重排），返回被摘下的 unique_ptr。
-    // 三个公开接口（Remove/Detach/RemovePanelInternal）共用这一份下标维护逻辑，
-    // 免得三处各写一遍、各错一遍。
+    // 内部：按索引摘除一条记录（不释放、不重排），返回其所有权并维护
+    // 激活下标 + 清理借用指针。Remove/Detach/RemovePanelInternal 共用。
     std::unique_ptr<Panel> Dock::TakeEntry(int idx, std::string *title)
     {
         if (idx < 0 || idx >= (int)m_Panels.size())
@@ -342,17 +342,18 @@ namespace X_Y
         return false;
     }
 
-    Panel *Dock::DetachPanel(Panel *panel, std::string *title)
+    std::unique_ptr<Panel> Dock::DetachPanel(Panel *panel, std::string *title)
     {
         for (int i = 0; i < (int)m_Panels.size(); ++i)
         {
             if (m_Panels[i].Panel_.get() != panel)
                 continue;
-            // 交出所有权：release() 让 unique_ptr 放手，调用方接管
+            // 直接交出所有权：调用方拿到 unique_ptr 即拥有，
+            // 全程没有"无主裸指针"的窗口（早退/抛异常也会正确释放）
             std::unique_ptr<Panel> owned = TakeEntry(i, title);
             ShowActivePanel();
             RequestRepaint();
-            return owned.release();
+            return owned;
         }
         return nullptr;
     }
@@ -502,12 +503,15 @@ namespace X_Y
         newDock->SetSplittable(m_Splittable);
         newDock->SetHostRepaint(m_HostRepaint);
 
-        // 让活跃面板跟随新 Dock（分屏时把当前内容切到新一侧）
+        // 让活跃面板跟随新 Dock（分屏时把当前内容切到新一侧）。
+        // ★ 纯 move 转移：TakePanelInternal 交出 unique_ptr，AddPanel 立刻接管。
+        //   中间没有"无主裸指针"窗口 —— 若 AddPanel 拒绝（如 CanAddPanel 为假），
+        //   unique_ptr 析构即正确释放，不会泄漏。
         Panel *active = GetActivePanel();
         if (active)
         {
-            RemovePanelInternal(active);
-            newDock->AddPanel(active, /*title留空*/ "");
+            if (auto owned = TakePanelInternal(active))
+                newDock->AddPanel(std::move(owned), /*title留空*/ "");
         }
 
         // 共享边分配：新 Dock 那侧 + 本 Dock 相对侧
@@ -582,21 +586,18 @@ namespace X_Y
         layout->RemoveDock(this);
     }
 
-    // 内部：不移面板版本（Split 用，用于把活跃面板移到新 Dock）
-    // ⚠️ 会被调用方拿走所有权（Split 里紧跟着 newDock->AddPanel）。
-    //    这里用 TakeEntry 保持与 Remove/Detach 同一套下标维护 + 断借用逻辑。
-    void Dock::RemovePanelInternal(Panel *panel)
+    // 内部：摘出面板但不触发重排（Split 用，把活跃面板切给新 Dock）。
+    // 返回所有权；调用方负责交给新 Dock。
+    // ⚠️ 与 DetachPanel 的差别：不做 ShowActivePanel（Split 后面还要整体重排）。
+    std::unique_ptr<Panel> Dock::TakePanelInternal(Panel *panel)
     {
         for (int i = 0; i < (int)m_Panels.size(); ++i)
         {
             if (m_Panels[i].Panel_.get() != panel)
                 continue;
-            // 取出后立刻 release：所有权马上被 Split 转交给新 Dock。
-            // （中间不会有人碰到它，所以不存在"悬空的借用指针"窗口）
-            std::unique_ptr<Panel> owned = TakeEntry(i, nullptr);
-            owned.release();
-            return;
+            return TakeEntry(i, nullptr);
         }
+        return nullptr;
     }
 
 } // namespace X_Y

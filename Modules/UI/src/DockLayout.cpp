@@ -288,14 +288,14 @@ namespace X_Y
         RequestRepaint();
     }
 
-    // 按落点收容一个已脱离宿主的 Panel（不销毁/不复制 Panel）。
-    // 落点命中哪个 Dock 就交给它；落空返回 nullptr，由调用方决定后续
-    // （通常回退成独立窗口，见 TabDock::DropPanel / TabHostContainer）。
+    // 按落点收容一个 Panel。
+    // 落点命中哪个 Dock 就交给它；落空返回 nullptr（此时 panel 已被释放，
+    // 因为没有 Dock 接管它 —— 调用方若想保住它，应该自己持有 unique_ptr）。
     //
     // ℹ️ 早期这里有个 TakePanel(panel, title)：语义是"找第一个【有】激活面板的
     //    Dock 塞进去"，方向正好相反（该找的是**能收容**的 Dock），且会 new 裸 Dock
     //    （没有 tab 栏）却无人释放。它从未被调用，已删除 —— 按落点收容走本函数。
-    Panel *DockLayout::AddPanelAt(Panel *panel, int x, int y,
+    Panel *DockLayout::AddPanelAt(std::unique_ptr<Panel> panel, int x, int y,
                                   const std::string &title)
     {
         if (!panel)
@@ -303,12 +303,10 @@ namespace X_Y
 
         // 复用 HitTestDock：与绘制 z 序 / 事件命中同一套顺序（逆序 = 上层优先）
         Dock *dock = HitTestDock(x, y);
-        if (!dock)
-            return nullptr;
-        if (!dock->CanAddPanel())
-            return nullptr;
+        if (!dock || !dock->CanAddPanel())
+            return nullptr; // panel 随参数析构被释放
 
-        return dock->AddPanel(panel, title);
+        return dock->AddPanel(std::move(panel), title);
     }
 
     void DockLayout::RouteFileDragEnter(const std::vector<XPath> &files, int x, int y)

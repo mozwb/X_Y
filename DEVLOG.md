@@ -1,5 +1,71 @@
 # DEVLOG
 
+## 2026-09-13 Panel 转移改成纯 move（unique_ptr 全程在手）
+
+> 砚台问："`m_Panels` 是拥有还是借用？那 panel 咋转移呢？"
+> 借此把转移路径上的"无主裸指针窗口"也消灭掉。
+
+### 改了什么
+
+之前 `DetachPanel` 摘出的所有权**经由裸指针**交给下一个 Dock：
+
+```cpp
+Panel *DetachPanel(...);        // 所有权离手，但没有任何东西记录谁接着
+// ... 中间若早退 / 抛异常 / 忘了接管 → 泄漏，编译器不提醒
+```
+
+现在**全程在 `unique_ptr` 手里**：
+
+```cpp
+std::unique_ptr<Panel> Dock::DetachPanel(Panel *panel, std::string *title);
+Panel *Dock::AddPanel(std::unique_ptr<Panel> panel, const std::string &title);
+```
+
+| 层 | 新签名 |
+|----|--------|
+| `Dock` | `AddPanel(unique_ptr)` 接管 / `DetachPanel -> unique_ptr` 交出 / `TakePanelInternal -> unique_ptr` |
+| `DockLayout` | `AddPanelAt(unique_ptr, x, y, title)` |
+| `Container` | `DetachPanel -> unique_ptr` |
+| `TabDock` | `DetachToWindowHandler` 回调签名改为收 `unique_ptr<Panel>` |
+| `TabContainer`/`TabHostContainer` | `HandlePanelDrop(unique_ptr<Panel>, ...)` |
+
+### 顺带简化
+
+- `Dock::RemovePanelInternal(Panel*)`（void，靠 release 裸指针）→
+  **`TakePanelInternal(Panel*) -> unique_ptr`**。`Split` 里变成纯 move 链：
+  ```cpp
+  if (auto owned = TakePanelInternal(active))
+      newDock->AddPanel(std::move(owned), "");
+  ```
+- `TabDock::DropPanel` 里不再需要"失败就 AddPanel 放回去"的补救分支 ——
+  回调改成收 `unique_ptr` 后，接管责任在回调内部，语义更清楚。
+
+### 验证（`g++ -std=c++20`，20 个 UI 源文件全部编译通过）
+
+运行时逐条验证，重点是**老版本保证不了的两条**：
+
+| 场景 | 结果 |
+|------|------|
+| `AddPanel(unique_ptr)` 接管 → 析构释放 | ✅ `alive 1→0` |
+| `DetachPanel` 跨 Dock 转移 → 恰好死一次 | ✅ `alive 1→0`（无双重释放/泄漏） |
+| **★ DetachPanel 后 `owned.reset()`（模拟忘了接管/中途早退）** | ✅ **自动释放，无泄漏**（老版本此处必漏） |
+| **★ `AddPanel` 被拒（`CanAddPanel` 为假）** | ✅ **unique_ptr 自动释放**（老版本此处必漏） |
+| `Split` 的 move 链（活跃面板随新 Dock） | ✅ `a.size=0 b=1 alive=1`，析构后 `alive=0` |
+
+### ⚠️ 语义变化（回调约定）
+
+`DetachToWindowHandler` 现在**按值收 `unique_ptr`**：
+
+- 返回 `true` = 回调已接管（所有权归它）
+- 返回 `false` = **此时 panel 已随参数析构**（`AddPanelAt` 失败时它释放了）
+  ⇒ 所以回调返回 false 时不能再去用那个 panel；`TabDock::DropPanel` 也因此
+  去掉了"失败就放回自己"的分支。
+
+### 仍需同步的 test 代码
+
+`test/src/main.cpp`（不在本仓库）：`delete logViewer/hexViewer` 仍是双重释放；
+`TopLayout topLayout;` 传 `&topLayout` 给 `SetDockLayout` 会被 delete（栈对象）。
+
 ## 2026-09-13 UI 所有权显式化（④ 修正：模型定了，我上一条写错了）
 
 > ⚠️ **本条修正同日上一条 ④ 的所有权模型描述。** 我上一轮照着自己臆想的 UML 图

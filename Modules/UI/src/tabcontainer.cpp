@@ -38,11 +38,12 @@ namespace X_Y
     void TabContainer::ConfigureTabDock(TabDock &dock)
     {
         dock.SetDetachToWindowHandler(
-            [this](Panel *panel, const std::string &title, int x, int y)
-            { return HandlePanelDrop(panel, title, x, y); });
+            [this](std::unique_ptr<Panel> panel, const std::string &title, int x, int y)
+            { return HandlePanelDrop(std::move(panel), title, x, y); });
     }
 
-    bool TabContainer::HandlePanelDrop(Panel *panel, const std::string &title,
+    bool TabContainer::HandlePanelDrop(std::unique_ptr<Panel> panel,
+                                       const std::string &title,
                                        int, int)
     {
         if (!panel)
@@ -61,13 +62,16 @@ namespace X_Y
             target->ScreenToClient(targetX, targetY);
             DockLayout *targetLayout = target->GetDockLayout();
             if (targetLayout &&
-                targetLayout->AddPanelAt(panel, targetX, targetY, title))
+                targetLayout->AddPanelAt(std::move(panel), targetX, targetY, title))
             {
                 destroy();
-                return true;
+                return true; // 目标窗口接管成功
             }
         }
 
+        // 没接管成功：
+        // ⚠️ 若上面 AddPanelAt 失败，panel 已被它释放（unique_ptr 按值传入）。
+        //    所以这里不能再碰 panel —— 直接返回 false。
         return false;
     }
 } // namespace X_Y

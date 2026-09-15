@@ -3,6 +3,7 @@
 #include "UI/dock/Dock.h"
 
 #include <functional>
+#include <memory>
 
 namespace X_Y
 {
@@ -11,8 +12,14 @@ namespace X_Y
     public:
         TabDock();
 
-        void SetDetachToWindowHandler(
-            std::function<bool(Panel *, const std::string &, int, int)> handler);
+        // 拖出到窗口时的回调（由壳注入）。
+        // ★ 参数是 unique_ptr：把 Panel 的所有权交给回调。
+        //   返回 true = 回调已接管（所有权归它）；返回 false = 未能接管，
+        //   由 DropPanel 负责放回原处（不会泄漏）。
+        using DetachToWindowHandler = std::function<bool(
+            std::unique_ptr<Panel>, const std::string &, int, int)>;
+
+        void SetDetachToWindowHandler(DetachToWindowHandler handler);
         void RouteInput(UIInputEvent &e) override;
 
     private:
@@ -23,10 +30,10 @@ namespace X_Y
         void DropPanel(int localX, int localY);
         void ResetPanelDrag();
 
-        Panel *m_DragPanel = nullptr;
+        Panel *m_DragPanel = nullptr; // 借用：正在拖的那个（不拥有）
         bool m_DraggingPanel = false;
         int m_DragStartX = 0;
         int m_DragStartY = 0;
-        std::function<bool(Panel *, const std::string &, int, int)> m_DetachToWindow;
+        DetachToWindowHandler m_DetachToWindow;
     };
 } // namespace X_Y
