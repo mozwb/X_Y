@@ -1,4 +1,474 @@
 # DEVLOG
+## 只保留最近十次改动多了就删除
+
+
+## 2026-09-14 内存模块③-c：策略改裸函数指针 + 删掉释放路径上的后端遍历
+
+> 承上条（③-b SlabBackend 接入）。砚台看过代码后提了两点：
+> ① "我们先处理你说的策略是 lambda 表达式的问题较好"；
+> ② "删除就是门面更新在对应后端更新就行" —— 质疑释放为什么要遍历后端。
+> 拍板：策略用函数指针；`own()` 留作自检；新后端挂载姿势等真要加时再说。
+
+### 一、策略：`std::function` → 裸函数指针
+
+```cpp
+using AllocPolicy = BackendType (*)(uint64_t);   // 以前是 std::function<...>
+```
+
+**为什么必须改**（不是"更规范"，是有真实的递归路径）：
+
+```
+用户 setPolicy(捕获物较大的 lambda)
+  → std::function 构造：捕获物塞不进 SBO 小缓冲
+  → 它调 operator new —— 而本模块重载了全局 operator new
+  → Memory::allocate() → 此刻 m_Policy 还没就绪 → 自举递归 / UB
+```
+
+- 旧代码"手动 malloc + placement new 放 `std::function`"**解决不了**这个问题：
+  那只安排了 `std::function` 对象本身在哪，**捕获物照样在堆上**。
+- 改为裸指针后：`setPolicy` 只是一次原子 store，`clearPolicy` 存 nullptr，
+  `hasPolicy` 判非空。零分配、零析构，门面成员彻底不用运行期构造。
+- **附带好处：把错误挡在编译期** —— 捕获 lambda 直接不匹配这个类型，编译不过。
+  需要"策略读配置"时，把配置做成门面成员 + 写无捕获静态函数去读，
+  而不是让策略去捕获。
+
+> ⚠️ 我上一轮把严重性讲夸大了一次，此处更正：**空捕获 lambda（如文档里
+> `[](uint64_t n){ return n<=512 ? Slab : Crt; }`）其实不会炸**（它存成函数指针）。
+> 会炸的是捕获物超过 SBO 的。所以这条是"看捕获大小"的隐患、不是必炸，
+> 但**不能把可用性押在编译器 SBO 大小这种不受控条件上**，故照样改掉。
+
+### 二、释放路径：删掉"遍历后端问 own()"这一层
+
+`deallocate` 现在是**纯 O(1)**：
+
+```cpp
+void* raw = ptr - kHeaderSize;      // header 就在就前面
+if (!HeaderValid(hdr, ptr))  { std::free(ptr); return; }   // magic + user + checksum
+if (hdr->magic != kAllocMagic) { /* 重复释放，告警并 return */ }
+// 按 header 里的 backend 字段找后端 → 归还
+```
+
+**删掉的那层是净负债**，理由是砚台点出来的那句"删除就是门面更新+对应后端更新"：
+中间那层 `ownsFast()`（遍历所有后端、问"这地址是不是你的地盘"）
+**没防住任何东西** —— 紧跟着的三连验真照样要读同一块内存，
+所以它没换来任何安全性，却：
+
+- 让**每一次 `delete`**（含所有纯 CRT 指针）变成 O(后端数)；
+- Slab 的 `own()` 要抢 `m_IndexLock` + 二分 → **全局串行点**；
+- 把判决拆成三段，段与段之间留了空隙（我上一轮还得专门补个 magic 检查来堵）。
+
+> 关键认识：**只要 Slab 被注册进 `m_Backends` 一次（哪怕只 `MallocFrom(Slab,n)` 一次），
+> 之后所有 `delete` 都要走 Slab 的 `own()`** —— CRT 路径被 slab 连累。
+
+### 三、`own()` 保留作自检
+
+删掉的是"释放热路径上的遍历"，不是 `own()` 接口本身。新增一个明确的自检入口：
+
+```cpp
+IMemoryBackend* Memory::backendOwning(void* ptr);   // 只问后端区域表，不读 header
+```
+
+- `owns(ptr)` —— 读 header 三连验真（与 deallocate 同判据）；
+- `backendOwning(ptr)` —— 只问后端自己的区域表（Slab 的 chunk 二分）。
+- ⚠️ `ownsFast()` 已**删除**，不要再加回来。
+- 两者都不在分配/释放路径上，所以 `own()` 可以"精确但偏慢"。
+
+### 四、涉及文件
+
+| 文件 | 动作 |
+|------|------|
+| `Memory/XMemFacade.h` | `AllocPolicy` 改裸函数指针；`m_Policy` 改 `atomic<AllocPolicy>`；删 `ownsFast` 声明、加 `backendOwning`；用法示例改成无捕获静态函数 |
+| `src/Memory/XMemFacade.cpp` | `ResolveWithSize` 适配函数指针；`deallocate` 删遍历、改纯 header 判决；`ownsFast` 删除；`owns` 改纯 header；新增 `backendOwning` |
+
+> `XMemBackend.h/.cpp` 未改 —— `own()` 本就在接口里，只是不再被释放路径调用。
+> 另：旧 `Modules/XCore/src/Memory/XMemory.cpp` 与 `Memory/XMemory.h` 已由砚台删除，
+> 之前的"两个 `X_Y::Memory` 抢定义"隐患解除。
+
+### 五、验证（交给砚台）
+
+- 全局 `new`/`delete` 照常（含 STL）；
+- `setPolicy(&无捕获函数)` 生效；尝试传捕获 lambda **应当编译不过**；
+- **释放不再抢 Slab 的索引锁**：`MallocFrom(Slab, n)` 之后，
+  普通 `new`/`delete` 的路径应与未启用 Slab 时一致（可对比 profile）；
+- `owns()` / `backendOwning()` 自检：门面指针 true/Slab，栈指针 false/nullptr。
+
+
+## 2026-09-14 内存模块③-b：SlabBackend 接入 + 退役 OwnedSet（header 双字段验真）
+
+> 砚台："Memory 模块有一个内存后端还没有接入你先接入一下，另外你使用什么哈希表来存什么
+> 是不是经过我们的门面分配内存，但是我觉得你直接在那个 header 里多加两个验证字段就行，
+> 没必要还要额外存储。"
+> 拍板：① 删掉 OwnedSet；② Slab 仅显式调用（默认仍全走 Crt）；③ 保留 slab 分配时的清零。
+
+### 一、接入了什么
+
+`BackendType::Slab` 此前只是枚举里的一个名字 —— `backendFor()` 返回 nullptr，
+`allocate()` 在 `if (!backend) return nullptr;` 那行**静默失败**。
+现在把旧 `Memory/XMemory.h` 的 slab 实现搬进新后端体系（`SlabBackend`）。
+
+**不是照抄**，四处必须改（旧实现放不进新体系）：
+
+| # | 旧 `XMemory.cpp` | 新 `XMemBackend.cpp` | 为什么 |
+|---|------------------|----------------------|--------|
+| 1 | `std::malloc` 取 chunk | `::malloc` | 后端铁律：只用 `::malloc/::free` |
+| 2 | `std::vector`/`std::mutex`/`std::shared_mutex` | `::malloc` 手写数组 + 自旋锁 | 构造期 `new` → 门面 → 后端 → 自己 → **自举递归**。slab 后端一旦注册成静态对象就必炸 |
+| 3 | 释放靠 `FindChunkByAddr` 二分 | 同一套区间查询，但对外叫 `own(ptr)` | 门面需要它做 fast-path（见下） |
+| 4 | 后端内 `memset(ptr,0,size)` | 保留（砚台定） | 与旧的逐位行为一致，便于对比新旧输出 |
+
+档位/chunk 沿用旧值：**8 档 64B…64KB，chunk 64KB**；
+chunk 回收沿用旧不变量：**只有该 chunk 自己全部空闲才 free**
+（旧代码特意注释过：不能用 bin 的 freeCount 判断单个 chunk）。
+
+### 二、OwnedSet 退役 → header 加两个字段
+
+`AllocHeader` 16B → **32B**（仍对齐 16）：
+
+```cpp
+struct AllocHeader
+{
+    uint64_t  size;      // 用户请求字节数
+    uint64_t  checksum;  // ★新：由 size+backend+user 算出的自校验
+    uintptr_t user;      // ★新：用户区地址（= raw + kHeaderSize）
+    uint32_t  magic;
+    uint8_t   backend;
+    uint8_t   pad[3];
+};
+```
+
+**为什么这下真的够了**（砚台判断的依据）：
+
+1. 归属判定本来就靠 header（`magic`+`backend`），表只被用来"先查表再读 header"；
+2. **旧 `XMemory::Free` 早就在证明这点** —— 它直接 `FindChunkByAddr` 判归属，**压根没有表**；
+3. 表是 per-pointer 开销：每次分配插一次、释放删一次、扩容还要重哈希；
+4. 两个新字段防的正是表**防不住**的那类错：重复释放、指针被改、跨后端错配。
+
+验真三连（**不查任何表、不解引用外部指针**）：
+
+```
+magic == kAllocMagic && user == ptr && checksum == Checksum(*hdr)
+```
+
+`deallocate` 的实际判决顺序（**三段，别简化**）：
+
+```
+① 快路径：地址落在自家区域内（问各后端 own()）→ 读 header 不可能段错误
+② 慢路径：读 header 做三连验真
+   ①②都不过 → 不是门面发的 → ::free 交回标准库
+③ 到这儿说明"确实是我发的"，但还要再看一眼 magic：
+   若 magic 已不是 kAllocMagic → 是【重复释放】（归还时会把 magic 擦成 0）
+   → 告警并 return，【不再归还】，避免把同一块还两次
+```
+
+> ⚠️ ③ 是写完后补的，别删。原因：slab 的 block 还回 free list 后，
+> 它所在的 chunk 仍是自家页 → `ownsFast` 照样 true。少了 ③ 的话，
+> 第二次 `delete` 会把已空闲的 block 再还一次 free list →
+> **同一地址在表里出现两次** → 后续两次分配拿到同一块内存。
+> 这种 bug 比直接崩溃难查得多（典型的 double-free 变异）。
+
+> 顺带把一直空着的 `IMemoryBackend::own()` 用起来了。
+
+### 二·补、实现中发现的锁顺序问题（ABBA 死锁，已处理）
+
+写到一半自查发现一个**低负载永远不炸、一上并发就卡死**的坑：
+
+- `deallocate` 的顺序是"先拿 `m_IndexLock` 查区间 → 放掉 → 再拿 bin 锁"；
+- 而我第一版 `AddChunk` / `DropChunk` 是"**持 bin 锁时**去动区间表"。
+
+两种顺序并存 = 经典 ABBA 死锁。**已按"持 bin 锁时绝不拿 m_IndexLock"重排**：
+
+| 场景 | 做法 |
+|------|------|
+| 扩了新 chunk | `AllocFromBin` 把新 chunk 的 base 回报出来，调用方**放掉 bin 锁之后**才 `IndexChunk()` |
+| 回收空 chunk | bin 锁内只 `DetachChunkNoFree()`（摘数组+记账，**不 free**）→ 放锁 → `UnindexChunk()` → **最后才** `RawFree` |
+
+**"先摘索引、再 free"这条顺序是必须的**：否则会出现"`own()` 还认这块地、
+但内存已经还给 OS"的窗口，门面就会在那一刻去读已经不属于自己的 header
+（→ 读野内存 + 误判归属）。
+
+回收空 chunk 时还有个小竞态：放锁 → 重新拿锁之间，别的线程可能已经把该 chunk
+收掉了。处理办法是重新拿锁后**先 `FindChunkIdx` 确认它还在**
+（返回 `chunkCount` = 已被收走，直接跳过），确认在才摘。
+
+> 另：`SlabBackend::own(ptr)` 只对自己的区间表做二分，**从不解引用 ptr**，
+> 所以门面可以放心地对任意外部指针（含 CRT 指针、栈地址）调它。
+
+### 三、连带改动
+
+| 文件 | 动作 |
+|------|------|
+| `Memory/XMemBackend.h` | `+ SlabBackend`（约 +50 行注释 + 声明） |
+| `src/Memory/XMemBackend.cpp` | **新建**，SlabBackend 实现 |
+| `Memory/XMemFacade.h` | `AllocHeader` 改 32B；`+ Checksum()`；`- m_OwnedTable` |
+| `src/Memory/XMemFacade.cpp` | 去表、加验真、`backendFor` 懒建 Slab 单例 |
+| `Memory/XMemOwnedSet.h`、`src/Memory/XMemOwnedSet.cpp` | **删除**（−214 行） |
+| `Memory/XMemTypes.h` | Slab 注释"待迁移" → "已接入" |
+| `src/Memory/Buffer.cpp` | `include "../../Memory/XMemory.h"` → `"../../Memory/XMemFacade.h"` |
+
+- `owns()` 改成"后端 own() + header 三连验真"，并**新增 `ownsFast()`**
+  （只问后端、不读 header，绝不触碰外部内存）；`ownedCount()` 原来读表的元素个数，
+  **改读统计器**（语义不变：在册 = 分配了还没释放，且跨基线也不会跑偏）。
+- **顺带修掉旧 `Memory::Free` 的一个真 bug**：>64KB 独立块释放时
+  `uint64_t size = 0; // 无法知道 malloc 的大小，只减计数` ——
+  代码注释自己都写了"理想情况应该记录大小"，实际效果是 `UsedBytes` **减不掉**。
+  新体系 header 里有 size，天然没这毛病。
+
+### ⚠️ 一个要砚台处理的构建问题（我没动）
+
+`build/CMakeFiles/XCore.dir/.../Memory/` 里**同时有旧的 `XMemory.cpp.obj`** ——
+说明上次 `cmake` configure 时旧的 `XMemory.cpp` 还在（它是 ② 之前就存在的文件，
+一直被 `file(GLOB)` 收着）。后果：
+
+- `XMemory.cpp` 与 `XMemFacade.h` 定义了**两个 `X_Y::Memory`**（一个是单例 `Instance()`，
+  一个只有 `Allocate/Deallocate`），且 `XMemory.cpp` 与 `Buffer.cpp` 都定义 `Memory::Alloc/Free`
+  → 靠链接器"取第一个定义"决定行为，**这是个定时炸弹**；
+- `OwnedSet.cpp` 删除后，旧 `.obj` 仍会留在库里。
+
+**建议**：删掉 `Modules/XCore/src/Memory/XMemory.cpp` 与 `Modules/XCore/Memory/XMemory.h`
+（旧体系已被新体系完全覆盖，且 `XMemBackend.cpp` 已把它的 slab 能力接过来），
+然后重新 configure 一次让 GLOB 刷新。**这一步等砚台点头再动。**
+
+### 四、验证（交给砚台）
+
+- `MallocFrom(BackendType::Slab, n)` 若干轮 → `stats()` 里 Slab 槽有 used/alloc/cap；
+- 释放后 `liveBlocks()` 回到 0，且 `ownedCount()` 与它一致；
+- 重复 `Free` 同一指针 → 第二次被 magic 挡下并告警（不会二次归还）；
+- `>64KB` 走 Slab 不崩（兜底 `::malloc`）；
+- `Memory::Instance().setEnabled(false)` 退路仍有效。
+
+
+## 2026-09-14 窗口存储位置显式表态：StorageTag（默认 Heap，栈对象写 StorageTag::Stack）
+
+> 砚台："我建议你添加一个属性，让用户自己决定是栈上的还是堆上的，
+> 然后我们默认是堆上，这样子用户自然而然就能意识到这个问题。"
+> 背景：上一轮的自毁机制会对 `WindowDestroy` 做 `delete this`，
+> 而 `test/main.cpp` 里原本是栈对象 → 一点关闭按钮就 delete 栈内存 = 崩。
+
+### 设计
+
+```cpp
+// XWidget.h
+enum class StorageTag
+{
+    Heap,  // new 出来（默认）—— 关窗时自动 delete，不泄漏
+    Stack  // 栈/成员对象 —— 关窗时只退订，内存归作用域
+};
+
+explicit XWidget(XWidget* parent = nullptr, StorageTag storage = StorageTag::Heap);
+bool IsHeapAllocated() const;
+```
+
+用法对比：
+```cpp
+auto* w = new TabContainer();                      // 默认 Heap → 关窗自动回收
+TabContainer w(nullptr, X_Y::StorageTag::Stack);   // 显式栈 → 关窗只退订
+```
+
+**⚠️ 默认 Heap 是有意的**：让"这个窗口我要不要自己管"在写代码时就被看见 ——
+栈对象必须显式敲 `StorageTag::Stack`，等于强制确认一次。
+
+> 📌 初稿额外加了个 `struct StackTag{}` 作为"好写的栈标记"，砚台指出**多余** ——
+> 直接用 `StorageTag::Stack` 就行，两套写法语义重复、还要多记一个类型。
+> 已删除，现在只有一种写法。
+
+### 自毁分支（关键）
+
+```cpp
+void XWidget::OnNativeDestroyed()
+{
+    if (m_RecycleQueued) return;
+    m_RecycleQueued = true;
+
+    // 栈对象：只退订，绝不 delete（内存归作用域）
+    if (!IsHeapAllocated()) {
+        disConnect(this);
+        return;
+    }
+    // 堆对象：死前退订 → 入队 → 安全点 delete
+    disConnect(this);
+    app->DeferRecycle([this]{ delete this; });
+}
+```
+
+### 连带改动
+
+- `Container` 同步加两个构造（`StorageTag` 默认 Heap + `StackTag` 重载），
+  `TabContainer` / `TabHostContainer` 用 `using Container::Container` 继承，
+  **自动支持两种写法**，无需各改一遍。
+- `test/main.cpp`：三个正式窗口保持 `new`（默认 Heap，不写 StorageTag 也走堆），
+  另加一条 **自检 3/3**：栈上建窗口显式传 `StorageTag::Stack` → `show` → `destroy`，
+  验证"没被误当堆对象 delete"（若识别失败，进程当场崩，测试即失败）。
+
+### 实测（三路径行为）
+
+```
+① 默认（不表态）：  storage=Heap   IsHeap=1  → 堆对象 → 入队 delete   ✓
+② 显式 Heap：      storage=Heap   IsHeap=1  → 堆对象 → 入队 delete   ✓
+③ 显式 StackTag：  storage=Stack  IsHeap=0  → 只退订，不 delete；
+                                              正常离开作用域才析构     ✓
+exit=0
+```
+
+### 验证
+
+- 最小复现：三条构造路径的 `IsHeapAllocated()` 与自毁分支行为均正确。
+- `XWidget.cpp` / `Container.cpp` / `tabcontainer.cpp` / `tabhostcontainer.cpp` /
+  `test/main.cpp` `g++ -std=c++20 -fsyntax-only -DXY_DEBUG` 全部通过。
+
+> 📌 遗留：`storage` 参数目前**没有运行期校验**（无法检测"声明 Heap 但实际建在栈上"
+> 这类说谎）。默认值和显式标记已能覆盖绝大多数误用，真正的强制手段
+> （如私有化 `operator new`）留待以后需要时再谈。
+
+---
+
+## 2026-09-14 disConnect 单参版语义改定：删自己相关的【所有】订阅
+
+> 砚台："我希望你改一下 disconnect 的行为，一个参数的那个就是删除自己作为接受者和发送者的订阅都删除。"
+
+### 改前 / 改后
+
+```cpp
+// 改前：只比 receiver
+void disConnect(MovementReceiver receiver) {
+    if (it->receiver == receiver) erase;
+}
+
+// 改后：sender 或 receiver 任一命中即删
+void disConnect(MovementReceiver receiver) {
+    if (it->receiver == receiver || it->sender == receiver) erase;
+}
+```
+
+**语义**：传进来的 ptr 只要出现在某条绑定的 **sender 或 receiver** 任一位置，这条绑定就删。
+一句话 —— **"把我和事件系统的所有关系一次清干净"**。
+
+### 为什么这么改
+
+改前只比 receiver，能删掉 `connect(this, t, this, ...)`（this 兼作两者），
+但会**漏掉 `sender == this && receiver != this`** 那类（本对象发事件给别人处理）。
+对象要销毁时漏网 = dispatcher 里残留指向野指针的绑定 = **UAF**。
+
+改后调用方只需 `disConnect(this)` **一次**，不必再记得补 `disConnect(self, self)`。
+
+### 实测（4 条绑定的组合场景）
+
+```
+注册 4 条：
+  [s=self  r=self  t=1]   自收自发（最常见）
+  [s=self  r=other t=2]   自己发、别人收   ← 改前会漏网
+  [s=other r=self  t=3]   别人发、自己收
+  [s=other r=other t=4]   完全无关
+
+disConnect(self) 后：
+  [s=other r=other t=4]   ← 只剩这条无关的
+>>> ✓ 与自身相关的 3 条全删干净
+```
+
+### 连带简化
+
+- `XWidget::OnNativeDestroyed()`：原来的 `disConnect(self, self); disConnect(self);` 两句
+  → **`disConnect(this);` 一句**。
+- `XWidget::~XWidget()`：兜底退订，同样一句 `disConnect(this)`。
+- `Container::~Container()`：原有 `disConnect(this)` **不用改**，但新语义下会顺带
+  清掉 sender 身份那批 —— 正是壳死了想要的效果（改进，非破坏）。
+- `XWidget::disconnectPa()` 用的是双参版，不受影响。
+
+### 验证
+
+- 最小复现：4 条绑定组合场景，`disConnect(self)` 精确删掉 3 条、保留无关的 1 条 ✓
+- 4 个文件（XWidget / Container / Application / test main）`-fsyntax-only` 通过。
+
+---
+
+## 2026-09-14 ⚠️ 关键修复：destroy() 把自毁绑定删掉了 → 窗口照样泄漏
+
+> 接上条（窗口自毁机制）。写完测试去跑，**发现自毁机制在 `destroy()` 路径上根本没生效**。
+> **是砚台让写测试才炸出来的。**
+
+### 问题
+
+```cpp
+// 老代码
+void XWidget::destroy() {
+    disConnect(this);      // ← 删掉【所有 receiver == this】的绑定
+    this->Destroy();       // ← 然后才 DestroyWindow → 发 WindowDestroy 事件
+}
+```
+
+`disConnect(this)` 会**把构造函数里新注册的这条也删掉**：
+```cpp
+connect(this, MovementType::WindowDestroy, this, &XWidget::OnNativeDestroyed);
+//                                         ^^^^ receiver 就是 this
+```
+⇒ `DestroyWindow` 随后发出的 `WindowDestroy` 事件**找不到任何监听者** ⇒
+`OnNativeDestroyed` 永远不被调用 ⇒ **对象永远不入回收队列 ⇒ 照样泄漏**。
+
+**实测复现**（最小复现，模拟 destroy 顺序）：
+```
+注册 WindowClose + WindowDestroy 两条绑定：绑定数=2
+disConnect(self) 之后：绑定数=0        ← WindowDestroy 也被删了
+派发 WindowDestroy: handled=0, destroyed 计数=0
+>>> 确认：OnNativeDestroyed 收不到事件，对象会泄漏
+```
+
+**影响面**：所有走 `destroy()` 的路径 —— 包括 `tabhostcontainer.cpp` 里刚改的两处
+（`window->destroy()`）！也就是说：**上一轮"修好"的 L1/L2 其实没修好。**
+
+### 修法
+
+`destroy()` **不再退订**，退订完全交给 `OnNativeDestroyed()`（对象真要死时才断链），
+外加 `~XWidget()` 兜底（覆盖"从没收到 WindowDestroy 就死了"的路径，如没 show() 过就被 delete）：
+
+```cpp
+void XWidget::destroy() {
+    // 不能 disConnect(this)！会把 WindowDestroy 绑定一起删掉。
+    this->Destroy();
+}
+XWidget::~XWidget() { disConnect(this); }   // 兜底
+```
+
+老代码那个 `disConnect` 附带作用是"防重复关闭"，但 `Destroy()` 内部本就有
+`if (m_Hwnd)` 保护，重复调用是 no-op，不影响。
+
+**修复后实测**：
+```
+修复后 destroy() 不退订 -> 绑定数=2
+派发 WindowDestroy: handled=1, destroyed=1
+>>> ✓ 自毁回调收到了，对象会被回收
+```
+
+### ⚠️ 教训（给我自己）
+
+**机制写完了不等于接上了。** 上一轮只验证了"`OnNativeDestroyed` 里的逻辑对"，
+没验证"`destroy()` 之后它到底会不会被调用"。
+以后这类"跨函数协作"的改动，必须端到端跑一遍，不能只看局部。
+
+### test 工程：改成自检程序
+
+`test/src/main.cpp` 启动时自动跑两项检查（宏 `XY_SELFCHECK_WINDOW_RECYCLE`，默认 1）：
+
+- **自检 1/2 窗口自毁 + 延迟回收**：`ProbeWindow`（记构造/析构计数）——
+  `new → show → destroy()`，断言 `destroy()` 返回后**尚未析构**（延迟生效）、
+  跑几轮 `ProcessEvents` 后**析构计数 +1**（安全点真的 delete 了）。
+- **自检 2/2 派发中退订**：同一 sender 挂 3 个 handler，H1 里 `disConnect` 掉自己，
+  断言 H1=H2=H3=1（改前会崩在 `bad_function_call`，或 H2 被跳过）。
+
+三个正式窗口（top/log/hex）已从**栈对象改成 `new`** —— 自毁机制会对 `WindowDestroy`
+做 `delete this`，栈对象必崩。（`topLayout` 也 new，因为 `SetDockLayout` 会
+`m_Layout.reset(layout)` 接管所有权。）
+
+埋点日志（`XY_DEBUG`）：`OnNativeDestroyed` 打印「收到 WindowDestroy → 登记延迟回收 /
+已入队 / 延迟回收执行 → delete this」；`FlushDeferredRecycle` 打印
+「回收安全点：本轮待回收动作 N 个」。
+
+> ⚠️ test 链接的是 `dist/lib/mingw` 预编译库 + `dist/include` 头文件（**拷贝快照，非软链**），
+> **必须重新构建 libMovement / libWidget / libUI 并同步 dist**，改动才生效。
+
+### 验证
+
+- 最小复现：改前 `destroyed=0`（漏），改后 `destroyed=1`（回收）。
+- `XWidget.cpp`、`test/src/main.cpp` `g++ -std=c++20 -fsyntax-only -DXY_DEBUG` 通过。
+
+---
 
 ## 2026-09-14 MovementDispatcher 派发中退订崩溃：DispatchEvent 改快照（砚台问出来的）
 
@@ -500,451 +970,3 @@ Panel *Dock::AddPanel(std::unique_ptr<Panel> panel, const std::string &title);
 
 > 仍未接入 CMake（`XCore` 用 `file(GLOB)`，下次 configure 自动纳入）。
 > 下一步待定：③-b（SlabBackend 迁入）或 ④（UI 四层所有权显式化）。
-
-## 2026-09-13 内存模块 ③-a：全局 new 重载 + 三通道 + 策略 + 统计细化（仍未接入构建）
-
-> 承接同日 ②（后端/统计/门面拆分）。本步加上"必经之路"，实现**统计所有分配**。
-
-### 文件（②的三个文件已按砚台命名偏好改名为 `XMem*`）
-
-| 文件 | 状态 | 职责 |
-|------|------|------|
-| `XCore/Memory/XMemTypes.h` | 🏗️ 新 | 公共枚举：`BackendType` / `OOMAction` / `SizeClass` + 分档函数 |
-| `XCore/Memory/XMemBackend.h` | 🔧 改名 | `IMemoryBackend` + `CrtBackend`（原 MemoryBackend.h） |
-| `XCore/Memory/XMemStats.h` | 🔧 改名+扩 | `MemoryCounter` / `MemoryStats` / `BackendStats` / `SizeClassStats` |
-| `XCore/Memory/XMemFacade.h` | 🔧 改名+扩 | 门面 + `OwnedSet` + 策略 + 三通道（原 Memory.h） |
-| `XCore/Memory/XMemGlobalNew.cpp` | 🏗️ 新 | 全局 `operator new/delete` 全套（含 `new[]`、nothrow、sized） |
-| `XCore/Memory/XMemory.h/.cpp` | ⏸️ 未动 | 旧 slab，待迁进 `SlabBackend` |
-
-### 定案：门面的三条通道（砚台拍板）
-
-| 通道 | API | 用途 |
-|------|-----|------|
-| ① 统一兜底 | 全局 `operator new/delete` | **所有** new（含 STL/第三方）必经之路，没人能绕过 |
-| ② 裸内存 | `X_Y::Malloc` / `X_Y::Free` | 替代 C 的 malloc/free（头文件已写醒目警告：**别混用**） |
-| ③ 显式后端 | `X_Y::AllocFrom` / `X_Y::MallocFrom` / `X_Y::NewFrom<Backend, T>` | 单次指定后端，绕过策略 |
-
-### 关键设计（本步新增的部分）
-
-1. **全局 `operator new/delete` 重载**：默认后端 = CRT ⇒ 效果是"标准库堆 + 一层记账"，
-   不是"换掉标准库"。行为对使用者透明，性能损耗 ≈ 一次调用 + 16B 分配头。
-2. **`OwnedSet`（已分配指针表）**：全局 delete 会把**所有**指针送进门面，
-   要安全回答"这指针是不是我发的"**不能读 ptr-16**（外部指针那里可能未映射 → 段错误），
-   故自管一个开放寻址哈希表（线性探测 + 墓碑）。**只用 `::malloc`/`::free`**，守自举铁律。
-3. **开关与释放解耦**：`setEnabled(false)` 只影响**新分配**；释放**永远**交门面判断归属。
-   ⇒ 运行中切换开关**不会**造成"分配走门面、释放走 CRT"的错配。
-4. **策略注入**：`setPolicy([](uint64_t n){ return n<=512 ? Slab : Crt; })`。
-   策略**只影响分配**，释放始终读分配头 ⇒ 随时换策略、永不错配。
-   ⚠️ 策略的 `std::function` 用 `malloc` 手工安置，避开它自身堆分配触发的自举递归。
-5. **`markBaseline()`（统计去皮）**：解决启动期分配（全局对象 / CRT 自身）污染泄漏自检。
-   含**跨基线释放下溢钳制** + `PreBaselineFrees` 计数。
-6. **统计细化到四个维度**：按后端 / 按大小档（新增，为日后定策略提供数据）/ 峰值 / 未释放块。
-
-### 验证（`g++ -std=c++20`，独立编译；按约定未做工程构建）
-
-| 验证项 | 结果 |
-|--------|------|
-| STL 容器是否进门面 | ✅ `vector`/`string`/`map`/`make_unique` 全部被统计（作用域内 `live=103`） |
-| 分配/释放守恒 | ✅ 2000 轮 `new`/`delete` 后 `live=0 owned=0 used=0` |
-| 归属判定 | ✅ 门面指针 `owns=1`；栈指针 `owns=0`（**不解引用 ptr，不崩**） |
-| 构造/析构配对 | ✅ `Allocate<T>`/`Deallocate<T>` 析构确被调用 |
-| `NewFrom<Backend,T>` | ✅ 编译期后端参数，正常构造 |
-| 策略路由 | ✅ `setPolicy` 后按 size 路由（Slab 未接入 → 返 nullptr，不崩） |
-| 开关 | ✅ 关掉后新分配 `owns=0`（走原生）；释放交门面仍安全 |
-| 对齐 | ✅ 满足 `max_align_t`（`Buffer::As<T>` 依赖） |
-
-### 尚未做（下一步）
-
-- **③-b**：`SlabBackend` 迁入（旧 `XMemory.h` 的 slab 实现搬到 `XMemBackend.h`）
-- **④**：UI 四层所有权显式化 `Container⊃Layout⊃Dock⊃Panel⊃Component`（`unique_ptr`，dock 按砚台定案区分内建/动态）
-- **⑤**：`Shutdown()` 与析构分离（治 `LogViewer::~LogViewer` 里 Join 卡死）
-- **⑥**：借用指针断链（`m_MouseCapturePanel` 等）
-- **⚠️ 未接入 CMake**：新文件尚未进构建（`XCore` 用 `file(GLOB)`，下次 configure 时自动纳入）
-- **⚠️ 多线程**：`OwnedSet` 目前无锁，高频多线程分配需分片或加锁（已记 TODO）
-
-> 审计全文见 `_notes/arch/MemoryAudit.md`。
-
-## 2026-09-13 内存模块拆分 ②：后端 / 统计 / 门面三件套（纯新增，未接入）
-
-> 起因：砚台发现 Widget/UI 里"一堆裸指针但没有清理代码"。审计后确认根因不是漏 delete，
-> 而是**所有权从未在代码里落地**；同时决定先把 Memory 模块拆开（本文），再补所有权（后续）。
-
-### 本次范围（只做 ②，不碰 UI、不碰旧 XMemory.h）
-
-| 文件 | 状态 | 职责 |
-|------|------|------|
-| `XCore/Memory/MemoryBackend.h` | 🏗️ 新 | 后端接口 `IMemoryBackend` + `CrtBackend`（默认后端，标准库兜底） |
-| `XCore/Memory/MemoryStats.h` | 🏗️ 新 | 统计独立：`MemoryCounter`（活计数器）+ `MemoryStats`（只读快照） |
-| `XCore/Memory/Memory.h` | 🏗️ 新 | 门面：外界唯一入口，分配头 + 后端选择 + 记账 |
-| `XCore/Memory/XMemory.h` / `.cpp` | ⏸️ 未动 | 旧 slab 实现原样保留，待迁进 `SlabBackend` |
-
-### 关键设计决定（砚台拍板）
-
-1. **分配 ≠ 所有权**：`Memory` 只管"字节从哪来"，不负责"谁在何时调析构"。
-   所有权交给 `unique_ptr`（后续 ③）。上层因此**不负责分配**，只负责构造对象。
-2. **默认后端 = CRT（标准库兜底）**：不抢全局堆。自研 slab 只在热点按需启用，
-   效果不好随时切回 —— 打消"怕自己写的不如标准库""怕断了别人用标准库的路"两个顾虑。
-3. **不做全局 `operator new` 重载**（风险太高）；改由 UI 四层**类作用域**重载（后续 ③/④）。
-4. **分配头（`AllocHeader`）方案**：`delete p` 时语言**不传回**构造参数，
-   所以"该还给哪个后端"必须记在指针前面。这解决混用：**分配时选后端，释放时不用记**。
-5. **门面必须平凡（POD）**：只持指针 + 固定数组，无需分配成员 → 静态初始化期安全，
-   不存在构造顺序问题。后端/统计器懒就位，均为零堆分配。
-6. **自举铁律**：后端与统计器内部**只用 `::malloc`/`::free`**，绝不回调门面，否则首次
-   `allocate` 死循环。
-7. **命名贴 STL**（砚台偏好，降低学习成本）：
-   `allocate` / `deallocate` / `Allocate<T>` / `Deallocate<T>`；
-   旧名 `Alloc` / `Free` / `AllocT` / `FreeT` **保留为 inline 转发**，现有调用点零改动。
-8. **统计分维度**：`UsedBytes`（验收泄漏看这个）≠ `Capacity`（池容量，不归零正常）
-   ≠ `Overhead`（header/元数据）；且**按后端分开记**。
-
-### 顺带查出的旧 BUG（本次未修，待迁 SlabBackend 时处理）
-
-- 旧 `XMemory.cpp` 的 `Free()`：>64KB 的大块走 `std::free(ptr)` 后
-  **没有扣减 `m_UsedBytes` / `m_UsedCapacity`**（`malloc` 指针无法反查大小），
-  于是大块分配的**计数只增不减** —— 计数器层面的"泄漏"。
-  新门面用 header 记录 size，已从根上解决。
-
-### 验证
-
-按约定琉璃不编译工程，但新文件**未接入构建**，故对三个新头文件做了独立语法/运行自检：
-
-- `g++ -std=c++20 -fsyntax-only` → exit 0
-- 运行自检覆盖：旧名兼容、显式后端、`Allocate<T>/Deallocate<T>`（析构确被调用 1 次）、
-  对齐满足 `max_align_t`（Buffer 的 `reinterpret_cast<T*>` 依赖它）、
-  100 轮分配/释放后 `live=0 / used=0`、门面与 CRT `new` 混用互不干扰、
-  误传外部指针被 magic 挡下（不崩、不破坏别的堆）
-- 输出确认：`live=0 leaks=0`、`used=0`、`overhead=2640 allocs=165 frees=165`（守恒）
-
-### 下一步（待办）
-
-- **③**：给 UI 四层加类作用域 `operator new/delete`，接到门面上（`static constexpr kBackend` 形态）
-- **④**：所有权显式化 `Container⊃Layout⊃Dock⊃Panel⊃Component`（`unique_ptr`），
-  按砚台定案：(b) 区分内建 dock / 动态 dock
-- **⑤**：`Shutdown()` 与析构分离（治 `LogViewer::~LogViewer` 里 Join 卡死）
-- **⑥**：借用指针断链（`m_MouseCapturePanel` 等）
-- **⑦**：`SlabBackend` 迁入 + `Buffer` 适配（当前 `Buffer` 走旧名转发即可，无需改）
-
-> 审计全文见 `_notes/arch/MemoryAudit.md`。
-
-## 2026-09-12 — UI 坐标体系统一（修正非顶部 Dock 的 Panel 绘制错位）
-
-> 砚台报的 bug：TabHostContainer 里把 Panel 拖进**除 TopDock 以外的** Dock 会错位，
-> 表现是从 (0,0) 起画而不是从 Dock 在窗口内的实际位置起画。TopDock 恰好正常。
-
-### 根因（诊断定案）
-四层各持 m_X/m_Y，但**坐标语义不统一**，且绘制链和输入链不对称：
-
-| 层 | 存的坐标 | 参照系 |
-|----|---------|--------|
-| Dock | 布局绝对 | DockLayout 左上角 |
-| Panel | **布局绝对** | 布局左上角（不是 Dock 相对！） |
-| Component | Panel 相对 | 所属 Panel 左上角 |
-| Canvas | 无坐标系概念 | 绝对 |
-
-- **输入链自洽**：每层 `e.x -= 偏移` 下钻，下钻后还原 → 点击一直是对的。
-- **绘制链断裂**：`Panel::OnPaint` 用 `m_X + comp->GetX()` 算 clip（知道要加绝对偏移），
-  但传给组件的 canvas **仍是绝对坐标**，组件只得自己再加一次 → `LogViewer.cpp` 里
-  手工写 `canvas.FillRect(GetX() + m_ScrollArea->GetX(), ...)` 就是这个病的症状。
-- **TopDock 为何正常**：`top=InvalidBoundary, left=InvalidBoundary` → `m_X = m_Y = 0`，
-  偏移量恰好为 0，把混用掩盖了。其余四 Dock 偏差量正好是 `Dock::m_X/m_Y`。
-
-### 定案方向（砚台拍板）
-砚台确认分层设计：**窗口布局（DockLayout/Dock）用绝对，面板内（Panel/Component）用相对**。
-两者各自合理，冲突在于转换点不明确。定案：
-- 转换点落在 **Dock↔Panel 交界**，两侧各自纯粹。
-- 用 **Canvas 可嵌套 origin 压栈**做转换（不是各组件自己加偏移）。
-- 选**选项 2**：origin 在 `Dock::OnPaint` 压，连 Panel 作者都无需感知 ——
-  **Panel 内部 + Component 内部全部按 (0,0) 起画**。
-- **写法乙**：`DockLayout::OnPaint` 先压 dock origin，使绘制与输入**逐层同构**：
-  ```
-  绘制: 绝对 ─PushOrigin(dock.X/Y)→ Dock局部 ─PushOrigin(panelX/Y)→ Panel局部
-  输入: 绝对 ─减 dock.GetX/Y→        Dock局部 ─减 panelX/Y→         Panel局部
-  ```
-
-### 本次改动（第一批：修错位 + 建坐标原语）
-- `Widget/Canvas.h`：加 `PushOrigin(dx,dy)` / `PopOrigin()` / `OriginX()` / `OriginY()`（可嵌套压栈）。
-- `Widget/CanvasImpl.h`：接口加 `PushOrigin/PopOrigin/GetOriginX/GetOriginY`。
-- `Widget/src/Win32/CanvasImplWin32.cpp`：后端持 `m_OriginX/m_OriginY` + 栈；
-  `FillRect/FillRoundRect/FillTriangle/FillCircle/SetClip` 全部叠加 origin；
-  `Clear/Flush/FlushRect` **不走** origin（物理缓冲操作，无坐标语义）。
-  文字走 `Font`（不认原点），故由 `Canvas` 转发壳在传参前加好 `OriginX/Y`。
-- 新 `UI/UiCore/UINode.h`：`UINodeView{Rect self, content; bool visible}` + `ContentInParent()`
-  + 原语 `ToLocal/ToParent/Hits` + 四层 `View()` 声明（定义在各自 .cpp）。
-- **Panel 坐标语义改为 Dock 局部**（`View(Panel).self` 落在父坐标系里）：
-  - `Dock::UpdatePanelRects`：改传 `m_EffPanel*`（Dock 局部），不再 `m_X + panelX`。
-  - **新增 `m_EffPanelX/Y/W/H` 生效面板区**：声明值 `m_Panel*` 钳到 Dock 内算出生效值，
-    绘制原点、输入偏移、命中判定三者统一用它 —— 且钳制结果**不写回声明值**
-    （否则窗口缩到 0 再放大会把声明尺寸永久压掉）。
-  - `Dock::RouteInput`：删掉 `p->GetX() - m_X` 补丁，改减 `m_EffPanelX/Y`。
-  - `Dock::HitTestPanel`：改用 `m_EffPanel*`。
-  - `Dock::OnPaint`：Panel 前 `PushOrigin(m_EffPanelX, m_EffPanelY)`；tab 栏改按 Dock 局部 (0,0) 画。
-  - `Panel::OnPaint`：clip 去掉 `m_X/m_Y`（origin 已由 Dock 压好）。
-- `DockLayout::OnPaint`：遍历 Dock 时 `PushOrigin(dock->GetX(), dock->GetY())`（写法乙）。
-- 清理各层手工偏移，统一成"(0,0) 起画"：
-  `LogViewer::OnPaint`、`HexViewer::OnPaint` + 内部 BinaryContent、`ScrollArea::OnPaint`
-  （改嵌套 origin，滚动位移并入 `PushOrigin(0, -m_ScrollOffset)`）、
-  `Horizontal::OnPaint` / `Vertical::OnPaint`（子组件前压 origin）、
-  `Label` / `Button` / `TextInput` / `Overlay` / `ListBox`（`x=GetX(),y=GetY()` → `x=0,y=0`）。
-- `Dock::HitTestEdge` **保持绝对语义**（由 DockLayout 用未平移坐标调用），加注释钉死，
-  防止以后被误"统一"成局部坐标。
-
-### 追加 — 分割线绘制漏用 boundary width（砚台报"压着线绘制"）
-- **现象**：分割线看着被 Dock 压扁 / 缝里露出背景色。
-- **根因**：`Boundary::width` 是**缝隙总宽**，`Dock::RecalcRect` 确实让出了 `width/2`
-  （`left = pos + width/2`、`right = pos - width/2`），但 `DockLayout::OnPaint`
-  画线用的是**写死的 `constexpr int thickness = 2`** —— 完全没读 `b.width`。
-  于是 `width = 14` 时 Dock 让了 7px 的缝、只画了 2px 的线，剩下 5px 是"真空"露背景。
-- **修法**：`DockLayout::OnPaint` 改用 `const int lineW = std::max(1, b.width)`，
-  居中 `pos - lineW / 2`。**让多少缝就画多宽**，两边同源。
-- 未动 `Dock::RecalcRect`（让缝逻辑本来是对的）、未动 `HitTestEdge`
-  （命中厚度已用 `std::max(thickness, b->width / 2)`，本来就没问题）。
-
-### 追加 — 内容溢出容器（滚动时盖住 tab 栏 / 越过边界）：补裁剪三处
-> 砚台报：Panel 放进左侧/中间 Dock 后刚放进去就超出底部，往下滚动会盖住 tab 栏；
-> 左栏最窄所以最明显（150% DPI）。
-
-- **根因（两层）**：
-  1. **Panel 没有外层裁剪**：`Panel::OnPaint` 只对每个组件设 clip，没给整个 Panel 设一次。
-     `ScrollArea` 里滚动的内容超出 Panel 矩形就直接画到外面 → 盖住 tab 栏。
-  2. **`SetClip` 对文字无效**：文字走 `Font` 直写像素/桥 DC，绕过 `CanvasImpl::BlitPixel`
-     的裁剪检查。所以滚动中的日志文字**根本裁不掉** —— 这是溢出的主因。
-- **修法（A + B + C2，砚台定）**：
-  - **A** `Panel::OnPaint`：加外层 `SetClip(0,0,m_W,m_H)`，画完每个组件后恢复外层裁剪。
-  - **B** `Dock::OnPaint`：改为**先画 Panel 内容（带 `SetClip(0,0,m_EffPanelW,m_EffPanelH)`）、
-    最后画 tab 栏** —— tab 栏压在最上层，任何内容都盖不住它。
-    另 `DockLayout::OnPaint` 给每个 Dock 加自己的裁剪，避免相邻 Dock 互相覆盖。
-  - **C2（精确裁剪）**：`CanvasTarget` 加 `clipEnabled/clipX/clipY/clipW/clipH`（物理像素）；
-    `CanvasImpl` 加 `GetClipRect()`；`Canvas::MakeTarget()` 把当前裁剪区填进去；
-    两个文字后端各自遵守：
-      - `FontWin32`（GDI，**当前实际在用**）：`DcClipScope` RAII 对桥 DC 做
-        `IntersectClipRect`（TextOutW 自动遵守，抗锯齿边缘也正确），
-        `ForceAlpha`/`FillRectIntoBuffer` 走 `InClip()` 逐像素判断。
-      - `FontFreeType`：`BlendBitmap`/`FillRectIntoBuffer` 走同一套 clip 判断。
-- **影响文件**：`Widget/CanvasImpl.h`、`Widget/Canvas.h`、`Widget/Win32/FontWin32.h`、
-  `Widget/Win32/FontFreeType.h`、`Widget/src/Win32/FontWin32.cpp`、
-  `Widget/src/Win32/FontFreeType.cpp`、`UI/src/Panel.cpp`、`UI/src/Dock.cpp`、
-  `UI/src/DockLayout.cpp`。
-
-### 追加 — 拖进 Dock 后 tab 栏消失（真凶：DockLayout 从未收到尺寸）
-> 砚台澄清：**同一个面板在独立窗口(TabContainer)能看到 tab 栏，拖进 Dock(TopLayout) 就看不到**。
-> 这说明不是裁剪本身画错，而是 Dock 矩形被压成了 0×0。
-
-- **根因链**：
-  1. test 的调用顺序是 `setSize()` → `SetDockLayout()` → `show()`。
-     `setSize` 只记逻辑尺寸，窗口要 `show()` 才创建 HWND。
-  2. 而 `Container::SetDockLayout` 里 `SetActiveSize` 被包在
-     `if (m_Layout && GetNativeHandle())` 内 —— 那一刻 HWND 还是 `nullptr`，
-     **`SetActiveSize` 从未被调用** → `DockLayout::m_LayoutW/m_LayoutH` 一直是 **0**。
-  3. 此后任何 `RecalcLayout()`（含拖入面板时 `AddPanel` → `Layout->RecalcLayout()`）
-     都用 0 尺寸算 → **所有 Dock 的 `m_W/m_H` 被压成 0**。
-  4. 于是 `m_EffPanelH = 0`，我上一轮加的 `SetClip(0,0,w,0)` **把整个 Dock 裁没了**，
-     tab 栏（`FillRect(0,0,tabW,30)`）也被 `DockLayout` 层的
-     `SetClip(0,0,dock->GetWidth(),dock->GetHeight())` = 0 裁掉 → 看不见。
-- **修法**：
-  1. `Container::SetDockLayout` **无条件**喂尺寸（去掉 `GetNativeHandle()` 条件）。
-     `BaseWin::GetActualWidth/Height` 无窗口时返回 `setSize` 存的逻辑值，可直接用；
-     窗口 resize 后仍由 `OnWindowResize` 继续同步。
-  2. `DockLayout::RecalcLayout` 加守卫：`m_LayoutW/H <= 0` 时直接 return，
-     避免真实尺寸到位前把 Dock 压成 0×0（防御性双保险）。
-- **涉及文件**：`UI/src/Container.cpp`、`UI/src/DockLayout.cpp`。
-- **test 同步清理**：去掉无用的旧拖动模拟残留，补进坐标系/绘制约定注释，
-  加 `XY_DEBUG_DOCK_RECTS` 开关（打印各 Dock 矩形 + 面板区，定位布局问题用）。
-
-### 追加 — tab 栏看不见的真正原因：TopLayout 用的是裸 Dock，没有 tab 栏
-> 上一节把 `SetActiveSize` 从未被调用修掉后，矩形正常了（砚台贴的打印为证），
-> 但 **tab 栏仍然看不见**。用打印数据定位到最终原因。
-
-**打印数据（layout size = 685×662）**：
-```
-dock#0 (Top)    rect=(0,0 685x130)     panelArea=(0,0 685x130)   panels=0
-dock#1 (Bottom) rect=(139,531 407x154) panelArea=(0,0 407x154)   panels=0
-dock#2 (Left)   rect=(0,134 135x551)   panelArea=(0,0 135x551)   panels=0
-dock#3 (Center) rect=(139,134 407x393) panelArea=(0,0 407x393)   panels=1
-dock#4 (Right)  rect=(550,134 135x551) panelArea=(0,0 135x551)   panels=0
-```
-- **矩形全部正确**：与边界换算吻合（TopLine=132 / BottomLine=529 / LeftLine=137 /
-  RightLine=548，各 Dock 让出 `width/2=2` 的缝），**无重叠、无超出**。
-  这排除了"整个 Dock 大过预留位置"的猜测。
-- **但 `panelArea.y` 全是 0**（带面板的 dock#3 也是 `(0,0 407x393)`），
-  本该是 `m_MenuBarHeight = 30` → 说明 **`m_MenuBarHeight == 0`**。
-
-**根因**：`TopLayout` 的五个成员声明为 **`X_Y::Dock`（裸 Dock）**，
-而 `SetMenuBarHeight(30)` 是在 **`TabDock` 的构造函数**里做的。
-裸 Dock 的 `m_MenuBarHeight` 保持默认 0，于是：
-1. `m_PanelY = 0` → 面板区占满整个 Dock 高度（"面板盖住 tab 栏位置 / 超出预留区"）；
-2. `Dock::OnPaint` 里 `FillRect(x, 0, tabW, m_MenuBarHeight=0)` → **高度 0，画不出来**。
-
-**这也最终解释了"独立窗口能看到 tab、拖进 Dock 看不到"**：
-- 独立窗口走 `TabContainer::CreateSinglePanelDock()` → `new TabDock()`（有 30px 栏）
-- `TopLayout` 用的是裸 `Dock`（没有栏）
-
-**修法**：`UI/DockLayout/toplayout.h` 五个成员改为 `X_Y::TabDock`，并加注释说明原因。
-**附带效果**：`TabHostContainer::ConfigureTabDocks()` 用 `dynamic_cast<TabDock*>`
-挂"拖出成独立窗口"的回调 —— 之前五区域 dock 是裸 Dock，**该回调从未挂上**；现在会正常生效。
-- **涉及文件**：`UI/DockLayout/toplayout.h`。
-
-### 追加 — 筛选栏被覆盖：Panel::OnPaint 缺组件级 PushOrigin（坐标统一漏的一环）
-> tab 栏修好、裁剪生效后，砚台报 **LogViewer 自己的筛选栏（关键词输入框 / tag 条）看不见了**，
-> **悬浮窗口里同样看不到** → 两边都看不到，说明问题在 `LogViewer`/`Panel` 层，与 Dock 无关。
-
-- **根因**：`Panel::OnPaint` 只给每个组件 `SetClip`，**没有 `PushOrigin`**。
-  而前面"坐标体系统一"那一批已经把各组件内部全改成按 `(0,0)` 起画
-  （`Label`/`Button`/`TextInput`/`ListBox`/`Overlay`/`ScrollArea`…）。
-  于是**组件的 `(0,0)` 落在了 Panel 的 `(0,0)`**，而不是组件自己的位置。
-- **表现**：`ScrollArea` 被 `OnLayout` 放在 `y=26`，但它的内容画到了 Panel 的 `y=0` ——
-  正好盖住上方的 `TagStrip` 和关键词输入框（= 筛选栏）。
-- **修法**：`Panel::OnPaint` 对每个组件补齐
-  `PushOrigin(comp->GetX(), comp->GetY())` / `PopOrigin()`，与 `Dock` 对 `Panel` 的做法一致；
-  裁剪也随之改为组件局部坐标 `SetClip(0, 0, w, h)`。
-- **至此"绘制与输入逐层同构"在每一层都成立**：
-  `绝对 → Dock局部 → Panel局部 → Component局部`
-  （输入链用逐层减偏移，绘制链用逐层压 origin）。
-- **涉及文件**：`UI/src/Panel.cpp`。
-
-### 追加 — 交互修复（命中 z 序 / tab 栏穿透 / 落点判定）
-> 砚台报：**右侧与底部 Dock 吃不到交互**（滑动无效）；**tab 栏的交互在 Dock 中也吃不到**。
-
-**共 4 处问题，核心是"同一份几何/顺序在多处各写一遍"：**
-
-1. **命中顺序与绘制 z 序相反**（主因）
-   - `OnPaint` 正序遍历 `m_Docks`，**后画的在上层**（Right 最上 → Top 最下）。
-   - `RouteInput` 也正序遍历、**先到先得**（Top 最先命中）。
-   - 结果：视觉上压在最上面的 Dock 反而最难命中。
-   - **修法**：新增 `DockLayout::HitTestDock()`，**逆序遍历**，与绘制 z 序对齐。
-
-2. **`m_MouseCaptureDockIndex` 用指针减法当下标**
-   ```cpp
-   m_MouseCaptureDockIndex = static_cast<std::size_t>(dock - m_Docks.front());
-   ```
-   依赖"`dock` 确实在 `m_Docks` 里"这一脆弱前提。
-   **修法**：改为直接存 `Dock *m_MouseCaptureDock`。
-
-3. **tab 栏事件会穿透到 Panel**
-   `Dock::RouteInput` 的 tab 命中只在 `Press` 且命中具体 tab 时设 `Handled`；
-   落在 tab 栏**空白处**、或 `Move`/`Release` 时会落到下面的 Panel。
-   **修法**：tab 栏条带内的事件**一律吞掉**（UI chrome 区域不穿透）。
-
-4. **tab 宽度三处各写一份 `120`**
-   `Dock::OnPaint`、`Dock::RouteInput`、`TabDock::RouteInput` 各一份 → 改一处漏一处就"画的和点的对不上"。
-   **修法**：收敛为 `Dock::kTabWidth` + `TabBarTotalWidth()` + `TabIndexAt()`，
-   绘制与命中**同源**；`TabDock` 删掉自己的 `kTabWidth`。
-
-**顺带**：`TabDock::DropPanel` 的落点判定原本也是正序遍历，同样改为复用 `HitTestDock` ——
-使「**绘制 z 序 / 事件命中 / 拖放落点**」三处顺序彻底统一（一处定义，三处跟随）。
-
-- **涉及文件**：`UI/dock/Dock.h`、`UI/dock/tabdock.h`、`UI/DockLayout/DockLayout.h`、
-  `UI/src/Dock.cpp`、`UI/src/DockLayout.cpp`、`UI/src/tabdock.cpp`。
-
-### 追加 — 清理 DockLayout::TakePanel（死代码 + 语义错）
-> 砚台确认后删除。`TakePanel(panel, title)` 的五个问题：
-> 1. **无人调用** —— UI 重构交接文档预埋的接口，实际落地时走的是 `AddPanelAt`（按落点），从未接线；
-> 2. **语义方向错** —— 它找"第一个 `GetActivePanel()` 非空的 Dock"塞进去；
->    该找的恰恰是"**能收容**"的 Dock，有没有激活面板跟能不能收容无关。
->    代码里原有作者批注 `// 这个行为貌似是错的`，核对属实；
-> 3. **`new Dock()` 裸 Dock** —— 没有 tab 栏（与刚修的 `TopLayout` 同类问题），且无人 `delete`，是泄漏；
-> 4. **正序遍历** —— 又一处没跟绘制 z 序统一的顺序；
-> 5. **与 `AddPanelAt` 职责重叠**。
->
-> **修法**：删除 `TakePanel`（声明 + 定义），按落点收容统一走 `AddPanelAt`；
-> `AddPanelAt` 改为**复用 `HitTestDock`**（逆序 = 上层优先，与绘制/事件命中同一套顺序），
-> 并补 `CanAddPanel()` 检查。
-> 两个调用方（`tabcontainer` / `tabhostcontainer`）本就是 `if (AddPanelAt(...))` 的用法，
-> 返回 `nullptr` 会正常回退到"新建独立窗口"分支，行为安全。
-> 另在 `AddPanelAt` 处留注释说明 `TakePanel` 的来龙去脉，避免以后有人从交接文档里又把它捡回来。
-- **涉及文件**：`UI/DockLayout/DockLayout.h`、`UI/src/DockLayout.cpp`。
-
-### 追加 — 滚轮在底部/右侧 Dock 失效：WM_MOUSEWHEEL 坐标被重复 DPI 缩放
-> 砚台澄清：tab 与分割线交互**都已正常**，问题是"**鼠标在底部/右边的 Dock 面板上滚轮没反应**"。
-
-- **根因**：滚轮坐标被**除了两次 scale**（150% DPI 下多除一次 1.5）。
-  1. `Win32WndProc` 的 `WM_MOUSEWHEEL` 分支调了 `pThis->ScreenToClient()`，
-     而该接口语义是 **"输入物理, 输出逻辑"**（内部 `÷scale`）；
-  2. 但 UI 侧契约是：**所有鼠标 Movement 携带物理客户区坐标**，
-     由 `Container` 统一做**唯一一次** `ClientPhysicalToLogical`（又 `÷scale`）。
-- **表现**：坐标偏小（往左上偏）→ 原本在**右/下** Dock 的鼠标被算到**左/中** Dock →
-  `HitTestDock` 命中错的 Dock → 滚轮事件送错地方。"底部和右边滚不动"即由此而来。
-- **修法**：`WM_MOUSEWHEEL` 改用 **`ScreenToClientPhysical`**（物理→物理，不除 scale），
-  与 `WM_MOUSEMOVE` / `WM_LBUTTONDOWN` / `WM_LBUTTONUP` 等一致
-  （它们都直接传 `lParam` 的原始物理客户区坐标）。
-  ⚠️ 注意 `WM_MOUSEWHEEL` 的 `lParam` 是**屏幕**坐标（不同于 `WM_MOUSEMOVE` 的客户区坐标），
-  所以仍必须先转客户区，不能直接传 `lParam`。
-- **防御**：在 `Container` 构造函数顶部写明**坐标契约**（产出侧必须给物理坐标），
-  避免以后又有 Movement 产出侧提前转逻辑坐标导致重复缩放。
-- **核查**：其余 `ScreenToClient` 调用（`tabcontainer`/`tabhostcontainer` 跨窗口收养、
-  OLE 文件拖放回调）消费方要的**就是逻辑坐标**，一致，无需改动。
-- **涉及文件**：`Widget/src/Win32/Win32WndProc.cpp`、`UI/src/Container.cpp`。
-
-### 追加 — 路由/绘制坐标统一落地（UINodeView 契约，不再是预留）
-> 砚台指出：前面只**预留**了 `UiCore/UINode.h` 的 `UINodeView`/`ToLocal`/`ToParent`/`Hits`，
-> **一处未用**。本次真正接线，四层全部改用。
-
-**统一方式**：C++ 跨类型泛型递归走不通（已确认），所以统一的是「**节点描述 + 坐标原语**」，
-不是单一递归函数。每层保留自己的薄路由方法，但：
-- 矩形一律取自 `View()`；
-- 层间转换一律走 `ToLocal` / `ToParent`；
-- 命中判定一律走 `Hits` / `Rect::Contains`。
-
-**各层改动**：
-| 位置 | 改动 |
-|---|---|
-| `DockLayout::HitTestDock` | `Hits(View(*dock))` 判定，逆序（与绘制 z 序一致） |
-| `DockLayout::OnPaint` | `View(*dock)` 取 `self` 压 origin/裁剪 |
-| `DockLayout::RouteInput` | `ToLocal`/`ToParent` 下钻 Dock |
-| `Dock::HitTestPanel` | `View(*this).Content()` 判定 |
-| `Dock::OnPaint` | `View(*this).content` 作面板区（压 origin/裁剪） |
-| `Dock::RouteInput` | `ToLocal`/`ToParent` 下钻 Panel |
-| `Panel::HitTest` | `View(*comp).self.Contains()` |
-| `Panel::OnPaint` | `View(*this)` / `View(*comp)` 的 `self`/`content` |
-| `Panel::OnInput` | `ToLocal`/`ToParent` 下钻 Component |
-| `Horizontal`/`Vertical` | 同上（容器型 Component 也纳入） |
-
-**关键点**：`View(Dock).content` **直接引用 `m_EffPanel*`**（生效面板区），
-而不是用 `m_MenuBarHeight` 另算一份 —— 避免又引入第二份"面板区真相"
-（过去 `m_Panel*` / `m_EffPanel*` / `Panel::GetX()` 三份数据打架正是根因）。
-新增 `Dock::GetEffPanelX/Y/W/H` 访问器供 `View` 使用。
-
-**结果**：UI 模块内**手写坐标算术全部清零**（`grep "e.x -=|e.x +="` 只剩注释）。
-唯一保留的特例是 `ScrollArea::PushOrigin(0, -m_ScrollOffset)` —— 那是滚动**变换**而非节点位置，语义不同。
-
-- **涉及文件**：`UI/UiCore/UINode.h`、`UI/dock/Dock.h`、`UI/src/Dock.cpp`、
-  `UI/src/DockLayout.cpp`、`UI/src/Panel.cpp`、`UI/src/horizontal.cpp`、`UI/src/vertical.cpp`。
-
-### 追加 — 修复回归：HitTestDock 误用 content 导致 tab 拖不动
-> 坐标统一落地后砚台立刻报"**tab 又不能拖动了**"。是我引入的回归。
-
-- **根因**：`HitTestDock` 里写了 `Hits(View(*dock))`，而 `Hits` 判的是 **`content`（内容区）**；
-  `View(Dock).content` = `m_EffPanel*`，**从 tab 栏下方开始**。
-  于是鼠标按在 tab 栏上时 `HitTestDock` 返回 `nullptr` → `m_MouseCaptureDock` 拿不到
-  → 事件根本下不去 → `TabDock` 收不到 Press → **tab 拖不动**。
-- **语义辨析（关键）**：「命中哪个 Dock」与「命中 Dock 内的面板内容」是两件事：
-  | 用途 | 用哪个矩形 | 位置 |
-  |---|---|---|
-  | 找**节点本身**（把事件交给它） | **`self`**（Dock 全矩形，含 tab 栏） | `DockLayout::HitTestDock` |
-  | 找**节点内的内容区** | **`content`**（避开 tab 栏） | `Dock::HitTestPanel` |
-- **修法**：`HitTestDock` 改用 `View(*dock).self.Contains(x, y)`。
-- **附带加固**：**从 `UINode.h` 移除 `Hits()` 原语**。它的名字暗示"命中"却静默选了
-  `content` 而非 `self`，正是本次事故的成因；移除后已无调用方。
-  改为要求调用方**显式写** `self.Contains(...)` / `Content().Contains(...)`，
-  读代码时一眼能看出用的是哪个矩形。原语收敛为 `ToLocal` / `ToParent` 两个。
-- **全量审计**：所有 `.self` / `.content` 使用点已逐处核对（见 DEVLOG 下方表格）。
-  **`Dock` 是唯一 `self != content` 的节点**，它正确地在"找节点本身"处用 `self`
-  （`HitTestDock` / 压 origin / 下钻）、在"找面板内容区"处用 `content`
-  （`HitTestPanel` / 画 Panel 前的 origin）。`Panel`/`Component` 的 `self == content`，两可。
-- **涉及文件**：`UI/UiCore/UINode.h`、`UI/src/DockLayout.cpp`、`UI/src/Panel.cpp`。
-
-### 已知问题（下一轮）
-- `Dock` 的 tab 栏仍不绘制标题文字（只画色块），宽度固定 `kTabWidth = 120`，
-  未按标题测宽。字体绘制需接 `FontLibrary`。
-
-### 已知限制（本次未处理，非本次引入）
-- `Canvas::SetClip` 只对**图形**（`BlitPixel` 路径）生效；**文字**经 `Font` 直写像素/桥 DC，
-  不走裁剪。即超出 clip 的文字仍会画出来。属既有行为，滚动区文字可能溢出。
-- `Dock::OnPaint` 的 tab 栏仍不画标题文字（只画色块），宽度硬编码 120。
-
-### 待办（第二批：统一驱动器，本次不做）
-- 把四层 `OnPaint`/`RouteInput` 重构成 `PaintSelf`/`PaintChildren` + 递归驱动器。
-- SpecialLayer 优先级显式化（boundary > tab 栏 > 子节点树；z 序 = 路由优先级）。
-- 分割线/边界命中与绘制共用 `UINodeView`。
-
-### 顺延
-- **窗口资源释放/泄露**问题（砚台：先不管，本次不动）。

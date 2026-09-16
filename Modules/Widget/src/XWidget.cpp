@@ -1,13 +1,15 @@
 #include "XWidget.h"
 #include "Log/XYLog.h"
+#include <cstdint> // uintptr_t（日志里打印对象地址用）
 
 namespace X_Y
 {
 
-    XWidget::XWidget(XWidget *parent)
-        : m_parent(parent)
+    XWidget::XWidget(XWidget *parent, StorageTag storage)
+        : m_parent(parent), m_Storage(storage)
     {
-        XDEBUG("XWidget 构造执行,parent={}", (uintptr_t)parent)
+        XDEBUG("XWidget 构造执行,parent={},storage={}",
+               (uintptr_t)parent, storage == StorageTag::Heap ? "Heap" : "Stack")
         auto app = Application::instance();
         if (!app)
         {
@@ -43,6 +45,18 @@ namespace X_Y
         connect(this, MovementType::WindowDestroy, this, &XWidget::OnNativeDestroyed);
     }
 
+    // ── 析构：兜底退订 ──
+    // 覆盖"从没收到过 WindowDestroy 就死了"的路径（如从没 show() 过的窗口被 delete）
+    // —— 那种情况下 OnNativeDestroyed 永远不会跑，订阅只能靠这里兜。
+    // 走正规路径时 OnNativeDestroyed 已先退过一次，这里再退是幂等的（表里没了就 no-op）。
+    //
+    // 单参 disConnect(ptr) 现在的语义是「删掉与该对象相关的所有订阅」
+    // （sender 或 receiver 任一命中即删），一次调用就够 —— 见 movements.h 注释。
+    XWidget::~XWidget()
+    {
+        disConnect(this);
+    }
+
     // ── 窗口原生销毁 → 登记延迟回收 ──
     //
     // 调用时机：WM_DESTROY 之后，dispatcher 正在遍历绑定表把 WindowDestroy
@@ -52,16 +66,38 @@ namespace X_Y
     // ⇒ 只入队，等 ProcessEvents 一轮结束后的安全点由 Application 真正释放。
     void XWidget::OnNativeDestroyed()
     {
-        // 门闩：已经排过队就不再排（防 flush 时 delete 两遍）
+        // 门闩：已经处理过就不再处理（防重复入队 → flush 时 delete 两遍）
         if (m_RecycleQueued)
+        {
+            XDEBUG("[窗口回收] {} @{} 重复收到 WindowDestroy，门闩拦下",
+                   toString(), (uintptr_t)this)
             return;
+        }
         m_RecycleQueued = true;
+
+        // ════════════════════════════════════════════════════════
+        // 栈对象：只退订，【绝不 delete】
+        //   对象内存归 C++ 作用域管（栈/成员）。这里若 delete 就是打在栈上，必崩。
+        //   窗口 HWND 已经没了，但 C++ 对象要等作用域结束才析构 —— 这是使用方
+        //   自己选 Stack 时就接受的语义。
+        // ════════════════════════════════════════════════════════
+        if (!IsHeapAllocated())
+        {
+            XDEBUG("[窗口回收] {} @{} 是【栈对象】→ 只退订，不 delete（内存归作用域）",
+                   toString(), (uintptr_t)this)
+            disConnect(this);
+            return;
+        }
+
+        XDEBUG("[窗口回收] {} @{} 是【堆对象】收到 WindowDestroy → 登记延迟回收",
+               toString(), (uintptr_t)this)
 
         Application *app = Application::instance();
         if (!app)
         {
             // 没有 Application（异常场景，如已析构）→ 退回直接删除。
             // 此时不在 dispatcher 遍历中，相对安全。
+            XWARN("[窗口回收] {} @{} 无 Application，退回直接 delete", toString(), (uintptr_t)this)
             delete this;
             return;
         }
@@ -70,24 +106,19 @@ namespace X_Y
         // 目的：对象马上要被 delete，dispatcher 里不能残留任何指向它的绑定，
         //       否则后续派发会打到野指针。
         //
-        // 两个重载比的字段不同（见 movements.h:143 / :164）：
-        //   双参 disConnect(sender, receiver) —— 比 sender && receiver
-        //   单参 disConnect(receiver)         —— 只比 receiver
-        //
-        // 实测（不是推测）：
-        //   · 构造函数里注册的 `connect(this, type, this, ...)` 是 sender==receiver==this，
-        //     单参版【本来就能删掉】它（receiver 字段就是 this）。
-        //   · 但会漏掉 sender==this && receiver!=this 的那类绑定
-        //     （如"本窗口发事件给别的对象处理"）。双参版专治这条。
-        // ⇒ 两条各删各的，合起来才彻底。留两条是有意的，不是冗余。
-        // ⚠️ MovementSender / MovementReceiver 都是 void* 同一类型，
-        //    `disConnect(self, self)` 唯一匹配双参重载，不歧义（已实测）。
-        void *self = this;
-        disConnect(self, self); // sender == this && receiver == this
-        disConnect(self);       // 所有 receiver == this（含 sender 是别人的）
+        // 单参 disConnect(ptr) 的语义（2026-09-14 砚台改定）：
+        //   「删掉与该对象相关的所有订阅 —— sender 或 receiver 任一命中即删」。
+        //   所以一句 `disConnect(this)` 就把本窗口与事件系统的所有关系清干净，
+        //   不需要再补 disConnect(self, self)（旧语义只比 receiver 时才需要）。
+        disConnect(this);
 
         app->DeferRecycle([this]()
-                          { delete this; });
+                          {
+                              XDEBUG("[窗口回收] @{} 延迟回收执行 → delete this", (uintptr_t)this)
+                              delete this;
+                          });
+        XDEBUG("[窗口回收] {} @{} 已入队（将在本轮 ProcessEvents 结束时释放）",
+               toString(), (uintptr_t)this)
     }
 
     bool XWidget::show(ShowCmd nShow)
@@ -117,7 +148,26 @@ namespace X_Y
 
     void XWidget::destroy()
     {
-        disConnect(this);
+        // ⚠️⚠️ 这里【不能】调 disConnect(this)！
+        //
+        // 单参 disConnect(ptr) 的语义是「删掉与该对象相关的所有订阅」
+        // （sender 或 receiver 任一命中即删）。而构造函数里注册了：
+        //   connect(this, WindowDestroy, this, &XWidget::OnNativeDestroyed)
+        // 它的 sender 和 receiver 都是 this —— 所以 disConnect(this)
+        // 必然把它【一起删掉】。于是下面 DestroyWindow 发出的 WindowDestroy
+        // 事件在派发时找不到监听者 → OnNativeDestroyed 永远不被调用 →
+        // 对象永远不会被回收（泄漏）。
+        //
+        // 正确时机：退订应该发生在对象【真要死】的时候，也就是
+        // OnNativeDestroyed() 里（析构里还有一层兜底）——
+        // destroy() 只是「请求销毁窗口」，对象此刻还活着，订阅不该拆。
+        //
+        // 实测记录：改前 destroy() 路径下 WindowDestroy 绑定被删光，
+        // 自毁回调收不到、对象泄漏（见 DEVLOG 2026-09-14）。
+        //
+        // ⚠️ 老代码那个 disConnect 的另一个作用本是「防止重复关闭」。
+        //    Destroy() 内部本来就有 `if (m_Hwnd)` 保护，重复调用是 no-op，
+        //    所以去掉退订不影响防重入。
         this->Destroy();
     }
 

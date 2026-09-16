@@ -36,6 +36,8 @@ namespace X_Y
         std::vector<std::function<void()>> actions;
         actions.swap(m_DeferredRecycle); // 队列立刻变空，本轮已取走
 
+        XDEBUG("[回收安全点] 本轮待回收动作 {} 个", actions.size())
+
         for (auto &action : actions)
         {
             if (action)

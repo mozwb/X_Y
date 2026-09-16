@@ -139,6 +139,7 @@ namespace X_Y
 
 		// -------------------------------------------------------------------------
 		// 全局 Disconnect：按【sender + receiver】删除（你原来的）
+		// 精确匹配：只删 sender 和 receiver 都等于给定值的那些绑定。
 		// -------------------------------------------------------------------------
 		void disConnect(
 			MovementSender sender,
@@ -159,13 +160,25 @@ namespace X_Y
 		}
 
 		// -------------------------------------------------------------------------
-		// 全局 Disconnect：只按【receiver】删除（你原来的）
+		// 全局 Disconnect：按【单个对象】删除 —— 删掉与该对象相关的【所有】订阅。
+		//
+		// ⚠️ 语义（2026-09-14 砚台拍板改定）：
+		//   传进来的 ptr 只要出现在某条绑定的 sender 或 receiver 上任一位置，
+		//   这条绑定就被删。也就是"把我和事件系统的所有关系一次清干净"。
+		//
+		//   改前只比 receiver —— 于是 `connect(this, ..., this, ...)` 这种
+		//   this 兼作两者的绑定能删掉，但 `sender == this && receiver != this`
+		//   那类（本对象发事件给别人处理）会漏网。
+		//   对象要销毁时漏网 = dispatcher 里残留指向野指针的绑定 = UAF。
+		//
+		//   现在统一成"删我相关的全部"，调用方只需 `disConnect(this)` 一次，
+		//   不必再记得补一次 disConnect(self, self)。
 		// -------------------------------------------------------------------------
 		void disConnect(MovementReceiver receiver)
 		{
 			for (auto it = m_Bindings.begin(); it != m_Bindings.end();)
 			{
-				if (it->receiver == receiver)
+				if (it->receiver == receiver || it->sender == receiver)
 				{
 					XDEBUG("回调被删除");
 					it = m_Bindings.erase(it);

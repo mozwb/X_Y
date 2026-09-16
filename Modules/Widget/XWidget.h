@@ -12,10 +12,39 @@ namespace X_Y {
     using Base = BaseWin;
     using MovementType = X_Y::MovementType;
 
+    // ── 存储位置标记 ──
+    //
+    // 为什么需要它：窗口原生销毁时（WM_DESTROY → WindowDestroy 事件），
+    // XWidget 会把这个对象交给 Application 的延迟回收队列，最终执行
+    // `delete this`。**若对象其实建在栈上，这一下 delete 打在栈内存上必崩。**
+    //
+    // 所以创建时就要说清楚"我是怎么建的"：
+    //   · Heap（默认）—— new 出来的，自毁时会真的 delete 释放内存。
+    //   · Stack       —— 栈/成员对象，生命周期由 C++ 作用域管，自毁时【只退订不 delete】。
+    //
+    // ⚠️ 默认 Heap 是有意的：让"我要不要自己管这个窗口"这件事在写代码时就被看见。
+    //    栈对象必须显式写 StorageTag::Stack，等于强制你确认一次。
+    //
+    // 用法：
+    //     auto* w = new TabContainer();                     // 默认 Heap
+    //     TabContainer w(nullptr, X_Y::StorageTag::Stack);  // 显式栈
+    enum class StorageTag
+    {
+        Heap, // new 出来（默认）—— 关窗时自动 delete，不泄漏
+        Stack // 栈/成员对象 —— 关窗时只退订，内存归作用域
+    };
+
     class XWidget : public Base {
     public:
-        explicit XWidget(XWidget* parent = nullptr);
-        ~XWidget() { disConnect(this); }
+        // ⚠️ 默认按【堆对象】处理：关窗时 XWidget 会 delete 自己。
+        //    栈上建窗口必须显式传 StorageTag::Stack 表态。
+        explicit XWidget(XWidget* parent = nullptr,
+                         StorageTag storage = StorageTag::Heap);
+
+        ~XWidget();
+
+        // 本对象是否归自毁机制释放（Heap=true / Stack=false）
+        bool IsHeapAllocated() const { return m_Storage == StorageTag::Heap; }
 
         // ── 窗口生命周期（带事件连接） ──────────────
         bool show(ShowCmd nShow = ShowCmd::Show);
@@ -81,6 +110,11 @@ namespace X_Y {
         const char* m_title = "X_Y";
         WindowStyleFlag m_WindowStyle = WindowStyleFlag::None;
         void* m_ParentHwnd = nullptr;
+
+        // ── 存储位置：决定关窗时要不要 delete 自己 ──
+        // Heap（默认）：OnNativeDestroyed 走延迟回收 → delete this。
+        // Stack       ：OnNativeDestroyed 只退订，内存归栈作用域管。
+        StorageTag m_Storage = StorageTag::Heap;
 
         // ── 回收门闩：保证同一个对象只被 delete 一次 ──
         // WindowDestroy 只发一次，正常不会重复入队；但若将来有别的路径也调

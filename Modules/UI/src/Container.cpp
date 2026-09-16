@@ -16,8 +16,8 @@ namespace X_Y
         self.ScreenToClient(x, y);
     }
 
-    Container::Container(XWidget *parent)
-        : XWidget(parent)
+    Container::Container(XWidget *parent, StorageTag storage)
+        : XWidget(parent, storage)
     {
         // ⚠️ 坐标契约（改鼠标事件前必读）：
         //   所有鼠标 Movement（Pressed/Moved/Released/Scrolled）的 GetX/GetY

@@ -36,10 +36,11 @@ namespace X_Y
         if (t != BackendType::Default && t != BackendType::Count)
             return t;
 
-        AllocPolicy *policy = m_Policy.load(std::memory_order_acquire);
-        if (policy && *policy)
+        // 策略是裸函数指针：非空即有效，直接调用（不会分配，自举安全）
+        AllocPolicy policy = m_Policy.load(std::memory_order_acquire);
+        if (policy)
         {
-            const BackendType chosen = (*policy)(size);
+            const BackendType chosen = policy(size);
             if (chosen != BackendType::Default && chosen != BackendType::Count)
                 return chosen;
         }
@@ -56,12 +57,87 @@ namespace X_Y
         // 放在函数内 static：首次取用时已就绪，多线程安全。
         static CrtBackend s_Crt;
 
+        // Slab 后端是【有状态】的（chunk 表 / free list），但构造是平凡的
+        // （成员全是零初始化的指针与计数，见 SlabBackend 的成员声明）——
+        // 它在静态期被取用时不会触发任何分配，故没有自举问题。
+        // 内存按需惰性申请（第一次 allocate 才 AddChunk）。
+        static SlabBackend s_Slab;
+
         if (t == BackendType::Crt && m_Backends[i].load(std::memory_order_acquire) == nullptr)
         {
             // 原子发布：多线程同时首次 allocate 时都写同一个值，无害。
             m_Backends[i].store(&s_Crt, std::memory_order_release);
         }
+        else if (t == BackendType::Slab &&
+                 m_Backends[i].load(std::memory_order_acquire) == nullptr)
+        {
+            m_Backends[i].store(&s_Slab, std::memory_order_release);
+        }
         return m_Backends[i].load(std::memory_order_acquire);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  归属判决（三连验真）—— 释放与自检共用的唯一判据
+    // ═════════════════════════════════════════════════════════════════════════
+    //
+    //  门面拿到的只有 ptr，必须回答"这是不是我发的"。
+    //  ⚠️ 不查任何表、不遍历后端 —— 答案就在 ptr 前面的 header 里。
+    //
+    //  ⚠️ 读 ptr-32 本身：header 位于 [raw, raw+32)，而 raw = ptr-32
+    //     与用户数据在同一块内存里，不会跨到未映射页去。
+    //     传外部指针（CRT 的、栈地址）进来时读到的多半是垃圾，
+    //     下面三条会把它们判为无效 —— 这正是预期行为。
+
+    namespace
+    {
+        // 三连验真：这个 header 是不是门面自己写下的？
+        // ptr 是用户拿到的指针，必须与 header 里记的 user 完全一致。
+        inline bool HeaderValid(const AllocHeader *hdr, void *ptr)
+        {
+            if (hdr->magic != kAllocMagic)
+                return false;
+            if (hdr->user != reinterpret_cast<uintptr_t>(ptr))
+                return false;
+            return hdr->checksum == Checksum(*hdr);
+        }
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  归属判定（自检用，不在释放热路径上）
+    // ═════════════════════════════════════════════════════════════════════════
+    //
+    //  判据与 deallocate 完全一致：读 header 做三连验真。
+    //  ⚠️ 它【不再】遍历后端问 own()：那是曾经的快路径，已删除 ——
+    //     它没防住任何东西（三连验真照样要读同一块内存），
+    //     却让每次 delete 都要抢一把全局锁、变成 O(后端数)。
+
+    bool Memory::owns(void *ptr) const
+    {
+        if (!ptr)
+            return false;
+
+        const auto *hdr = reinterpret_cast<const AllocHeader *>(
+            static_cast<const uint8_t *>(ptr) - kHeaderSize);
+        return HeaderValid(hdr, ptr);
+    }
+
+    // ── 后端自检：这个地址属于哪个后端？─────────────────────────────────────
+    // 与 owns() 不同，本函数【只问后端自己的区域表】，不读任何 header。
+    // 用途：Slab 的 chunk 区间查询、将来"这个指针到底谁的"这类诊断。
+    // ⚠️ 它【不在】分配/释放的任何路径上 —— 所以各后端的 own() 可以
+    //    放心做得"精确但偏慢"（比如 Slab 要拿索引锁 + 二分）。
+    IMemoryBackend *Memory::backendOwning(void *ptr)
+    {
+        if (!ptr)
+            return nullptr;
+
+        for (uint32_t i = 0; i < kBackendSlots; ++i)
+        {
+            IMemoryBackend *b = m_Backends[i].load(std::memory_order_acquire);
+            if (b && b->own(ptr))
+                return b;
+        }
+        return nullptr;
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -76,7 +152,7 @@ namespace X_Y
         const BackendType resolved = ResolveWithSize(type, size);
         IMemoryBackend *backend = backendFor(resolved);
         if (!backend)
-            return nullptr; // 该后端未接入（如 Slab 尚未迁移）
+            return nullptr; // 该后端未注册（Default 未配策略且默认后端无效等）
 
         // ── 预算检查 ──
         if (s_MaxBytes != 0)
@@ -112,25 +188,22 @@ namespace X_Y
             return nullptr;
         }
 
-        // ── ② 在头部写清"我是谁"（释放时据此找对后端）──
-        auto *hdr = static_cast<AllocHeader *>(raw);
-        hdr->magic = kAllocMagic;
-        hdr->backend = static_cast<uint8_t>(resolved);
-        hdr->size = size;
-
-        // ── ③ 返回 header 之后的用户区 ──
+        // ── ② 返回 header 之后的用户区 ──
         void *user = static_cast<uint8_t *>(raw) + kHeaderSize;
 
-        // ── ④ 登记到"已分配表"（供 deallocate 安全判定归属）──
-        if (!m_OwnedTable.insert(user))
-        {
-            // 登记失败（内存不足）→ 退回，不能返回一个"不认识的"指针
-            backend->deallocate(raw, size + kHeaderSize);
-            m_Counter.onOOM();
-            if (s_OOMAction == OOMAction::Abort)
-                std::terminate();
-            return nullptr;
-        }
+        // ── ③ 在头部写清"我是谁"（释放时据此找对后端 + 验真）──
+        //    ⚠️ 字段顺序有讲究：先把 size/backend/user 填好，最后才算
+        //       checksum 并落 magic —— 这样 checksum 覆盖的必然是终值。
+        auto *hdr = static_cast<AllocHeader *>(raw);
+        hdr->size = size;
+        hdr->backend = static_cast<uint8_t>(resolved);
+        hdr->user = reinterpret_cast<uintptr_t>(user);
+        hdr->checksum = Checksum(*hdr);
+        hdr->magic = kAllocMagic;
+
+        // ⚠️ 这里【不再】往任何表里登记 —— 判据已经全在 header 里了。
+        //    旧实现有个 OwnedSet::insert，失败还要回滚本次分配；表退役后
+        //    这条失败路径自然消失（少一次可能失败的插入，也少一次回滚）。
 
         m_Counter.onAllocate(size, resolved);
         m_Counter.onOverhead(kHeaderSize);
@@ -146,28 +219,42 @@ namespace X_Y
         if (!ptr)
             return;
 
-        // ── 先做安全探测：只有确认是门面发的，才去读分配头 ──
-        // ⚠️ 不能直接读 ptr - kHeaderSize：外部指针那里可能是未映射内存，
-        //    甚至正好压在页边界上 → 段错误。故先查 OwnedSet。
-        if (!m_OwnedTable.contains(ptr))
+        // ── 判决：直接读 header，看"口令"对不对 ──
+        // 布局是 [ AllocHeader ][ 用户数据 ]，所以 header 就在 ptr 前面。
+        // 判据三条（缺一不可）：
+        //   magic    —— 是不是门面写的
+        //   user     —— 是不是正好等于 ptr（防指针被改/偏移错）
+        //   checksum —— 内部是否自洽（防内存被踩）
+        //
+        // ⚠️ 这里【不再】先遍历后端问 own()。曾经有过那样一层，已删除：
+        //    它是净负债 —— 多抢一把全局锁、让每次 delete 变成 O(后端数)，
+        //    却没防住任何东西（下面这三条照样要读同一块内存）。
+        //    释放现在是纯粹 O(1)：读 header → 按 backend 字段找后端 → 归还。
+        //
+        // ⚠️ 读 ptr-32 本身的安全性：operator delete 会把【所有】指针
+        //    送进来（含 CRT 分配的）。外部指针那里读到的多半是垃圾，
+        //    三连判决会把它们判为"不是我的"→ 交回 ::free，这正是预期行为。
+        void *raw = static_cast<uint8_t *>(ptr) - kHeaderSize;
+        auto *hdr = static_cast<AllocHeader *>(raw);
+
+        if (!HeaderValid(hdr, ptr))
         {
             // 不是门面发的（CRT 的、或开关关闭期间分配的）→ 交回标准库
             std::free(ptr);
             return;
         }
 
-        void *raw = static_cast<uint8_t *>(ptr) - kHeaderSize;
-        auto *hdr = static_cast<AllocHeader *>(raw);
-
+        // 走到这里 = 三条全过，确实是我发的。
+        // 但还要防【重复释放】：归还前会把 magic 擦成 0，所以"已释放过"
+        // 在这里表现为 magic 不对（而 user/checksum 仍自洽）。
+        // 少了这道检查，同一块会被还两次 → 同一地址在 free list 里出现
+        // 两次 → 后续两次分配拿到同一块内存（比崩溃难查得多）。
         if (hdr->magic != kAllocMagic)
         {
-            // 在册但头不对 —— 重复释放或指针被改过。报告并兜底。
             std::fprintf(stderr,
-                         "[XMem] deallocate: corrupt header %p (double free?)\n",
+                         "[XMem] deallocate: double free or corrupt header %p\n",
                          ptr);
-            m_OwnedTable.erase(ptr);
-            std::free(raw);
-            return;
+            return; // 不再归还，避免把同一块还两次
         }
 
         const uint64_t realSize = hdr->size;
@@ -183,8 +270,8 @@ namespace X_Y
         const BackendType bt = static_cast<BackendType>(hdr->backend);
         IMemoryBackend *backend = backendFor(bt);
 
-        hdr->magic = 0;          // 防重复释放时误判
-        m_OwnedTable.erase(ptr); // 从"已分配表"摘除
+        // 防重复释放：擦掉魔数，第二次调用就走不到这里。
+        hdr->magic = 0;
 
         m_Counter.onDeallocate(realSize, bt);
         if (backend)

@@ -38,7 +38,12 @@ namespace X_Y
     class Container : public XWidget
     {
     public:
-        explicit Container(XWidget *parent = nullptr);
+        // ⚠️ storage 默认 Heap：关窗时 XWidget 会自毁（delete this）。
+        //    栈上建壳子要显式传 StorageTag::Stack —— 见 XWidget.h 的 StorageTag 说明。
+        //    （TabContainer / TabHostContainer 用 `using Container::Container`
+        //      继承这个构造，所以它们自动支持同样的写法。）
+        explicit Container(XWidget *parent = nullptr,
+                           StorageTag storage = StorageTag::Heap);
         ~Container() override;
 
         // ── 统一模型：总是挂一个纯逻辑 DockLayout ──

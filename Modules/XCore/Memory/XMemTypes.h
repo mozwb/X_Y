@@ -22,7 +22,7 @@ namespace X_Y
     {
         Default = 0, // 走门面策略决定的后端（策略为空时 = Crt）
         Crt = 1,     // 标准库堆（malloc/free）—— 默认后端，标准库兜底
-        Slab = 2,    // 自研 slab 分配器（待从旧 XMemory.h 迁入）
+        Slab = 2,    // 自研 slab 分配器（已接入；仅显式指定或策略选用）
         Count        // 哨兵：统计槽位数
     };
 

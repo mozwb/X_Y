@@ -30,20 +30,30 @@
 //     返回指针前面，deallocate 时往回读一眼就知道该找谁。
 //     这保证了：**策略/后端随便换，释放永不错配**。
 //
-//  2. 为什么需要 OwnedSet（已分配指针表）：
+//  2. 归属判定靠 header 验真，不靠"已分配指针表"、也不遍历后端：
 //     全局 operator delete 会把手边【所有】指针送进来，其中混有非门面
 //     分配的（CRT 的、开关关闭期间分配的）。要判断"是不是我发的"，
-//     不能去读 ptr-16（外部指针那里可能未映射 → 段错误），
-//     所以维护一张自管的指针集合来查。
+//     答案就在 ptr 前面的 header 里，三条一起看：
+//       magic（是不是我写的）+ user（是不是正好等于 ptr）+ checksum（自洽）
+//     三条全过 = 我发的；任一不过 = 不是我的 → 交回 ::free。
+//     故释放是 O(1)：读 header → 按 backend 字段找后端 → 归还。
+//     ⚠️ 曾用过哈希表（OwnedSet）登记每个在册指针，已【退役】：
+//        header 里的字段本来就能回答这个问题，表是重复存储 + 每次分配/释放
+//        的额外开销；旧实现（XMemory.h）也从来没有表。
+//     ⚠️ 也【曾】加过"先问各后端 own() 判断是不是自家页"的快路径，同样
+//        已删除：它是净负债 —— 让每次 delete 抢一把全局锁、变成 O(后端数)，
+//        却没防住任何东西（三连验真照样要读同一块内存）。
 //
 //  3. 门面必须是平凡可初始化的：
 //     全局 operator new 重载后，门面可能在静态初始化期（甚至更早）
 //     被触达。故门面的成员都设计成"不需要运行期构造"的形态，
-//     后端与策略都在指针后面懒就位。
+//     后端懒就位；策略是裸函数指针（见 AllocPolicy 的说明）。
 //
 //  4. 自举铁律：
-//     后端、统计器、OwnedSet、策略存储内部【只用 ::malloc / ::free】，
+//     后端、统计器、策略存储内部【只用 ::malloc / ::free】，
 //     绝不回调门面。否则第一次 allocate 就会死循环。
+//     ⚠️ 这条也约束"用户传进来的东西"：策略是函数指针而非 std::function，
+//        就是为了杜绝"用户 lambda 的捕获物触发 operator new → 回调门面"。
 //
 //  ── 用法 ──
 //      // 日常：直接 new 就行（全局重载接管，含 STL）
@@ -59,9 +69,22 @@
 //      auto* o = X_Y::NewFrom<BackendType::Slab, Widget>(args...);
 //
 //      // 策略：决定 new 走哪个后端
-//      Memory::Instance().setPolicy([](uint64_t n) {
-//          return n <= 512 ? BackendType::Slab : BackendType::Crt;
-//      });
+//      // ⚠️ 默认没有策略 = 全部走 Crt（标准库兜底）。
+//      //    Slab 是【按需启用】的：只在确实有收益的热点上开，
+//      //    效果不好把策略清掉（clearPolicy）就回到 Crt，不用改任何调用点。
+//      //
+//      // ⚠️ 策略必须是【无捕获的普通函数】（或静态成员函数）——
+//      //    捕获 lambda 在这里【编译不过】，这是有意的：
+//      //    std::function 的捕获物可能触发 operator new → 回调门面 → 自举递归。
+//      //    详见上方 AllocPolicy 的说明。
+//      static BackendType SmallToSlab(uint64_t n)
+//      {
+//          return n <= 512 ? BackendType::Slab : BackendType::Default;
+//      }
+//      Memory::Instance().setPolicy(&SmallToSlab);
+//
+//      // 需要"策略读配置"时：把配置做成门面的成员，
+//      // 让上面这个静态函数去读它 —— 而不是让策略去捕获。
 //
 //      // 统计
 //      Memory::Instance().markBaseline();   // main 开头调一次
@@ -74,7 +97,6 @@
 // ═════════════════════════════════════════════════════════════════════════════
 
 #include "XMemBackend.h"
-#include "XMemOwnedSet.h"
 #include "XMemStats.h"
 
 #include <atomic>
@@ -91,28 +113,66 @@ namespace X_Y
     // 布局：  [ AllocHeader ][ 用户数据 ... ]
     //                        ↑ 返回给用户的地址
     //
-    // 每个分配前面都藏一份，用来回答三件事：
-    //   magic   —— 这个指针是不是我们发的？（快速合法性检查）
-    //   backend —— 该还给哪个后端
-    //   size    —— 原始请求大小（还给后端，并用于统计销账）
+    // 每个分配前面都藏一份，用来回答四件事：
+    //   size     —— 原始请求大小（还给后端，并用于统计销账）
+    //   backend  —— 该还给哪个后端
+    //   user     —— 用户区地址（★ 验真用：见下）
+    //   checksum —— ★ 验真用：由 size+backend+user 算出的自校验
+    //   magic    —— 这个指针是不是我们发的？
+    //
+    //  ★ 为什么靠这两个新字段就够了（不再需要"已分配指针表"）：
+    //    释放时门面拿到的只有 ptr，它必须回答"这是不是我发的"。
+    //    旧方案维护一张哈希表逐个登记指针（每次分配插、释放删、扩容重哈希）；
+    //    新方案把答案记在 ptr 前面，前提是"敢读 ptr - kHeaderSize"。
+    //    敢不敢读由两步决定（见 XMemFacade.cpp 的 deallocate）：
+    //      ① 地址落在已知自管区间内（问各后端 own()）→ 一定是自家页，必可读；
+    //      ② 否则读 header 后做三连验真：magic 对 + user 自洽 + checksum 对。
+    //    三连全过 = 门面发的；任一不过 = 不是门面发的 → 交回 ::free。
+    //    ⚠️ 旧实现（XMemory.h 的 Free）本来就是这么干的 —— 它压根没有表。
     //
     // ⚠️ 对齐：header 必须占整数倍对齐字节，保证后面用户数据仍满足
     //    alignof(max_align_t)。故 kHeaderSize 向上取整到 16。
+    //
+    // ⚠️ 改动本结构 = 改动门面与释放路径的契约：加字段务必同步 Checksum()。
     struct AllocHeader
     {
-        uint32_t magic;  // kAllocMagic 标记
-        uint8_t backend; // BackendType
+        uint64_t size;     // 用户请求的字节数
+        uint64_t checksum; // ★ 验真：Checksum(*this)
+        uintptr_t user;    // ★ 验真：用户区地址（= raw + kHeaderSize）
+        uint32_t magic;    // kAllocMagic 标记
+        uint8_t backend;   // BackendType
         uint8_t pad[3];
-        uint64_t size; // 用户请求的字节数
     };
 
     inline constexpr uint32_t kAllocMagic = 0x58595F4D;         // 'X','Y','_','M'
-    inline constexpr uint64_t kHeaderRaw = sizeof(AllocHeader); // 16
+    inline constexpr uint64_t kHeaderRaw = sizeof(AllocHeader); // 32
     inline constexpr uint64_t kHeaderSize =
         (kHeaderRaw + 15) & ~static_cast<uint64_t>(15);
 
-    // OwnedSet（已分配指针表）声明见 XMemOwnedSet.h，实现在 XMemOwnedSet.cpp。
-    // 它是纯实现细节，读门面逻辑时不必关心它的哈希表怎么写的。
+    // ── 分配头自校验 ─────────────────────────────────────────────────────────
+    // 由 size + backend + user 揉出来的一个值，写进 header->checksum。
+    // 用途：捕获"内存被踩""指针被改""跨后端错配"这类 header 内部不自洽的情况。
+    //
+    // ⚠️ 它【不是】安全哈希，只求便宜 + 能把不自洽暴露出来：
+    //    门面上还叠了 magic 与 user 自洽两道，三者一起才构成判决。
+    //    所以这里不需要密码学强度，也就不引入任何依赖。
+    inline uint64_t Checksum(const AllocHeader &h)
+    {
+        uint64_t x = h.size;
+        x ^= static_cast<uint64_t>(h.backend) * 0x9E3779B97F4A7C15ULL;
+        x ^= static_cast<uint64_t>(h.user) + 0x165667B19E3779F9ULL;
+        x ^= 0xC2B2AE3D27D4EB4FULL; // 常量种子
+        // splitmix64 收尾
+        x ^= x >> 30;
+        x *= 0xBF58476D1CE4E5B9ULL;
+        x ^= x >> 27;
+        x *= 0x94D049BB133111EBULL;
+        x ^= x >> 31;
+        return x;
+    }
+
+    // ⚠️ 归属判定没有独立的表：判据就是分配头里的字段（见 AllocHeader 与
+    //    deallocate 实现）。所以本类不再持有 OwnedSet。
 
     // ── Memory：门面 ─────────────────────────────────────────────────────────
     class Memory
@@ -154,30 +214,34 @@ namespace X_Y
         //
         // ⚠️ 策略【只影响分配】。释放永远读分配头里的记录，
         //    所以随时换策略都不会出现"分配走 A、释放走 B"的错配。
-        using AllocPolicy = std::function<BackendType(uint64_t)>;
+        //
+        // ⚠️⚠️ 为什么是【裸函数指针】而不是 std::function（改这里前必读）：
+        //    std::function 有个小缓冲（SBO），捕获物塞不下时它会调
+        //    operator new —— 而本模块【重载了全局 operator new】，
+        //    于是这条路径会绕回门面的 allocate，造成自举递归：
+        //        用户调 setPolicy(捕获较大的 lambda)
+        //          → std::function 构造 → operator new（全局重载）
+        //          → Memory::allocate() → 而此刻 m_Policy 尚未就绪 → 递归/UB
+        //    这在"首次分配之前"调用时尤其致命（静态初始化期）。
+        //    手动 malloc + placement new 也【解决不了】——那只安排了
+        //    std::function 对象本身在哪，捕获物照样在堆上。
+        //    故策略只能是裸函数指针：无捕获、无状态、绝无堆分配可能。
+        //    需要"策略读配置"时，把配置做成门面的成员 + 写个无捕获的
+        //    静态函数去读它，而不是让策略去捕获。
+        //    （这也把错误挡在编译期：捕获 lambda 会直接不匹配这个类型）
+        using AllocPolicy = BackendType (*)(uint64_t);
 
         void setPolicy(AllocPolicy policy)
         {
-            // ⚠️ 自举铁律：不能用 std::function 的默认存储（它可能堆分配，
-            //    而堆分配会走全局 operator new → 回调门面 → 递归）。
-            //    故手动 malloc 一块放它。
-            void *raw = std::malloc(sizeof(AllocPolicy));
-            if (!raw)
-                return;
-            auto *fn = new (raw) AllocPolicy(std::move(policy));
-            void *old = m_Policy.exchange(fn, std::memory_order_acq_rel);
-            if (old)
-            {
-                static_cast<AllocPolicy *>(old)->~AllocPolicy();
-                std::free(old);
-            }
+            // 裸指针，直接原子存即可 —— 无需分配、无需析构。
+            m_Policy.store(policy, std::memory_order_release);
         }
 
-        void clearPolicy() { setPolicy(AllocPolicy{}); }
+        void clearPolicy() { setPolicy(nullptr); }
+
         bool hasPolicy() const
         {
-            AllocPolicy *p = m_Policy.load(std::memory_order_acquire);
-            return p && *p;
+            return m_Policy.load(std::memory_order_acquire) != nullptr;
         }
 
         // ── 统计零点校准（"去皮"）──
@@ -206,8 +270,17 @@ namespace X_Y
         //    所以：是门面发的 → 读头归还；不是 → 交回 ::free。
         void deallocate(void *ptr, uint64_t size = 0);
 
-        // 归属判定（deallocate 的安全前提，也可对外用于自检）
-        bool owns(void *ptr) const { return m_OwnedTable.contains(ptr); }
+        // 归属判定（自检，也可对外用于诊断）
+        // 实现见 .cpp：读 ptr 前面的 header 做三连验真（magic + user + checksum）。
+        // ⚠️ 它【不在】释放热路径上 —— 释放直接读 header，同样 O(1)。
+        bool owns(void *ptr) const;
+
+        // 后端自检：这个地址落在哪个后端的自管区域里？没有则返回 nullptr。
+        // ⚠️ 与 owns() 不同，它【不读任何 header】，只问后端自己的区域表
+        //    （Slab 的 chunk 区间查询）。这是 own() 接口的用途所在。
+        // ⚠️ 它不在分配/释放的任何路径上，所以后端的 own() 可以做得
+        //    "精确但偏慢"（Slab 要拿索引锁 + 二分）而不影响性能。
+        IMemoryBackend *backendOwning(void *ptr);
 
         // ═════════════════════════════════════════════════════════════════════
         //  对象级便捷接口（分配 + 构造 / 析构 + 归还）
@@ -280,10 +353,12 @@ namespace X_Y
         // 基线之前发生了多少次分配（= 开机成本，不参与泄漏判断）
         uint64_t earlyAllocs() const { return m_Counter.EarlyAllocs(); }
 
-        // 在册指针数（应等于 liveBlocks；不等说明 OwnedSet 与计数不同步）
+        // 在册分配数（= 尚未释放的块数）。
+        // ⚠️ 旧版这里读的是 OwnedSet 的元素个数；表退役后直接问统计器，
+        //    语义不变（"在册"就等于"分配了还没释放"），且跨基线也不会跑偏。
         uint64_t ownedCount() const
         {
-            return static_cast<uint64_t>(m_OwnedTable.size());
+            return m_Counter.LiveBlocks();
         }
 
         bool UnderBudget() const
@@ -337,11 +412,15 @@ namespace X_Y
         std::atomic<IMemoryBackend *> m_Backends[kBackendSlots] = {};
         MemoryCounter m_Counter; // 自管（固定数组 + 原子），零堆分配
 
-        // 已分配指针表（归属判定），自身只用 malloc
-        OwnedSet m_OwnedTable;
+        // 已分配指针表已退役：归属判定改由 header 字段承担（见 AllocHeader）。
+        // 这里曾经有个 OwnedSet m_OwnedTable —— 它是 per-pointer 的重复存储，
+        // 而 header 里的 magic/user/checksum 本来就能回答同一个问题。
 
-        // 策略：放在堆上（malloc 来的），避免门面成员需要运行期构造
-        std::atomic<AllocPolicy *> m_Policy{nullptr};
+        // 策略：一个裸函数指针（见 AllocPolicy 的说明）。
+        // ⚠️ 以前这里是 std::atomic<AllocPolicy*> —— 指向 malloc 出来的
+        //    std::function。改成裸指针后不需要任何分配与析构，
+        //    门面成员保持"零运行期构造"，静态初始化期绝对安全。
+        std::atomic<AllocPolicy> m_Policy{nullptr};
 
         // 全局配置（inline static，零初始化）
         inline static uint64_t s_MaxBytes = 0; // 0 = 不限预算

@@ -1,6 +1,9 @@
-﻿#include "../../Memory/Buffer.h"
+#include "../../Memory/Buffer.h"
 
-#include "../../Memory/XMemory.h"
+// ⚠️ 曾经是 "../../Memory/XMemory.h"（旧内存体系）。
+//    Buffer 用到的 Memory::Instance().Alloc/Free 是门面的旧名兼容层，
+//    声明在 XMemFacade.h 里 —— 旧头文件已被新体系取代，不再 include。
+#include "../../Memory/XMemFacade.h"
 #include <cstdio>
 #include <limits>
 
