@@ -95,7 +95,7 @@ namespace X_Y
         void LoadIndex();
 
         std::unordered_map<std::string, Buffer> m_Entries;
-        XPath m_DataDir{"DataStore/"};
+        XPath m_DataDir{"DataStore"};
 
         mutable std::shared_mutex m_Mutex;
         bool m_Enabled = true; // 静音开关（false=全部空转）

@@ -77,6 +77,39 @@ namespace X_Y
     }
 
     // ═════════════════════════════════════════════════════════════════════════
+    //  纯记账入口（★ 只给全局 operator new / delete 用）
+    // ═════════════════════════════════════════════════════════════════════════
+    //
+    //  全局 new/delete 走的是原生 malloc/free（跨 DLL 安全，见
+    //  XMemGlobalNew.cpp 文件头），它不写 header、不挑后端。
+    //  但"统计所有分配"这个目标还是要的 —— 这两个函数就是那条路
+    //  唯一的记账出口。
+    //
+    //  ⚠️ 只动统计数字，不碰内存、不碰后端、不碰 header。
+    //
+    //  ⚠️ 后端槽固定记到 Crt：new 走的就是标准库堆，语义上正对应
+    //     Crt 这一栏。这样"按后端分布"里 Crt 就代表"普通 new 的量"，
+    //     Slab 那栏只反映显式调用的量 —— 数字反而更诚实。
+
+    void Memory::notifyAlloc(uint64_t size)
+    {
+        if (size == 0)
+            return;
+
+        m_Counter.onAllocate(size, BackendType::Crt);
+        // ⚠️ 【不】记 onOverhead：new 这条路径没有分配头，
+        //    所以不能把那 32 字节算进去（以前会算，是错的）。
+    }
+
+    void Memory::notifyFree(uint64_t size)
+    {
+        // size == 0 表示"释放方没给出大小"（不带 size 的 operator delete
+        // 被调用时就是这样）。此时只减次数，不动字节数 —— 宁可字节数偏高，
+        // 也不要凭空减掉一个猜出来的值。
+        m_Counter.onDeallocate(size, BackendType::Crt);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
     //  归属判决（三连验真）—— 释放与自检共用的唯一判据
     // ═════════════════════════════════════════════════════════════════════════
     //
@@ -231,15 +264,19 @@ namespace X_Y
         //    却没防住任何东西（下面这三条照样要读同一块内存）。
         //    释放现在是纯粹 O(1)：读 header → 按 backend 字段找后端 → 归还。
         //
-        // ⚠️ 读 ptr-32 本身的安全性：operator delete 会把【所有】指针
-        //    送进来（含 CRT 分配的）。外部指针那里读到的多半是垃圾，
-        //    三连判决会把它们判为"不是我的"→ 交回 ::free，这正是预期行为。
+        // ⚠️ 本函数现在【只服务显式分配器】（路 B）—— 全局 delete
+        //    已不再调用它（delete 现在是纯 ::free，见 XMemGlobalNew.cpp）。
+        //    按成对约定，走到这里的指针【本该】都带合法 header。
+        //    但下面仍然保留"判不过就交回 ::free"的兜底，因为：
+        //      · Free()/Deallocate() 是 public 的，手滑传错指针有可能；
+        //      · 判不过时用 ::free 至少不会比"直接崩"更坏。
+        //    （这是低成本的保险，不是给混用开的口子 —— 成对约定依然成立）
         void *raw = static_cast<uint8_t *>(ptr) - kHeaderSize;
         auto *hdr = static_cast<AllocHeader *>(raw);
 
         if (!HeaderValid(hdr, ptr))
         {
-            // 不是门面发的（CRT 的、或开关关闭期间分配的）→ 交回标准库
+            // 不是门面发的 → 交回标准库
             std::free(ptr);
             return;
         }

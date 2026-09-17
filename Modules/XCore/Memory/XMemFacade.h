@@ -8,31 +8,42 @@
 //      XMemBackend.h     ← 后端：字节从哪来、怎么还
 //      XMemStats.h       ← 统计：只记账
 //      XMemFacade.h      ← 门面：外界入口，选后端、记账、归属判定 ★
-//      XMemGlobalNew.cpp ← 全局 operator new/delete 重载（必经之路）
+//      XMemGlobalNew.cpp ← 全局 operator new/delete 重载（★ 现在只统计）
 //
 //  ── 门面的两条意义（这是整个模块存在的理由）──
 //    ① 统计：所有分配都记账（按后端 / 按大小档 / 峰值 / 未释放块）
 //    ② 策略：可注入"这次该走哪个后端"，从而优化内存分配
 //    分配器（slab）只是"策略的一种实现"，真正有价值的是这层可插拔的
-//    策略 + 统计 —— 优化只需改策略，全局受益。
+//    策略 + 统计。
 //
-//  ── 三条通道（各管各的场景）──
-//    ① 全局 operator new 重载 → 统一兜底，没人能绕过（XMemGlobalNew.cpp）
-//       使用者什么都不用改，new / STL / 第三方全部进门面。
-//    ② X_Y::Malloc / X_Y::Free → 裸内存，替代 C 的 malloc/free
-//    ③ X_Y::AllocFrom / NewFrom → 显式指定后端（单次，绕过策略）
+//  ── 两条路（各管各的，不要混）──
+//
+//    路 A：new / delete（XMemGlobalNew.cpp）
+//          · 只统计 —— 原生 ::malloc / ::free，不走策略、不写 header
+//          · 为什么不能让它接管分配：Windows 上 EXE 与 DLL 各有符号绑定，
+//            MinGW 的 libstdc++-6.dll 是独立运行时 → 会"跨堆释放" → 崩。
+//            详见 XMemGlobalNew.cpp 文件头。
+//
+//    路 B：X_Y::* 显式接口（本文件）—— 门面完整能力所在
+//          X_Y::New<T> / NewFrom<B,T>    分配 + 构造
+//          X_Y::Delete                   析构 + 归还（认 header，不必记来源）
+//          X_Y::Malloc / AllocFrom       裸内存
+//          X_Y::Free                     裸内存归还
+//
+//    ⚠️ 一句话规矩：路 A 的指针只能用 delete，路 B 的只能用 X_Y:: 那组。
+//       混用 = 把内存还给错误的堆 = 崩。不做检测、不做兜底。
 //
 //  ── 设计要点（改之前必读）──
 //
 //  1. 为什么必须有 header（分配头）：
-//     `delete p` 时 C++ 【不会】把构造时的额外参数传回来，所以门面
-//     无法知道 p 当初走的是哪个后端。因此在分配时把"我是谁"记在
-//     返回指针前面，deallocate 时往回读一眼就知道该找谁。
-//     这保证了：**策略/后端随便换，释放永不错配**。
+//     释放时（X_Y::Delete / Free）拿到只有 ptr，而 C++ 不会把"当初用哪个
+//     后端分配"传回来。所以在 ptr 前面记一份（size / backend / user /
+//     checksum），归还时读一眼就知道该找谁。
+//     ★ 它的全部价值就是"让使用者不必记住来源"—— 所以路 B 里
+//       New 和 NewFrom 共用同一个 Delete，不需要成对的两个名字。
 //
 //  2. 归属判定靠 header 验真，不靠"已分配指针表"、也不遍历后端：
-//     全局 operator delete 会把手边【所有】指针送进来，其中混有非门面
-//     分配的（CRT 的、开关关闭期间分配的）。要判断"是不是我发的"，
+//     要判断"是不是门面发的"，读 ptr 前面的 header 三条一起看，
 //     答案就在 ptr 前面的 header 里，三条一起看：
 //       magic（是不是我写的）+ user（是不是正好等于 ptr）+ checksum（自洽）
 //     三条全过 = 我发的；任一不过 = 不是我的 → 交回 ::free。
@@ -45,9 +56,9 @@
 //        却没防住任何东西（三连验真照样要读同一块内存）。
 //
 //  3. 门面必须是平凡可初始化的：
-//     全局 operator new 重载后，门面可能在静态初始化期（甚至更早）
-//     被触达。故门面的成员都设计成"不需要运行期构造"的形态，
-//     后端懒就位；策略是裸函数指针（见 AllocPolicy 的说明）。
+//     new 可能在静态初始化期（甚至更早）被触达，而它要调 notifyAlloc
+//     → 门面必须在此之前就是可用的。故门面的成员都设计成
+//     "不需要运行期构造"的形态，后端懒就位；策略是裸函数指针。
 //
 //  4. 自举铁律：
 //     后端、统计器、策略存储内部【只用 ::malloc / ::free】，
@@ -56,35 +67,29 @@
 //        就是为了杜绝"用户 lambda 的捕获物触发 operator new → 回调门面"。
 //
 //  ── 用法 ──
-//      // 日常：直接 new 就行（全局重载接管，含 STL）
+//      // ① 普通 new：会被统计，但不受门面管理
 //      auto* w = new Widget(args...);
 //      delete w;
 //
-//      // 裸内存：用这个，别用 C 的 malloc
-//      void* p = X_Y::Malloc(1024);
+//      // ② 想走门面（策略 / 指定后端 / 完整统计）→ 用 X_Y:: 这一组
+//      auto* a = X_Y::New<Widget>(args...);                    // 走策略
+//      auto* b = X_Y::NewFrom<BackendType::Slab, Widget>(args...); // 指定后端
+//      X_Y::Delete(a);                                         // ★ 都是它
+//      X_Y::Delete(b);                                         //   （不必记来源）
+//
+//      void* p = X_Y::Malloc(1024);                            // 裸内存，走策略
+//      void* q = X_Y::AllocFrom(BackendType::Crt, 1024);       // 裸内存，指定后端
 //      X_Y::Free(p);
+//      X_Y::Free(q);
 //
-//      // 显式指定后端
-//      void* q = X_Y::AllocFrom(BackendType::Slab, 1024);
-//      auto* o = X_Y::NewFrom<BackendType::Slab, Widget>(args...);
-//
-//      // 策略：决定 new 走哪个后端
-//      // ⚠️ 默认没有策略 = 全部走 Crt（标准库兜底）。
-//      //    Slab 是【按需启用】的：只在确实有收益的热点上开，
-//      //    效果不好把策略清掉（clearPolicy）就回到 Crt，不用改任何调用点。
-//      //
-//      // ⚠️ 策略必须是【无捕获的普通函数】（或静态成员函数）——
-//      //    捕获 lambda 在这里【编译不过】，这是有意的：
-//      //    std::function 的捕获物可能触发 operator new → 回调门面 → 自举递归。
-//      //    详见上方 AllocPolicy 的说明。
+//      // 策略：决定"路 B 里没指定后端的那部分"走哪个后端
+//      // ⚠️ 不影响 new（new 已固定走原生 malloc）。
+//      // ⚠️ 必须是【无捕获的普通函数】——捕获 lambda 编译不过（见 AllocPolicy）。
 //      static BackendType SmallToSlab(uint64_t n)
 //      {
 //          return n <= 512 ? BackendType::Slab : BackendType::Default;
 //      }
 //      Memory::Instance().setPolicy(&SmallToSlab);
-//
-//      // 需要"策略读配置"时：把配置做成门面的成员，
-//      // 让上面这个静态函数去读它 —— 而不是让策略去捕获。
 //
 //      // 统计
 //      Memory::Instance().markBaseline();   // main 开头调一次
@@ -92,8 +97,13 @@
 //      Memory::Instance().liveBlocks();     // 泄漏自检（应为 0）
 //
 //      // 旧名兼容（现有代码如 Buffer 零改动）
+//      // ⚠️ 它们走的是【路 B 完整门面】（有 header、按策略选后端），
+//      //    所以同样受成对约定约束：Alloc 发的只能用 Free 释放。
 //      void* r = Memory::Instance().Alloc(1024);
 //      Memory::Instance().Free(r);
+//
+//      // 排查手段：怀疑"门面接管的指针来自别的堆"时先关掉统计/门面
+//      Memory::Instance().setEnabled(false);
 // ═════════════════════════════════════════════════════════════════════════════
 
 #include "XMemBackend.h"
@@ -175,6 +185,7 @@ namespace X_Y
     //    deallocate 实现）。所以本类不再持有 OwnedSet。
 
     // ── Memory：门面 ─────────────────────────────────────────────────────────
+
     class Memory
     {
     public:
@@ -200,9 +211,10 @@ namespace X_Y
         OOMAction oomAction() const { return s_OOMAction; }
 
         // ── 一键开关 ──
-        // 关闭后新的分配完全走原生（::malloc），零干预。
-        // ⚠️ 只影响【分配】；释放永远交门面自己判断归属，所以运行中
-        //    切换开关是安全的（不会错配）。
+        // 关闭后完全停掉门面介入：new/delete 连统计也不做（纯原生），
+        // 显式分配器不受影响（它本来就是显式调的）。
+        // ⚠️ 首要用途是【排查】：怀疑"跨 DLL / 多运行时导致堆不匹配"时，
+        //    第一件事就是关掉它 —— 关了不崩 = 问题出在门面介入的那条路上。
         void setEnabled(bool on) { s_Enabled.store(on, std::memory_order_relaxed); }
         bool enabled() const { return s_Enabled.load(std::memory_order_relaxed); }
 
@@ -260,19 +272,44 @@ namespace X_Y
         //   type == Default → 先问策略，策略没意见则用默认后端
         //   type == 具体后端 → 单次覆盖，绕过策略
         // 失败行为由 OOMAction 决定；Abort 之外统一返回 nullptr。
+        //
+        // ⚠️ 这是【通用分配器】的入口，不是 new 的入口。
+        //    全局 operator new 已改为"只统计"（见 XMemGlobalNew.cpp），
+        //    它【不会】走到这里。想被门面完整管理（策略/指定后端/header）
+        //    就必须显式用本函数、或 AllocFrom / NewFrom。
         void *allocate(uint64_t size, BackendType type = BackendType::Default);
 
-        // 归还。★ 不需要传后端、不需要传大小 —— 全靠 header / 归属表。
+        // 归还。★ 不需要传后端、不需要传大小 —— 全靠 header。
         //
-        // ⚠️ 为什么这里要容忍"非门面指针"（fallback 到 ::free）：
-        //    全局 operator delete 重载后，delete 会把【所有】指针交到这里，
-        //    包括 CRT 自己分配的、或开关关闭期间分配的。
-        //    所以：是门面发的 → 读头归还；不是 → 交回 ::free。
+        // ⚠️⚠️ 成对约定（硬规矩，用错就崩，不救）：
+        //    allocate / Alloc / AllocFrom / MallocFrom / NewFrom 发的指针，
+        //    【只能】用 deallocate / Free / DeleteFrom 释放。
+        //    反过来，new 发的指针必须用 delete（见 XMemGlobalNew.cpp）。
+        //    混用 = 把内存还给错误的堆 = 崩。没有兜底、没有检测。
         void deallocate(void *ptr, uint64_t size = 0);
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  纯记账入口（★ 只给全局 operator new / delete 用）
+        // ═════════════════════════════════════════════════════════════════════
+        //  背景：全局 new 已改为"只统计" —— 它用 ::malloc 拿内存、
+        //  用 ::free 归还，【不写 header、不挑后端、不问策略】。
+        //  这两个函数就是那条路径唯一的记账出口。
+        //
+        //  ⚠️ 它们【只动统计数字】，不碰任何内存、不碰后端、不碰 header。
+        //     所以调用它们绝不会递归回 new（自举安全）。
+        //
+        //  ⚠️ 为什么需要它们而不是直接调 allocate：
+        //     因为 new 必须走原生 malloc（跨 DLL 安全，见 XMemGlobalNew.cpp
+        //     文件头）。一旦走门面分配，就等于又接管了分配器。
+        //
+        //  ⚠️ 这两个也不是给用户调的。用户要分配请用 Alloc / AllocFrom / NewFrom。
+        void notifyAlloc(uint64_t size);
+        void notifyFree(uint64_t size);
 
         // 归属判定（自检，也可对外用于诊断）
         // 实现见 .cpp：读 ptr 前面的 header 做三连验真（magic + user + checksum）。
-        // ⚠️ 它【不在】释放热路径上 —— 释放直接读 header，同样 O(1)。
+        // ⚠️ 它【不在】任何热路径上 —— 全局 delete 已不再调用它
+        //    （delete 现在是纯 ::free，见 XMemGlobalNew.cpp）。
         bool owns(void *ptr) const;
 
         // 后端自检：这个地址落在哪个后端的自管区域里？没有则返回 nullptr。
@@ -286,6 +323,11 @@ namespace X_Y
         //  对象级便捷接口（分配 + 构造 / 析构 + 归还）
         // ═════════════════════════════════════════════════════════════════════
 
+        // ⚠️ 下面两个 Allocate 重载有【重载解析歧义】的坑：
+        //    若 T 的某个构造参数恰好是 BackendType，
+        //    编译器会选 (BackendType, Args...) 那版，把用户参数当后端。
+        //    新代码请优先用 X_Y::New<T> / X_Y::NewFrom<B,T>（无歧义）。
+        //    这两个保留是为了兼容既有调用点。
         template <typename T, typename... Args>
         T *Allocate(BackendType type, Args &&...args)
         {
@@ -429,18 +471,23 @@ namespace X_Y
     };
 
     // ═════════════════════════════════════════════════════════════════════════
-    //  通道 ②③：命名空间级便捷函数
+    //  路 B：显式分配器（命名空间级便捷函数）
+    //
+    //  ⚠️ 这一整块是"通用分配器"，替代了你原本期望 new/delete 承担的角色。
+    //     全局 new/delete 现在只统计（见 XMemGlobalNew.cpp）。
+    //
+    //  ⚠️⚠️ 成对约定（硬规矩，用错就崩，不救）：
+    //     Malloc / MallocFrom / AllocFrom / NewFrom 发的指针，
+    //     【只能】用 Free / Deallocate / DeleteFrom 释放。
+    //     不要用 delete，也不要用 C 的 free()。
+    //     new 发的指针反过来只能用 delete。
     // ═════════════════════════════════════════════════════════════════════════
 
-    // ── ② 裸内存：替代 C 的 malloc / free ──────────────────────────────────
+    // ── 裸内存：替代 C 的 malloc ────────────────────────────────────────────
+    // 走策略（Default 后端），失败返回 nullptr（或按 OOMAction 处理）。
     //
-    // ⚠️⚠️ 重要警告（务必遵守）：
-    //   1. 本函数分配的内存【只能用 X_Y::Free 或 delete 释放】，
-    //      绝不能用 C 的 free()（那是另一个堆，会崩）。
-    //   2. 反过来，C 的 malloc 分配的内存也不要交给 X_Y::Free
-    //      （门面会识别出来并交回 ::free，但那是编程错误）。
-    //   3. 这是【裸内存】—— 没有构造/析构。
-    //      要构造对象请用 new 或 NewFrom。
+    // ⚠️ 这是【裸内存】—— 没有构造/析构。
+    //    要构造对象请用 NewFrom（或 placement new）。
     inline void *Malloc(uint64_t size)
     {
         return Memory::Instance().allocate(size);
@@ -449,13 +496,13 @@ namespace X_Y
     // 释放裸内存。
     // ⚠️ 只用于 Malloc / MallocFrom / AllocFrom 返回的指针。
     //    不要用来释放 new 出来的【对象】（那会跳过析构 → 资源泄漏）。
-    //    （对象请用 delete / Memory::Deallocate）
+    //    对象请用 DeleteFrom（或 Memory::Deallocate）。
     inline void Free(void *ptr)
     {
         Memory::Instance().deallocate(ptr, 0);
     }
 
-    // ── ③ 显式指定后端（单次，绕过策略）────────────────────────────────────
+    // ── 显式指定后端（单次，绕过策略）────────────────────────────────────
     inline void *MallocFrom(BackendType backend, uint64_t size)
     {
         return Memory::Instance().allocate(size, backend);
@@ -466,8 +513,71 @@ namespace X_Y
         return Memory::Instance().allocate(size, backend);
     }
 
-    // 带构造：后端放在模板参数里（编译期可知 → 可内联，零运行期开销）
+    // ═════════════════════════════════════════════════════════════════════════
+    //  ★ 对象级：X_Y::New / X_Y::Delete —— 这两个就是"路 B 的 new/delete"
+    // ═════════════════════════════════════════════════════════════════════════
+    //
+    //  为什么要有这两个名字：
+    //    new/delete 已经退化成"只统计"（走原生堆，不受门面管理）。
+    //    想要门面完整能力（策略 / header / 统计）的分配+构造，
+    //    以前只能写 Memory::Instance().Allocate<T>(...) —— 又长又不对称。
+    //    这两个命名空间级函数就是它的短名字，形状与 new/delete 对齐。
+    //
+    //  ⚠️ 和 new/delete 的区别（别混）：
+    //      new T / delete p          → 原生堆，只统计，无 header
+    //      X_Y::New<T> / X_Y::Delete → 门面堆，走策略，有 header
+    //    两者【不能混用】（成对约定）。
+
+    // 分配 + 构造（走策略；策略空则走默认后端 = Crt）
+    //   用法：auto* w = X_Y::New<Widget>(args...);
+    //
+    // ⚠️ 这里【不走】Memory::Allocate 的重载解析，而是直接展开成
+    //    "allocate + placement new"。原因：Allocate 有两个重载
+    //    —— (BackendType, Args...) 和 (Args...) —— 当 T 的某个构造参数
+    //    恰好是 BackendType 时，重载解析会选前者，把用户的参数
+    //    当成"指定后端"，静默换后端（且少传一个构造参数）。
+    //    直接展开就没有这个歧义：本函数 = 无歧义地"走策略"。
+    template <typename T, typename... Args>
+    T *New(Args &&...args)
+    {
+        void *mem = Memory::Instance().allocate(sizeof(T), BackendType::Default);
+        if (!mem)
+            return nullptr;
+        try
+        {
+            return new (mem) T(std::forward<Args>(args)...);
+        }
+        catch (...)
+        {
+            Memory::Instance().deallocate(mem, sizeof(T)); // 构造抛异常不泄漏
+            throw;
+        }
+    }
+
+    // ── 对象级释放：X_Y::Delete ─────────────────────────────────────────────
+    //   用法：X_Y::Delete(w);
+    //
+    //  ★ 它是【路 B 唯一的对象释放入口】：
+    //      New<T> 发的、NewFrom<B,T> 发的 —— 全都用它释放，不需要区分。
+    //      因为它读 header 就知道该还给哪个后端、调哪个析构。
+    //      （header 存在的意义就是这个：让使用者【不必记住来源】）
+    //
+    //  ⚠️ 它和 delete 是两条路，不能混：
+    //      delete         → 路 A（原生堆，无 header）
+    //      X_Y::Delete    → 路 B（门面堆，有 header）
+    //      delete 一个路 B 的指针会崩：路 A 不认识 header。
+    //
+    //  ⚠️ 这个函数只有"路 B"的语义，不做任何"这是不是门面发的"判断 ——
+    //     传进来的必然带 header（成对约定的前提）。
+    template <typename T>
+    void Delete(T *ptr)
+    {
+        Memory::Instance().Deallocate(ptr);
+    }
+
+    // ── 指定后端：分配 + 构造 ──────────────────────────────────────────────
     //   用法：auto* w = X_Y::NewFrom<BackendType::Slab, Widget>(args...);
+    //         X_Y::Delete(w);          // ← 释放用同一个入口，不用记来源
     template <BackendType Backend, typename T, typename... Args>
     T *NewFrom(Args &&...args)
     {
@@ -485,7 +595,9 @@ namespace X_Y
         }
     }
 
-    // 配套：析构 + 归还（与 NewFrom 成对，读代码时配对明确）
+    // 与 NewFrom 等价的对象释放入口。
+    // ⚠️ 现在它【只是 X_Y::Delete 的别名】—— 保留纯粹是为了兼容既有写法，
+    //    新代码直接用 X_Y::Delete 即可（两者行为完全一致）。
     template <typename T>
     void DeleteFrom(T *ptr)
     {

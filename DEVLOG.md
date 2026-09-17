@@ -2,6 +2,183 @@
 ## 只保留最近十次改动多了就删除
 
 
+## 2026-09-16 内存模块③-e：补 X_Y::New / X_Y::Delete（命名对称）
+
+> 砚台："为啥不是 `X_Y::` 这样子使用，你把他封装到 `X_Y::new` 和 `X_Y::delete` 里好了"
+> 拍板：统一成命名空间级；`Memory::Instance().Allocate<T>()` / `Deallocate` **保留**。
+
+### 改了什么
+
+路 B 之前只有 `Malloc`/`Free` 是命名空间级的，对象级却要写
+`Memory::Instance().Allocate<T>(...)` —— 又长又和 `new/delete` 不对称。补上：
+
+```cpp
+auto* o = X_Y::New<Widget>(args...);   // 分配 + 构造，走策略   ★新
+X_Y::Delete(o);                        // 析构 + 归还          ★新
+
+auto* s = X_Y::NewFrom<BackendType::Slab, Widget>(args...);
+X_Y::DeleteFrom(s);
+```
+
+**完整对称表（现在）：**
+
+| 裸内存 | 对象 |
+|--------|------|
+| `X_Y::Malloc(n)` — 走策略 | `X_Y::New<T>(...)` — 走策略 |
+| `X_Y::AllocFrom(B, n)` — 指定后端 | `X_Y::NewFrom<B, T>(...)` — 指定后端 |
+| `X_Y::Free(p)` | `X_Y::Delete(p)` |
+| `X_Y::MallocFrom(B, n)`（别名） | `X_Y::DeleteFrom(p)` |
+
+### ⚠️ 实现上的一个坑（写的时候发现的，已避开）
+
+`Memory::Allocate<T>` 有**两个重载**：
+
+```cpp
+T *Allocate(BackendType type, Args&&...args);
+T *Allocate(Args&&...args);
+```
+
+**若 `T` 的某个构造参数恰好是 `BackendType`**，重载解析会选前者，
+把用户的构造参数当成"指定后端"，**静默换后端、还少传一个构造参数**。
+
+所以 `X_Y::New<T>` **没有**去转发 `Allocate`，而是直接展开成
+`allocate(sizeof(T), Default)` + placement new —— 无歧义。
+`Allocate` 那两个重载**保留**（既有调用点在用），但已在注释里标出这个坑，
+并注明新代码优先用 `X_Y::New` / `X_Y::NewFrom`。
+
+### 成对约定（更新后的完整版）
+
+```
+new 发的                        → delete
+X_Y::New / NewFrom 发的         → X_Y::Delete / DeleteFrom
+X_Y::Malloc / AllocFrom 发的    → X_Y::Free
+```
+
+混用 = 把内存还给错误的堆 → 崩。**不做检测、不做兜底。**
+
+> ⚠️ 特别提醒：`X_Y::Malloc(n)` 分配的是 `malloc(n + 32)`，
+> 返回的是 `raw + 32`。所以误用 `delete p` 会让 `free()` 拿到块中间的
+> 地址 → **必崩**（不是"歪打正着对上了"）。
+
+### 涉及文件
+
+`Memory/XMemFacade.h`：加 `X_Y::New` / `X_Y::Delete`；更新文件头两条路说明、
+用法示例、成对约定表；给 `Memory::Allocate` 标注重载歧义坑。
+
+
+## 2026-09-16 内存模块③-d：全局 new/delete 退回"只统计"（跨 DLL 崩溃修复）
+
+> 起因：跑 WindowRuntime 自检，第一条 `XDEBUG` 就崩。栈是
+> ```
+> msvcrt.dll!free()
+> libstdc++-6.dll!std::filesystem::path 析构
+> X_Y::XPath::operator/          FilesSystem.h:152
+> X_Y::DataStore::IndexPath      DataStore.cpp:48
+> X_Y::DataStore::LoadIndex      DataStore.cpp:79
+> ```
+> 实测：`main` 开头加 `Memory::Instance().setEnabled(false)` 后**不崩**。
+> 砚台拍板：**把路堵死** —— new/delete 只统计，完整能力另走显式 API。
+
+### 一、根因（不是某行代码写错，是路本身走不通）
+
+原设计让全局 `new` 走门面 `allocate`（加分配头、按策略选后端），
+目标是"所有分配没人能绕过"。**在 Windows + MinGW 下这个假设不成立**：
+
+- EXE 与各 DLL **各自绑定符号**，而 MinGW 的 `libstdc++-6.dll`
+  是**独立的一个运行时**；
+- 于是会出现"内存由 libstdc++ 的堆分配、却经 EXE 的 `operator delete` 释放"；
+- 门面读 `ptr-32` 找不到分配头 → 兜底 `std::free(ptr)`；
+- 而那个 `std::free` 解析到 **`msvcrt.dll!free`** —— 不是同一个堆 → **崩**。
+
+**★ 关键认识：重载全局 `operator new/delete` 隐含"全进程只有一个堆"的假设。
+只要存在第二个运行时/DLL 边界，假设就破。** 砚台将来还要写自己的 DLL，
+所以这条路必须放弃，不能靠"静态链 libstdc++"拖时间。
+
+### 二、修法：职责彻底分开（两条路）
+
+| | 路 A：全局 new/delete | 路 B：显式分配器 |
+|---|---|---|
+| 入口 | `new` / `delete` | `Malloc`/`Free`、`AllocFrom`、`NewFrom`/`DeleteFrom` |
+| 内存来源 | `::malloc` / `::free` | 门面 `allocate` → 后端（Crt/Slab） |
+| 分配头 | ❌ 无 | ✅ 有（记 size + backend + user + checksum） |
+| 策略 | ❌ 不参与 | ✅ 参与（`Default` 时问策略） |
+| 统计 | ✅ 记次数与字节 | ✅ 完整记（含后端分布、overhead） |
+| 跨 DLL | ✅ 安全（malloc/free 同堆配对） | ✅ 安全（只碰自己发的指针） |
+
+**全局 `new` 现在长这样**（`XMemGlobalNew.cpp` 整个重写）：
+
+```cpp
+void *operator new(std::size_t size)
+{
+    void *p = std::malloc(size ? size : 1);
+    if (!p) throw std::bad_alloc();
+    NotifyAlloc(size);          // ← 只记账，不碰后端/header/策略
+    return p;
+}
+void operator delete(void *ptr, std::size_t size) noexcept
+{
+    NotifyFree(size);           // ← sized delete：字节数精确
+    std::free(ptr);             // ← 无条件原生 free
+}
+```
+
+**门面新增两个纯记账入口**（`XMemFacade.h/.cpp`）：
+
+```cpp
+void notifyAlloc(uint64_t size);   // → m_Counter.onAllocate(size, BackendType::Crt)
+void notifyFree(uint64_t size);    // → m_Counter.onDeallocate(size, BackendType::Crt)
+```
+
+- 只动统计数字，**绝不碰内存/后端/header** → 自举安全；
+- 固定记到 `Crt` 槽（new 走的就是标准库堆）；
+- `notifyAlloc` **不记 `onOverhead`** —— new 这条路没有分配头，
+  不能把那 32 字节算进去（以前会算，是错的）。
+
+> ⚠️ sized delete 的字节数**不保证一定精确**：编译器在大小可知时才会调
+> `operator delete(void*, size_t)`。所以不带 size 的版本必须保留，
+> 它传 0 = "只知道次数，不知道字节"。
+
+### 三、⚠️ 成对约定（硬规矩，用错就崩，不救）
+
+```
+new 发的                      → 只能 delete
+Malloc/Alloc/AllocFrom/NewFrom 发的 → 只能用 Free/DeleteFrom
+```
+
+两边混用 = 把内存还给错误的堆。**不做检测、不做兜底**（砚台："把路堵死就行"）。
+
+> 因此 `Memory::deallocate` 里"判不过就 `std::free`"那段**保留但降级为兜底**：
+> 它只服务 `Free`/`Deallocate` 手滑传错指针的情况，不是给混用开的口子。
+
+### 四、涉及文件
+
+| 文件 | 动作 |
+|------|------|
+| `src/Memory/XMemGlobalNew.cpp` | **整个重写**：new→malloc+记账，delete→free+记账；删掉所有 `allocate`/`deallocate` 调用 |
+| `Memory/XMemFacade.h` | 加 `notifyAlloc`/`notifyFree`；通道说明改写成"两条路"；用法示例重写；`setEnabled` 说明改成"排查开关" |
+| `src/Memory/XMemFacade.cpp` | 实现两个记账函数；`deallocate` 注释改为"只服务显式分配器" |
+
+**其它模块零改动** —— `Buffer` 用的 `Memory::Alloc/Free` 仍走完整门面（路 B）。
+
+### 五、连带影响（要知道）
+
+- **STL / `std::string` / `std::filesystem::path` 等不再进策略、不进 Slab**，
+  只被统计到次数与字节。这是路 A 的必然代价，也正是换来跨 DLL 安全的代价。
+- **"按后端分布"的数字含义变了**：`Crt` 栏现在 = "普通 new 的量"，
+  `Slab` 栏只反映**显式调用**的量。数字反而更诚实。
+- 将来写 DLL：DLL 内部的 new/delete 用自己的运行时，**根本不进本门面**，
+  互不干扰 —— 这正是要的效果。
+
+### 六、验证（交给砚台）
+
+- 自检重跑，第一条 `XDEBUG` 不再崩（原崩溃点：DataStore::LoadIndex → IndexPath）；
+- `main` 开头那行 `setEnabled(false)` 可以**留着**——它是排查这类问题的第一手段；
+- `stats()` 里 `Crt` 的次数/字节应当有数（所有 new 都被统计）；
+- `MallocFrom(Slab, n)` 后 `Slab` 栏有数，`Free` 后 `liveBlocks()` 归零；
+- ⚠️ 检查现有代码**有没有把 `NewFrom`/`Malloc` 的返回值用 `delete` 释放**的
+  —— 按新约定那是错的（`Buffer` 用的是 `Alloc`/`Free`，成对，没问题）。
+
+
 ## 2026-09-14 内存模块③-c：策略改裸函数指针 + 删掉释放路径上的后端遍历
 
 > 承上条（③-b SlabBackend 接入）。砚台看过代码后提了两点：

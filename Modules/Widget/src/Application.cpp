@@ -18,7 +18,12 @@ namespace X_Y
     Application::~Application()
     {
         // 兜底：退出时可能还有没来得及回收的对象（比如窗口已 Destroy 但
-        // 事件循环没再转一轮）。这里最后清一次，避免进程退出前泄漏。
+        // 事件循环没再转一轮）。这里最后清一次。
+        //
+        // ⚠️ 静态析构顺序已实测确认安全：Application 是 main 里第一个构造的
+        //    （最先），DataStore / LOG 是首次写日志时才构造（在后）
+        //    ⇒ 析构逆序时 DataStore / LOG 都【还没死】，这里 flush 触发的
+        //      窗口析构链（含 XDEBUG 写日志）能正常工作。
         FlushDeferredRecycle();
         s_instance = nullptr;
     }
