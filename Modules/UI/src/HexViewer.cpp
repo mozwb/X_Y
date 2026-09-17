@@ -133,18 +133,20 @@ namespace X_Y
 
     HexViewer::HexViewer()
         : Panel(),
-          m_FileBar(std::make_unique<Horizontal>()),
-          m_ScrollArea(std::make_unique<ScrollArea>()),
           m_Content(std::make_unique<BinaryContent>())
     {
+        m_FileBar = new Horizontal();
+        m_ScrollArea = new ScrollArea();
         m_ScrollArea->SetContent(m_Content.get());
         m_FileBar->OnSelected = [this](std::size_t index, Component *)
         {
             if (!m_UpdatingSelection)
                 ActivateFile(index);
         };
-        Panel::AddComponent(m_FileBar.get());
-        Panel::AddComponent(m_ScrollArea.get());
+        // ★ 所有权交给 Panel（AddComponent 接管，析构时由 Panel 释放）；
+        //   本类成员只留裸借用指针。
+        Panel::AddComponent(m_FileBar);
+        Panel::AddComponent(m_ScrollArea);
     }
 
     HexViewer::~HexViewer() = default;

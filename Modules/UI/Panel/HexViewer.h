@@ -38,8 +38,11 @@ namespace X_Y
         void ActivateFile(std::size_t index);
         void CloseFile(std::size_t index);
         void ProcessPendingClose();
-        std::unique_ptr<Horizontal> m_FileBar;
-        std::unique_ptr<ScrollArea> m_ScrollArea;
+        // ⚠️ 借用指针（裸）：由【基类 Panel 拥有】（AddComponent 接管），
+        //    本类只借用访问，绝不 delete（否则双重释放 → 崩溃）。
+        Horizontal *m_FileBar = nullptr;
+        ScrollArea *m_ScrollArea = nullptr;
+        // m_Content 不进 Panel 树，仅被 m_ScrollArea 借用 → 由本类 unique_ptr 拥有。
         std::unique_ptr<BinaryContent> m_Content;
         std::vector<std::unique_ptr<Button>> m_FileTabs;
         std::vector<XPath> m_Files;

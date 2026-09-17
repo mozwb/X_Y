@@ -2,6 +2,67 @@
 ## 只保留最近十次改动多了就删除
 
 
+## 2026-09-17 窗口生命周期三连：Panel 组件 double-free 修复 + 主窗退出语义 + Application 托管/退出清理
+
+> 起因：砚台发来 Qt Creator 调试器截图，崩在 `std::default_delete<X_Y::Component>::operator()`；紧接着又发现：关主窗后其他窗口泄漏、关掉所有窗口程序也不退出。
+
+### ① Panel 子类组件 double-free（崩溃根因）
+
+- **根因**：`LogViewer` / `HexViewer` 把组件**同时**挂到两处 owns ——
+  自己的 `unique_ptr` 成员 **和** `Panel::AddComponent(comp)`（内部
+  `m_Components.emplace_back()` 接管所有权）。
+- **析构顺序致命**（派生成员 → 基类）：`~LogViewer` body 跑完 → 成员
+  unique_ptr **先 delete 一次** → 基类 `~Panel()` 再对**同一（已释放）指针**
+  delete 一次 → 读已失效 vptr → 崩。`Component` 有虚析构也没用，问题不在虚析构。
+- `Panel.h` 头注释本就声明这些应是"借用指针"（还点名了 LogViewer 的 TagStrip），
+  unique_ptr 是写歪了。
+- **修法**：Panel 拥有组件，子类成员改**裸借用指针**，构造改 `new` +
+  `AddComponent(ptr)`（所有权转交 Panel）。
+  - `LogViewer.h/.cpp`：`m_TagStrip`/`m_KeywordInput`/`m_ScrollArea` → 裸指针；
+    `m_LogStripe` **保持 unique_ptr**（不进 Panel 树，仅被 ScrollArea 借用）。
+  - `HexViewer.h/.cpp`：`m_FileBar`/`m_ScrollArea` → 裸指针；`m_Content` **保持 unique_ptr**（同理）。
+  - （`Horizontal`/`Vertical` 是纯借用容器，不 owns、析构不 delete，无问题。）
+
+### ② 关窗不退出：FirstWin → 手动主窗
+
+- 旧 `Application::FirstWin` 语义是"进程里第一个建的顶层窗口 = 负责退出的窗口"。
+  `XWidget` 构造时 `!IsFirstWin()` → `updateFirstWin()` + `connect(WindowClose, app, &appClose)`。
+- 但自检探针窗（`test/src/main.cpp` 的 ProbeWindow）**先建、抢走 FirstWin**；
+  它 `destroy()` 走 `DestroyWindow()`（**不经 WM_CLOSE**）→ 不触发 appClose，
+  `FirstWin` 也不复位 → 三个真窗口全走"只关自己"分支 → 没人退程序。
+- **改为手动指定主窗**：删 `FirstWin`/`IsFirstWin`/`updateFirstWin`；
+  加 `SetMainWindow(XWidget*)` / `GetMainWindow()` / `OnMainWindowDestroyed()`。
+  `XWidget` 顶层窗口一律 `connect(WindowClose, this, &XWidget::destroy)`。
+  `SetMainWindow` 负责把主窗的 WindowClose 接到 `appClose`。
+
+### ③ Application 托管名单 + 显式退出清理（Shutdown）
+
+- **问题**：关主窗 → `Running=false` → 主循环一退，其他窗口**从没 destroy**
+  → 不进延迟回收 → 析构不跑、`LogViewer` 的 Ticker 线程不停（泄漏）。
+- **关键约束**：退出清理**不能直接 `delete`** —— `~BaseWin`→`Destroy()`→
+  `DestroyWindow()` 会**同步发 WM_DESTROY**，又入队一个 `WindowDestroy(this)`；
+  直接 delete 会让该事件指向已释放内存 → UAF。正路是 `w->destroy()` + **泵消息**。
+- **新增**：`Own(XWidget*)`（幂等托管）/ `ForgetOwnedWindow(XWidget*)` /
+  `Shutdown()`（逐个 destroy + `pushEvents/ProcessEvents` 直到名单空 + 兜底 flush）。
+  `XWidget::OnNativeDestroyed` 开头脱名单。
+- **语义**：关主窗 = 退出；`Shutdown()` 在主循环结束后**显式调用**，清掉剩下所有托管窗口。
+- **无二次释放**：`destroy()` 幂等 / `delete` 只来自 `OnNativeDestroyed` 的
+  `DeferRecycle`（`m_RecycleQueued` 门闩）/ `Own` 幂等 + 退场即脱名单。
+
+### 涉及文件
+
+`Modules/Widget/Application.h/.cpp`、`Modules/Widget/src/XWidget.cpp`、
+`Modules/UI/Panel/LogViewer.h`、`Modules/UI/src/LogViewer.cpp`、
+`Modules/UI/Panel/HexViewer.h`、`Modules/UI/src/HexViewer.cpp`、
+`Modules/UI/src/tabhostcontainer.cpp`、`test/src/main.cpp`
+
+### 待办
+
+- 浮动面板窗已在 `tabhostcontainer.cpp` 补 `Application::instance()->Own(window)`（砚台补）。
+- 泛化托管接口（`void*` + cleanup action）**暂缓**，以后再看。
+- 编译验证交砚台。
+
+
 ## 2026-09-16 内存模块③-e：补 X_Y::New / X_Y::Delete（命名对称）
 
 > 砚台："为啥不是 `X_Y::` 这样子使用，你把他封装到 `X_Y::new` 和 `X_Y::delete` 里好了"
@@ -22,12 +83,12 @@ X_Y::DeleteFrom(s);
 
 **完整对称表（现在）：**
 
-| 裸内存 | 对象 |
-|--------|------|
-| `X_Y::Malloc(n)` — 走策略 | `X_Y::New<T>(...)` — 走策略 |
+| 裸内存                            | 对象                                 |
+| --------------------------------- | ------------------------------------ |
+| `X_Y::Malloc(n)` — 走策略         | `X_Y::New<T>(...)` — 走策略          |
 | `X_Y::AllocFrom(B, n)` — 指定后端 | `X_Y::NewFrom<B, T>(...)` — 指定后端 |
-| `X_Y::Free(p)` | `X_Y::Delete(p)` |
-| `X_Y::MallocFrom(B, n)`（别名） | `X_Y::DeleteFrom(p)` |
+| `X_Y::Free(p)`                    | `X_Y::Delete(p)`                     |
+| `X_Y::MallocFrom(B, n)`（别名）   | `X_Y::DeleteFrom(p)`                 |
 
 ### ⚠️ 实现上的一个坑（写的时候发现的，已避开）
 
@@ -96,14 +157,14 @@ X_Y::Malloc / AllocFrom 发的    → X_Y::Free
 
 ### 二、修法：职责彻底分开（两条路）
 
-| | 路 A：全局 new/delete | 路 B：显式分配器 |
-|---|---|---|
-| 入口 | `new` / `delete` | `Malloc`/`Free`、`AllocFrom`、`NewFrom`/`DeleteFrom` |
-| 内存来源 | `::malloc` / `::free` | 门面 `allocate` → 后端（Crt/Slab） |
-| 分配头 | ❌ 无 | ✅ 有（记 size + backend + user + checksum） |
-| 策略 | ❌ 不参与 | ✅ 参与（`Default` 时问策略） |
-| 统计 | ✅ 记次数与字节 | ✅ 完整记（含后端分布、overhead） |
-| 跨 DLL | ✅ 安全（malloc/free 同堆配对） | ✅ 安全（只碰自己发的指针） |
+|          | 路 A：全局 new/delete          | 路 B：显式分配器                                     |
+| -------- | ------------------------------ | ---------------------------------------------------- |
+| 入口     | `new` / `delete`               | `Malloc`/`Free`、`AllocFrom`、`NewFrom`/`DeleteFrom` |
+| 内存来源 | `::malloc` / `::free`          | 门面 `allocate` → 后端（Crt/Slab）                   |
+| 分配头   | ❌ 无                           | ✅ 有（记 size + backend + user + checksum）          |
+| 策略     | ❌ 不参与                       | ✅ 参与（`Default` 时问策略）                         |
+| 统计     | ✅ 记次数与字节                 | ✅ 完整记（含后端分布、overhead）                     |
+| 跨 DLL   | ✅ 安全（malloc/free 同堆配对） | ✅ 安全（只碰自己发的指针）                           |
 
 **全局 `new` 现在长这样**（`XMemGlobalNew.cpp` 整个重写）：
 
@@ -152,11 +213,11 @@ Malloc/Alloc/AllocFrom/NewFrom 发的 → 只能用 Free/DeleteFrom
 
 ### 四、涉及文件
 
-| 文件 | 动作 |
-|------|------|
-| `src/Memory/XMemGlobalNew.cpp` | **整个重写**：new→malloc+记账，delete→free+记账；删掉所有 `allocate`/`deallocate` 调用 |
-| `Memory/XMemFacade.h` | 加 `notifyAlloc`/`notifyFree`；通道说明改写成"两条路"；用法示例重写；`setEnabled` 说明改成"排查开关" |
-| `src/Memory/XMemFacade.cpp` | 实现两个记账函数；`deallocate` 注释改为"只服务显式分配器" |
+| 文件                           | 动作                                                                                                 |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `src/Memory/XMemGlobalNew.cpp` | **整个重写**：new→malloc+记账，delete→free+记账；删掉所有 `allocate`/`deallocate` 调用               |
+| `Memory/XMemFacade.h`          | 加 `notifyAlloc`/`notifyFree`；通道说明改写成"两条路"；用法示例重写；`setEnabled` 说明改成"排查开关" |
+| `src/Memory/XMemFacade.cpp`    | 实现两个记账函数；`deallocate` 注释改为"只服务显式分配器"                                            |
 
 **其它模块零改动** —— `Buffer` 用的 `Memory::Alloc/Free` 仍走完整门面（路 B）。
 
@@ -252,10 +313,10 @@ IMemoryBackend* Memory::backendOwning(void* ptr);   // 只问后端区域表，�
 
 ### 四、涉及文件
 
-| 文件 | 动作 |
-|------|------|
-| `Memory/XMemFacade.h` | `AllocPolicy` 改裸函数指针；`m_Policy` 改 `atomic<AllocPolicy>`；删 `ownsFast` 声明、加 `backendOwning`；用法示例改成无捕获静态函数 |
-| `src/Memory/XMemFacade.cpp` | `ResolveWithSize` 适配函数指针；`deallocate` 删遍历、改纯 header 判决；`ownsFast` 删除；`owns` 改纯 header；新增 `backendOwning` |
+| 文件                        | 动作                                                                                                                                |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `Memory/XMemFacade.h`       | `AllocPolicy` 改裸函数指针；`m_Policy` 改 `atomic<AllocPolicy>`；删 `ownsFast` 声明、加 `backendOwning`；用法示例改成无捕获静态函数 |
+| `src/Memory/XMemFacade.cpp` | `ResolveWithSize` 适配函数指针；`deallocate` 删遍历、改纯 header 判决；`ownsFast` 删除；`owns` 改纯 header；新增 `backendOwning`    |
 
 > `XMemBackend.h/.cpp` 未改 —— `own()` 本就在接口里，只是不再被释放路径调用。
 > 另：旧 `Modules/XCore/src/Memory/XMemory.cpp` 与 `Memory/XMemory.h` 已由砚台删除，
@@ -285,12 +346,12 @@ IMemoryBackend* Memory::backendOwning(void* ptr);   // 只问后端区域表，�
 
 **不是照抄**，四处必须改（旧实现放不进新体系）：
 
-| # | 旧 `XMemory.cpp` | 新 `XMemBackend.cpp` | 为什么 |
-|---|------------------|----------------------|--------|
-| 1 | `std::malloc` 取 chunk | `::malloc` | 后端铁律：只用 `::malloc/::free` |
-| 2 | `std::vector`/`std::mutex`/`std::shared_mutex` | `::malloc` 手写数组 + 自旋锁 | 构造期 `new` → 门面 → 后端 → 自己 → **自举递归**。slab 后端一旦注册成静态对象就必炸 |
-| 3 | 释放靠 `FindChunkByAddr` 二分 | 同一套区间查询，但对外叫 `own(ptr)` | 门面需要它做 fast-path（见下） |
-| 4 | 后端内 `memset(ptr,0,size)` | 保留（砚台定） | 与旧的逐位行为一致，便于对比新旧输出 |
+| #   | 旧 `XMemory.cpp`                               | 新 `XMemBackend.cpp`                | 为什么                                                                              |
+| --- | ---------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------- |
+| 1   | `std::malloc` 取 chunk                         | `::malloc`                          | 后端铁律：只用 `::malloc/::free`                                                    |
+| 2   | `std::vector`/`std::mutex`/`std::shared_mutex` | `::malloc` 手写数组 + 自旋锁        | 构造期 `new` → 门面 → 后端 → 自己 → **自举递归**。slab 后端一旦注册成静态对象就必炸 |
+| 3   | 释放靠 `FindChunkByAddr` 二分                  | 同一套区间查询，但对外叫 `own(ptr)` | 门面需要它做 fast-path（见下）                                                      |
+| 4   | 后端内 `memset(ptr,0,size)`                    | 保留（砚台定）                      | 与旧的逐位行为一致，便于对比新旧输出                                                |
 
 档位/chunk 沿用旧值：**8 档 64B…64KB，chunk 64KB**；
 chunk 回收沿用旧不变量：**只有该 chunk 自己全部空闲才 free**
@@ -353,9 +414,9 @@ magic == kAllocMagic && user == ptr && checksum == Checksum(*hdr)
 
 两种顺序并存 = 经典 ABBA 死锁。**已按"持 bin 锁时绝不拿 m_IndexLock"重排**：
 
-| 场景 | 做法 |
-|------|------|
-| 扩了新 chunk | `AllocFromBin` 把新 chunk 的 base 回报出来，调用方**放掉 bin 锁之后**才 `IndexChunk()` |
+| 场景         | 做法                                                                                                         |
+| ------------ | ------------------------------------------------------------------------------------------------------------ |
+| 扩了新 chunk | `AllocFromBin` 把新 chunk 的 base 回报出来，调用方**放掉 bin 锁之后**才 `IndexChunk()`                       |
 | 回收空 chunk | bin 锁内只 `DetachChunkNoFree()`（摘数组+记账，**不 free**）→ 放锁 → `UnindexChunk()` → **最后才** `RawFree` |
 
 **"先摘索引、再 free"这条顺序是必须的**：否则会出现"`own()` 还认这块地、
@@ -371,15 +432,15 @@ magic == kAllocMagic && user == ptr && checksum == Checksum(*hdr)
 
 ### 三、连带改动
 
-| 文件 | 动作 |
-|------|------|
-| `Memory/XMemBackend.h` | `+ SlabBackend`（约 +50 行注释 + 声明） |
-| `src/Memory/XMemBackend.cpp` | **新建**，SlabBackend 实现 |
-| `Memory/XMemFacade.h` | `AllocHeader` 改 32B；`+ Checksum()`；`- m_OwnedTable` |
-| `src/Memory/XMemFacade.cpp` | 去表、加验真、`backendFor` 懒建 Slab 单例 |
-| `Memory/XMemOwnedSet.h`、`src/Memory/XMemOwnedSet.cpp` | **删除**（−214 行） |
-| `Memory/XMemTypes.h` | Slab 注释"待迁移" → "已接入" |
-| `src/Memory/Buffer.cpp` | `include "../../Memory/XMemory.h"` → `"../../Memory/XMemFacade.h"` |
+| 文件                                                   | 动作                                                               |
+| ------------------------------------------------------ | ------------------------------------------------------------------ |
+| `Memory/XMemBackend.h`                                 | `+ SlabBackend`（约 +50 行注释 + 声明）                            |
+| `src/Memory/XMemBackend.cpp`                           | **新建**，SlabBackend 实现                                         |
+| `Memory/XMemFacade.h`                                  | `AllocHeader` 改 32B；`+ Checksum()`；`- m_OwnedTable`             |
+| `src/Memory/XMemFacade.cpp`                            | 去表、加验真、`backendFor` 懒建 Slab 单例                          |
+| `Memory/XMemOwnedSet.h`、`src/Memory/XMemOwnedSet.cpp` | **删除**（−214 行）                                                |
+| `Memory/XMemTypes.h`                                   | Slab 注释"待迁移" → "已接入"                                       |
+| `src/Memory/Buffer.cpp`                                | `include "../../Memory/XMemory.h"` → `"../../Memory/XMemFacade.h"` |
 
 - `owns()` 改成"后端 own() + header 三连验真"，并**新增 `ownsFast()`**
   （只问后端、不读 header，绝不触碰外部内存）；`ownedCount()` 原来读表的元素个数，
@@ -820,330 +881,3 @@ disConnect(self);         // 所有 receiver == this（含 sender 是别人的�
 - 审计里其余项（U2/U5 断链、M2、T4 Join 无超时）未动。
 
 ---
-
-## 2026-09-14 UI 资源管理审计 + 修两处内存/关闭 bug
-
-> 砚台："检查一下 UI 模块的资源管理，看看有没有泄露的风险。"
-> 审计结论与完整清单见 `_notes/arch/MemoryAudit.md` **附录 A**（本次新增）。
-> 本条目只记**本次实际动过的代码**。
-
-### 审计结论（先说好消息）
-
-四层所有权已按"方案 2"落地（`DockLayout::m_OwnedDocks` / `Dock::m_Panels` /
-`Panel::m_Components` / `Container::m_Layout` 全是 `unique_ptr`），
-`HexViewer::m_FileTabs`、`FontLibrary`、`CanvasImplWin32` 的 DIB/DC、
-`EnableFileDrop` 的 OLE 引用计数**都干净**。UI 层不直接持有任何 GDI/内核句柄。
-
-剩下的问题分三类，**本次只修了两处**：
-
-| 类别 | 条目 | 本次 |
-|------|------|------|
-| 真泄漏 | L1/L2 拖出面板建的独立窗口对象无人 delete | ✅ 同日第二条已修 |
-| 数据增长 | **M1 LogStripe 只增不删、无上限** | ✅ **已修** |
-| 关闭正确性 | **HexViewer 延迟关闭存下标会过期（关错文件）/ 单槽会覆盖（丢关闭）** | ✅ **已修** |
-| 悬空借用 | U1~U7（`m_FileDropPanel` / `ScrollArea::m_Content` / `m_DragPanel` …） | ⏸ 未修 |
-| 自毁路径 | Split/Merge/RemovePanel | ⏸ 砚台明确暂不处理 |
-
-### 改动 1：LogStripe 封顶 5000（方案 A）
-
-**问题**：上游 `m_AllEntries` 是 `LoopQueue<LogEntry,5000>`（环形，满了覆盖最旧，内存恒定），
-但下游 `m_LogStripe`（`ListBox`，`std::vector<ListItem>`）**只加不删** ——
-上游封顶、下游不封顶。开几小时 stripe 涨到几十万条，内存全在这儿；
-且 `RebuildAll()` 全量重建时峰值翻倍 + 卡顿。
-`MAX_ENTRIES` 过去只管住了 `m_AllEntries`，**管不到 stripe** —— 这是最容易误读的点。
-
-**改法**（砚台拍板方案 A：给 ListBox 加通用原子能力，而不是整表 Clear 重灌）：
-
-- `Modules/UI/Component/ListBox.h` + `src/ListBox.cpp`：新增 **`RemoveFirst(int n)`**
-  —— 删头部最旧 n 条。
-  ⚠️ 关键是它**必须重置折行游标**：`m_FoldedCount` 是"已惰性折叠到第几条"的游标，
-  `EnsureFold` 只从它往后补算 —— 这个设计**只适用于只增不减**。头部一删，
-  所有 item 下标前移，`m_Fold[i]` 与 `m_Items[i]` 整体错位。
-  ⇒ 统一重置（`m_FoldedCount=0; m_LastFoldWidth=-1;`）触发一次全量重折。
-  同时维护 `m_SelectedIndex`（平移 n；被删掉则收敛到 0 或 -1）。
-- `Modules/UI/Panel/LogViewer.h` + `src/LogViewer.cpp`：新增私有 `TrimStripe()`，
-  在 `IncrementalAppend` 与 `RebuildAll` 末尾调用，把 stripe 钳到 `MAX_ENTRIES(5000)`。
-
-### 改动 2：HexViewer 延迟关闭改用指针 + 队列
-
-**问题**：关闭是**延迟**的（`Button::OnInput` 正在 `Horizontal::Components` 的遍历栈里，
-此刻删自己会 UAF）—— 这个延迟设计本身是对的。但登记的东西不对：
-
-```cpp
-// 旧：捕获【下标】，且只有【单槽】
-std::size_t m_PendingClose = -1;
-tab->SetOnClose([this, index]{ m_PendingClose = index; });
-```
-1. **下标会过期**：登记到结算之间若发生任何改动 `m_Files` 的操作
-   （拖入新文件、关掉别的 tab），下标指向的已不是当初点 × 的那个文件 → **关错文件**。
-2. **单槽会覆盖**：两次点 × 之间没发生重绘，后一次覆盖前一次 → **丢关闭请求**（点了没反应）。
-
-**改法**：
-- `Modules/UI/Panel/HexViewer.h`：`std::size_t m_PendingClose` →
-  `std::vector<Button *> m_PendingClose`（指针稳定 + 队列不丢）。
-- `Modules/UI/src/HexViewer.cpp`：
-  - `AddFile` / `CloseFile` 的 `SetOnClose` 统一改为**按指针捕获**（两处写法归一，免得再走岔）。
-  - `ProcessPendingClose()`：`swap` 取走队列（避免自己吃自己），逐条**按指针反查当前下标**再 `CloseFile`。
-  - `ClearFiles()`：**先 `m_PendingClose.clear()`** —— 否则紧随其后的 `m_FileTabs.clear()`
-    会把队列里的裸指针全变悬空，下次结算即 UAF。
-
-### 验证
-
-- 三个文件 `g++ -std=c++20 -fsyntax-only` 全部通过（语法自检，**非项目构建**）。
-- 运行时行为（折行重算、选中平移、连点多个 × 是否都关掉）**待砚台跑起来看**。
-
-### 遗留（下次可做，都还没动）
-
-- U2 `DockLayout::m_FileDropPanel` / U5 `ScrollArea::m_Content` 断链（各单文件，机械补）。
-- M2 `HexViewer` 每个打开文件整份常驻；M3 `SetDataStoreKey` 全量重建峰值。
-- T4 `LogViewer::Stop()` 的 `Join()` 无超时（UI 线程可能永久卡死）。
-
----
-
-## 2026-09-13 Panel 转移改成纯 move（unique_ptr 全程在手）
-
-> 砚台问："`m_Panels` 是拥有还是借用？那 panel 咋转移呢？"
-> 借此把转移路径上的"无主裸指针窗口"也消灭掉。
-
-### 改了什么
-
-之前 `DetachPanel` 摘出的所有权**经由裸指针**交给下一个 Dock：
-
-```cpp
-Panel *DetachPanel(...);        // 所有权离手，但没有任何东西记录谁接着
-// ... 中间若早退 / 抛异常 / 忘了接管 → 泄漏，编译器不提醒
-```
-
-现在**全程在 `unique_ptr` 手里**：
-
-```cpp
-std::unique_ptr<Panel> Dock::DetachPanel(Panel *panel, std::string *title);
-Panel *Dock::AddPanel(std::unique_ptr<Panel> panel, const std::string &title);
-```
-
-| 层 | 新签名 |
-|----|--------|
-| `Dock` | `AddPanel(unique_ptr)` 接管 / `DetachPanel -> unique_ptr` 交出 / `TakePanelInternal -> unique_ptr` |
-| `DockLayout` | `AddPanelAt(unique_ptr, x, y, title)` |
-| `Container` | `DetachPanel -> unique_ptr` |
-| `TabDock` | `DetachToWindowHandler` 回调签名改为收 `unique_ptr<Panel>` |
-| `TabContainer`/`TabHostContainer` | `HandlePanelDrop(unique_ptr<Panel>, ...)` |
-
-### 顺带简化
-
-- `Dock::RemovePanelInternal(Panel*)`（void，靠 release 裸指针）→
-  **`TakePanelInternal(Panel*) -> unique_ptr`**。`Split` 里变成纯 move 链：
-  ```cpp
-  if (auto owned = TakePanelInternal(active))
-      newDock->AddPanel(std::move(owned), "");
-  ```
-- `TabDock::DropPanel` 里不再需要"失败就 AddPanel 放回去"的补救分支 ——
-  回调改成收 `unique_ptr` 后，接管责任在回调内部，语义更清楚。
-
-### 验证（`g++ -std=c++20`，20 个 UI 源文件全部编译通过）
-
-运行时逐条验证，重点是**老版本保证不了的两条**：
-
-| 场景 | 结果 |
-|------|------|
-| `AddPanel(unique_ptr)` 接管 → 析构释放 | ✅ `alive 1→0` |
-| `DetachPanel` 跨 Dock 转移 → 恰好死一次 | ✅ `alive 1→0`（无双重释放/泄漏） |
-| **★ DetachPanel 后 `owned.reset()`（模拟忘了接管/中途早退）** | ✅ **自动释放，无泄漏**（老版本此处必漏） |
-| **★ `AddPanel` 被拒（`CanAddPanel` 为假）** | ✅ **unique_ptr 自动释放**（老版本此处必漏） |
-| `Split` 的 move 链（活跃面板随新 Dock） | ✅ `a.size=0 b=1 alive=1`，析构后 `alive=0` |
-
-### ⚠️ 语义变化（回调约定）
-
-`DetachToWindowHandler` 现在**按值收 `unique_ptr`**：
-
-- 返回 `true` = 回调已接管（所有权归它）
-- 返回 `false` = **此时 panel 已随参数析构**（`AddPanelAt` 失败时它释放了）
-  ⇒ 所以回调返回 false 时不能再去用那个 panel；`TabDock::DropPanel` 也因此
-  去掉了"失败就放回自己"的分支。
-
-### 仍需同步的 test 代码
-
-`test/src/main.cpp`（不在本仓库）：`delete logViewer/hexViewer` 仍是双重释放；
-`TopLayout topLayout;` 传 `&topLayout` 给 `SetDockLayout` 会被 delete（栈对象）。
-
-## 2026-09-13 UI 所有权显式化（④ 修正：模型定了，我上一条写错了）
-
-> ⚠️ **本条修正同日上一条 ④ 的所有权模型描述。** 我上一轮照着自己臆想的 UML 图
-> 改了代码，引入了根本不存在的"借用 layout / 借用 dock"概念。砚台指出后重做。
-
-### 我错在哪（记下来，免得再犯）
-
-| 我臆想的 | 实际 |
-|---|---|
-| `TopLayout` 是"外部传进来的栈对象" → Container 只能**借用**它 | `TopLayout` 是 `DockLayout` 的**便利子类，它就是这个窗口的 layout**（一窗口一 layout） |
-| Dock 分"内建（借用）/动态（拥有）"，要两套列表 | Dock **全部归 layout**，不分来源 |
-| `Container` 需要 `m_LayoutOwned` + 借用 `m_Layout` 两个成员 | 只需要一个 `unique_ptr<DockLayout>` |
-
-**根因**：把"谁拥有"和"谁在管布局"混成一件事，于是造出多余的抽象。
-
-### 正确模型（砚台确认）
-
-```
-窗口 (Container)
-  └── 一个 DockLayout                ← 一窗口一 layout，唯一
-        ├── 无宗 Dock（初始五区域）    ┐ 全部归 layout，无借用概念
-        └── 有父 Dock（Split 切出）    ┘ （区别只在"相对位置固定 / 归还方式"）
-              └── Panel               ← 唯一会"搬家"的东西
-```
-
-- **Dock 不会搬家**（只在宗族内 Split/Merge），所以 Dock 层不存在借用。
-- **只有 Panel 会转移**（在 Dock 之间拖拽）→ **借用只存在于 Panel 这一层**。
-- 无宗 Dock = 窗口最初始的区域划分，相对位置不可变更。
-- 有父 Dock 由 `DockFather` 记录宗族；归还由宗族处理（`Merge`，已实现，本次未动逻辑）。
-
-### 本次改动
-
-| 文件 | 从（我上一轮写错的） | 到（正确模型） |
-|------|---------------------|---------------|
-| `DockLayout` | `m_Docks`（借用）+ `m_OwnedDocks`（拥有） | `m_OwnedDocks`（全拥有）+ `m_Docks`（借用视图） |
-| `DockLayout` | `AddDock`（借用）/ `AddOwnedDock`（拥有）两个入口 | **统一 `AddDock`（接管所有权）**；删 `AddOwnedDock` |
-| `DockLayout` | `RemoveDock`（只摘）+ `RemoveAndDestroyDock`（摘+删） | **统一 `RemoveDock`（摘 + 释放）**；删 `RemoveAndDestroyDock` |
-| `Container` | `unique_ptr m_LayoutOwned` + 借用 `m_Layout` | **单个 `unique_ptr<DockLayout> m_Layout`** |
-| `TopLayout` | 五个 `TabDock` **值成员** | 五个 `new TabDock()`，**所有权归基类**；成员改指针（借用视图），`TopDock()` 返回引用 |
-| `Container::AddSinglePanel` | `AddDock` 后再 `DockBind`（重复登记） | 只调 `DockBind`（内部走 AddDock，一次到位） |
-
-### 保留的上轮修复（这些是真 BUG，与模型无关）
-
-- **`Dock::Merge()` 自毁后继续访问 `this`**：老代码 `RemoveDock(this)` 后又调
-  `RequestRepaint()`（访问成员），而注释说"随后由布局释放"却没人释放
-  —— use-after-free + 泄漏。现在先抄下 `layout` 指针，最后一行 `RemoveDock(this)`，
-  并注明此后不得再碰任何成员。
-- **借用指针断链**：`Dock::TakeEntry` 清 `m_MouseCapturePanel`；
-  `TabDock::DropPanel` 在 `DetachPanel` 后立刻 `ResetPanelDrag`；
-  `Panel::RemoveComponent` 先断焦点/拖拽目标再释放；
-  `DockLayout::RemoveDock` 清 `m_MouseCaptureDock` / `m_FileDropPanel`。
-- **`Dock::TakeEntry`**：三处重复的下标维护收敛成一份。
-
-### 验证
-
-- **20 个 UI 源文件全部编译通过**（含 imgui 两个）
-- 运行时（独立测试程序）：
-  | 场景 | 结果 |
-  |------|------|
-  | layout 析构释放全部 Dock | ✅ `dockDead=2` |
-  | **`TopLayout` 五个区域 Dock 由 layout 释放** | ✅ 全局 new/delete 计数 **`net=0`**（无泄漏） |
-  | `Dock` / `TabDock` 有虚析构，经基类指针 delete 正确 | ✅ `has_virtual_destructor = 1` |
-  | Dock 析构释放全部 Panel | ✅ `panelDead=2` |
-  | Panel 跨 Dock 转移 | ✅ `panelDead=1`（恰好一次，无双重释放） |
-  | Panel 拥有 Component | ✅ 无泄漏 |
-
-### ⚠️ 破坏性变更（需同步）
-
-- `test/src/main.cpp`：`TopLayout topLayout;` 是**栈对象** + `SetDockLayout(&topLayout)`，
-  现在 `SetDockLayout` **接管所有权**、`Container` 析构会 `delete` 它
-  → **栈对象被 delete，会崩**。该文件在 `D:\workbench\test`（不在本仓库），未改。
-  正确写法：`topWindow.SetDockLayout(new X_Y::TopLayout());`
-- 同文件结尾的 `delete logViewer; delete hexViewer;` 也是**双重释放**（所有权已归 Dock）。
-
-## 2026-09-13 UI 所有权显式化（④：Container ⊃ Layout ⊃ Dock ⊃ Panel ⊃ Component）
-
-> 承接内存审计（`_notes/arch/MemoryAudit.md`）。审计结论：UI 的隐患根因不是"漏了 delete"，
-> 而是**所有权从未在代码里落地** —— 四层全是裸指针 + 不拥有，而真正的所有者
-> 付不起 delete 的代价（重活都在析构里）。本步把所有权写进类型。
-
-### 改动（按砚台定案的链路逐层落地）
-
-| 层 | 改动 | 关键点 |
-|----|------|--------|
-| **Component** | 不改 | 叶子，无子节点 |
-| **Panel** | `m_Components`：`vector<Component*>` → `vector<unique_ptr<Component>>` | **Panel 拥有组件**；`AddComponent` 即接管 |
-| **Dock** | `m_Panels`/`m_Titles` → `vector<PanelEntry{unique_ptr<Panel>, string}>` | **Dock 拥有 Panel**；一个容器管住指针+标题，不再两处同步下标 |
-| **DockLayout** | `m_Docks`（借用）+ 新增 `m_OwnedDocks`（拥有） | **区分内建/动态 dock**（砚台定案 (b)） |
-| **Container** | `m_Layout` + `bool m_OwnLayout` → `unique_ptr<DockLayout> m_LayoutOwned` + 借用 `m_Layout` | 自建才释放；**外部传入（栈对象）绝不删** |
-
-### 关键设计
-
-1. **两套 Dock 列表（方案 b）**：`TopLayout` 的五个 Dock 是**值成员**，
-   若混进拥有列表会被 delete 栈对象 → 立即崩。故：
-   - `DockBind(dock&, ...)` → **借用**（引用传入 = 调用方持有）
-   - `AddOwnedDock(dock*)` → **拥有**（指针传入 = 接管）
-   - `Container::AddSinglePanel` / `Dock::Split` 一律走 `AddOwnedDock`。
-
-2. **借用指针必须显式断链**（审计里的 [B]/[G]）：
-   - `Dock`：`TakeEntry()` 统一维护下标 + **清 `m_MouseCapturePanel`**；
-     拖拽转移时 `TabDock::DropPanel` 在 `DetachPanel` 后立刻 `ResetPanelDrag()`
-     （否则 `m_DragPanel` 在两步之间悬空）
-   - `Panel`：`RemoveComponent` 先断 `m_FocusedComponent`/`m_DragTarget` 再释放
-   - `DockLayout::RemoveAndDestroyDock` 顺手清 `m_MouseCaptureDock`/`m_FileDropPanel`
-
-3. **三处重复的下标维护收敛成一个 `Dock::TakeEntry(idx, title*)`**：
-   `RemovePanel`/`DetachPanel`/`RemovePanelInternal` 原先各写一遍下标修正
-   （三份都略有差异），现在共用一份，返回 `unique_ptr` 表达所有权转移。
-
-### 顺带修掉的两个真 BUG
-
-- **`Dock::Merge()` 自毁后继续访问 `this`**：老代码 `RemoveDock(this)` 之后又调
-  `RequestRepaint()`（访问成员），而注释写着"随后由布局释放本 Dock"却**没人释放**
-  —— 既是 use-after-free 又是泄漏。改为先抄下 `layout` 指针，最后一行
-  `RemoveAndDestroyDock(this)`，并注明**此后不得再碰任何成员**。
-- **`DockLayout::RemoveDock` 只摘不删**：动态 Dock（`Split` 产生的）从此无人释放。
-  新增 `RemoveAndDestroyDock`（只释放自己拥有的；内建 Dock 会被跳过）。
-
-### 验证（`g++ -std=c++20 -fsyntax-only`，按约定未做工程构建）
-
-- **全部 20 个 UI 源文件编译通过**（含 imgui 两个）
-- 运行时所有权行为（独立测试程序连 Panel/Dock/DockLayout）：
-  | 场景 | 结果 |
-  |------|------|
-  | Panel 析构 → 释放全部组件 | ✅ `dead=3` |
-  | Dock 析构 → 释放全部 Panel | ✅ 2 个面板恰好各死一次 |
-  | **内建 dock（栈对象）未被 layout 删除** | ✅ `mixed ownership: survived, no crash` |
-  | **`DetachPanel` 跨 Dock 转移 → 恰好死一次** | ✅ `dead=1`（无双重释放、无泄漏） |
-  | `RemovePanel` 恰好释放一次 | ✅ `dead=1` |
-  | `RemoveComponent` 断焦点借用后释放 | ✅ 不崩 |
-
-### 尚未做（下一轮）
-
-- **⑤**：`Shutdown()` 与析构分离（治 `LogViewer::~LogViewer` 里 `Join()` 卡死）
-- **⑥**：回调链弱引用（`m_HostRepaint`/`m_RepaintCallback` 的断链时机）
-- **⑦**：`Component` 内部反向借用（`TagStrip::m_Owner`、`ScrollArea::m_Content`）的清理约定
-- ⚠️ **`test/src/main.cpp` 需同步**：`new LogViewer` 传给 `AddSinglePanel` 后
-  所有权已归 Dock，结尾那两行 `delete logViewer/hexViewer` **现在是双重释放**
-  （该文件在 `D:\workbench\test`，不在本仓库，未改）
-
-## 2026-09-13 内存模块：实现与声明分离（可读性重构）
-
-> 砚台反馈："`.h` 写了所有实现读起来有点困难了"。确实 —— 上一步 ③-a 把门面
-> 和统计的实现全内联在头文件里，`XMemFacade.h` 一度 608 行、`XMemStats.h` 396 行，
-> 接口被实现细节淹没。本步做分离，**行为零变化**。
-
-### 改动
-
-| 文件 | 前 | 后 | 说明 |
-|------|----|----|------|
-| `XMemFacade.h` | 608 行 | **329 行** | 只留接口 + 常量 + 命名空间级 inline 便捷函数 |
-| `XMemFacade.cpp` | — | **183 行**（新） | `allocate` / `deallocate` / `ResolveWithSize` / `backendFor` / `Shutdown` |
-| `XMemStats.h` | 396 行 | **177 行** | 只留 POD 快照 + `MemoryCounter` 声明 |
-| `XMemStats.cpp` | — | **319 行**（新） | 计数、基线、快照、打印 |
-| `XMemOwnedSet.h` | — | **53 行**（新） | 已分配指针表声明（从 Facade 抽出） |
-| `XMemOwnedSet.cpp` | — | **144 行**（新） | 哈希表实现（纯实现细节，读门面时不必看） |
-
-### 分离原则（写进各文件头注释）
-
-- **留头文件**：类声明、常量、模板（语言要求）、以及**必须在静态初始化期就能调用**
-  的极小路（`Instance()` / `enabled()` / 命名空间级 `Malloc`/`Free` 等 inline 转发）。
-- **移到 .cpp**：分配头维护、预算检查、归属判定、后端分发、哈希表、统计与打印。
-
-### 顺带修的问题
-
-- `XMemFacade.h` 缺 `<exception>`（`std::terminate`）—— 之前靠别的头间接引入，
-  分离后立刻暴露。已补。
-- 顺手清掉 Facade 头里 `cstdio`/`cstdlib`/`cstring`/`exception` 等只在 .cpp 需要的包含。
-
-### 验证
-
-- `g++ -std=c++20` 全量编译（5 个 cpp：GlobalNew / Stats / OwnedSet / Facade + 测试）
-- 行为对比前一步**完全一致**：
-  - STL 容器全部进门面（作用域内 `live=103 owned=103`）
-  - 2000 轮 `new`/`delete` 后 `live=0 owned=0 used=0`
-  - 归属判定：门面指针 `owns=1`，栈指针 `owns=0`（不解引用外部指针）
-  - 开关关闭后新分配走原生，释放仍安全
-  - 统计四维度输出正常（按后端 / 按大小档 / 峰值 / 未回收块）
-
-> 仍未接入 CMake（`XCore` 用 `file(GLOB)`，下次 configure 自动纳入）。
-> 下一步待定：③-b（SlabBackend 迁入）或 ④（UI 四层所有权显式化）。

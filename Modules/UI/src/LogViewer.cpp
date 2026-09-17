@@ -116,8 +116,8 @@ namespace X_Y
     {
         m_Key = SysClock::NowFormat("YY-MM-DD") + ".log";
 
-        m_TagStrip = std::make_unique<TagStrip>(this);
-        m_KeywordInput = std::make_unique<TextInput>();
+        m_TagStrip = new TagStrip(this);
+        m_KeywordInput = new TextInput();
         m_KeywordInput->SetPlaceholder("输入关键词，回车添加到筛选");
         // 输入框回车 → 添加为筛选规则
         m_KeywordInput->OnEnter = [this]()
@@ -127,12 +127,14 @@ namespace X_Y
 
         m_LogStripe = std::make_unique<LogStripe>();
 
-        m_ScrollArea = std::make_unique<ScrollArea>();
+        m_ScrollArea = new ScrollArea();
         m_ScrollArea->SetContent(m_LogStripe.get());
 
-        AddComponent(m_TagStrip.get());
-        AddComponent(m_KeywordInput.get());
-        AddComponent(m_ScrollArea.get());
+        // ★ 所有权交给 Panel（AddComponent 接管，析构时由 Panel 释放）；
+        //   本类成员只留裸借用指针。
+        AddComponent(m_TagStrip);
+        AddComponent(m_KeywordInput);
+        AddComponent(m_ScrollArea);
     }
 
     LogViewer::~LogViewer()

@@ -23,13 +23,11 @@ namespace X_Y
             connect(this, MovementType::WindowClose, this, &XWidget::destroy);
             connect(parent, MovementType::WindowClose, this, &XWidget::destroy);
         }
-        else if (!app->IsFirstWin())
-        {
-            app->updateFirstWin();
-            connect(this, MovementType::WindowClose, app, &Application::appClose);
-        }
         else
         {
+            // 顶层窗口：关它就关它自己。
+            // ⚠️ "关哪个窗口退出程序"不再由"谁先建"决定 —— 改由
+            //    Application::SetMainWindow 显式指定（见 Application.h）。
             connect(this, MovementType::WindowClose, this, &XWidget::destroy);
         }
 
@@ -74,6 +72,11 @@ namespace X_Y
             return;
         }
         m_RecycleQueued = true;
+
+        // 从 Application 的托管名单摘除：本对象即将退场，
+        // 不该再被退出清理（Application::Shutdown）当成"活着"去 destroy。
+        if (Application *app = Application::instance())
+            app->ForgetOwnedWindow(this);
 
         // ════════════════════════════════════════════════════════
         // 栈对象：只退订，【绝不 delete】

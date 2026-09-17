@@ -1,6 +1,6 @@
 #include "UI/Container/tabhostcontainer.h"
 #include "UI/DockLayout/DockLayout.h"
-
+#include "Widget/Application.h"
 namespace X_Y
 {
     void TabHostContainer::SetDockLayout(DockLayout *layout)
@@ -68,6 +68,7 @@ namespace X_Y
         //    这里【不要】再手动 delete —— 老代码两处 delete 只销毁了 HWND，
         //    C++ 对象（含它的 m_Layout→Dock→Panel 整棵树）根本没析构，反而更漏。
         auto *window = new TabContainer();
+        Application::instance()->Own(window);
         window->SetWindowTitle(title);
         window->setSize(700, 500);
 

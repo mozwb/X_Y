@@ -1,6 +1,7 @@
 #include "Application.h"
 #include "Widget/BaseWin.h"
 #include "Widget/PlatformLoop.h"
+#include "Widget/XWidget.h"
 
 namespace X_Y
 {
@@ -49,6 +50,77 @@ namespace X_Y
                 action(); // 执行（通常是 delete this）
         }
         // actions 析构 → 动作对象本身也没了。队列无残留，无需"摘除"逻辑。
+    }
+
+    // ── 主窗口（退出语义）──
+    // 显式指定"关掉它就退出程序"的窗口，取代旧的"第一个建的顶层窗口自动当首窗"。
+    //   w == nullptr → 取消主窗口（此后没有任何窗口负责退出）。
+    void Application::SetMainWindow(XWidget *w)
+    {
+        if (m_MainWindow == w)
+            return;
+
+        // 解除旧主窗的绑定（sender=旧主窗, receiver=this），避免残留指向旧窗。
+        if (m_MainWindow)
+            m_dispatcher.disConnect(static_cast<void *>(m_MainWindow),
+                                    static_cast<void *>(this));
+
+        m_MainWindow = w;
+
+        if (w)
+        {
+            // 关闭主窗 → 退出程序
+            connect(w, MovementType::WindowClose, this, &Application::appClose);
+            // 主窗若走原生销毁路径（非 WindowClose）→ 清引用，防悬空
+            connect(w, MovementType::WindowDestroy, this,
+                    &Application::OnMainWindowDestroyed);
+        }
+    }
+
+    // ── 托管窗口 ──
+    void Application::Own(XWidget *w)
+    {
+        if (!w)
+            return;
+        for (auto *owned : m_OwnedWindows)
+            if (owned == w)
+                return; // 幂等
+        m_OwnedWindows.push_back(w);
+    }
+
+    void Application::ForgetOwnedWindow(XWidget *w)
+    {
+        for (auto it = m_OwnedWindows.begin(); it != m_OwnedWindows.end(); ++it)
+        {
+            if (*it == w)
+            {
+                m_OwnedWindows.erase(it);
+                return;
+            }
+        }
+    }
+
+    // ── 退出清理 ──
+    // 逐个销毁还活着的托管窗口；每处理一个就泵一轮消息，保证
+    // destroy → WM_DESTROY → WindowDestroy → 延迟回收 delete 真正走完。
+    void Application::Shutdown()
+    {
+        Running = false;
+
+        // 从名单尾部取并【先摘除】：即使 destroy 没触发移除（如窗口本就没建
+        // HWND，Destroy 是 no-op），循环也一定收敛，不会死转。
+        int guard = 0;
+        while (!m_OwnedWindows.empty() && ++guard <= kMaxShutdownRounds)
+        {
+            XWidget *w = m_OwnedWindows.back();
+            m_OwnedWindows.pop_back();
+            if (w)
+                w->destroy(); // 已销毁则是 no-op（Destroy 内部有 m_Impl 守卫）
+            pushEvents();
+            ProcessEvents();
+        }
+
+        FlushDeferredRecycle(); // 兜底：清掉残留的延迟回收动作
     }
 
     void Application::exec()

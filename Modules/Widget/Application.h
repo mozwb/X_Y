@@ -7,6 +7,8 @@
 namespace X_Y
 {
 
+    class XWidget; // 主窗口类型（仅需指针，前置声明即可）
+
     // 这个管理了程序运行周期，接受win32消息转化系统事件，可以仿照这个写渲染层或者其他层
     // 总线接受所有事件，只负责系统事件，其他再下发执行
     class Application
@@ -18,7 +20,23 @@ namespace X_Y
         MovementDispatcher m_dispatcher;
         MovementQueue m_eventQueue;
         bool Running = true;
-        bool FirstWin = false;
+
+        // ── 主窗口（退出语义）──
+        // 【手动指定】"关掉它就退出程序"的窗口。
+        // 取代旧的「进程里第一个建的顶层窗口自动当首窗」—— 那种约定会被
+        // 瞬时窗口（自检探针窗、临时窗）抢走名额，导致没人负责退出。
+        // 未指定（nullptr）时：关闭任何窗口都只关它自己，程序不退出。
+        XWidget *m_MainWindow = nullptr;
+
+        // 主窗口若走原生销毁路径（非 WindowClose）→ 清引用，防悬空。
+        void OnMainWindowDestroyed() { m_MainWindow = nullptr; }
+
+        // ── 托管窗口名单 ──
+        // 手动把窗口交给 Application 托管（Own）。程序退出时（Shutdown）名单里
+        // 还活着的窗口会被 destroy + 回收 —— 避免退出后残留（析构不跑、
+        // 线程不停、资源泄漏）。窗口正常销毁时会自动从名单摘除。
+        std::vector<XWidget *> m_OwnedWindows;
+        static constexpr int kMaxShutdownRounds = 100000; // 兜底防死循环
         // 如果你需要打包一些逻辑，你可以写层栈，从而减轻事件分发器压力
         LayerStack m_LayerStack;
         std::unique_ptr<class PlatformLoop> m_PlatformLoop;
@@ -80,11 +98,7 @@ namespace X_Y
         virtual void pushEvents(XMovement *e);
         virtual void ProcessEvents();
         bool isRunning() { return Running; }
-        void appClose()
-        {
-            Running = false;
-            FirstWin = false;
-        }
+        void appClose() { Running = false; }
         MovementDispatcher &GetDispatcher() { return m_dispatcher; }
         MovementQueue &GetEventQueue() { return m_eventQueue; }
 
@@ -110,14 +124,24 @@ namespace X_Y
         {
             return s_instance;
         }
-        bool IsFirstWin()
-        {
-            return FirstWin;
-        }
-        void updateFirstWin()
-        {
-            FirstWin = true;
-        }
+        // ── 主窗口（退出语义）────────────────────────────────
+        // 显式指定"关掉它就退出程序"的窗口。
+        //   w == nullptr → 取消主窗口（此后没有任何窗口负责退出）。
+        // 内部把 w 的 WindowClose 接到 appClose；并在 w 被原生销毁时清掉引用。
+        void SetMainWindow(XWidget *w);
+        XWidget *GetMainWindow() const { return m_MainWindow; }
+
+        // ── 托管 / 退出清理 ────────────────────────────
+        // 把一个【new 出来的顶层窗口】交给 Application 托管：程序退出时若它还
+        // 活着，会被 Shutdown 自动 destroy + 回收。重复托管同一窗口幂等。
+        void Own(XWidget *w);
+        // 窗口销毁时由 XWidget 回调：从名单摘除（不拥有、不 delete）。
+        void ForgetOwnedWindow(XWidget *w);
+        // 显式退出清理：销毁所有还活着的托管窗口，并泵消息把
+        // 「destroy → WM_DESTROY → WindowDestroy → 延迟回收」走完，
+        // 保证析构/线程停止/资源释放都跑到。
+        // ⚠️ 请在【主循环结束后】（如 main 末尾）调用，别在回调里调。
+        void Shutdown();
         void PushLayer(Layer *layer)
         {
             m_LayerStack.PushLayer(layer);

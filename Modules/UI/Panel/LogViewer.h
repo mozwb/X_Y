@@ -62,9 +62,13 @@ namespace X_Y
         void RebuildAll();                                        // 全量重建（关键词变 / 数据重置时）
         void IncrementalAppend(uint64_t fromSeq, uint64_t toSeq); // 增量喂新条目
         void TrimStripe();                                        // 淘汰 stripe 头部，封顶 MAX_ENTRIES
-        std::unique_ptr<TextInput> m_KeywordInput;
-        std::unique_ptr<TagStrip> m_TagStrip;
-        std::unique_ptr<ScrollArea> m_ScrollArea;
+        // ⚠️ 借用指针（裸）：这三个组件由【基类 Panel 拥有】——
+        //    构造时 AddComponent 接管所有权，Panel 析构时统一释放。
+        //    本类只借用访问，绝不 delete（否则与 Panel 双重释放 → 崩溃）。
+        TextInput *m_KeywordInput = nullptr;
+        TagStrip *m_TagStrip = nullptr;
+        ScrollArea *m_ScrollArea = nullptr;
+        // m_LogStripe 不进 Panel 树，仅被 m_ScrollArea 借用 → 由本类 unique_ptr 拥有。
         std::unique_ptr<LogStripe> m_LogStripe;
 
         static constexpr uint64_t MAX_ENTRIES = 5000;
