@@ -102,9 +102,6 @@ target_link_libraries(DataStore PUBLIC XCore)
 xy_module(Log)
 target_link_libraries(Log PUBLIC DataStore)
 
-xy_module(Image)
-target_link_libraries(Image PUBLIC Log XCore)
-
 # ── vendor：freetype(文字后端，per-pixel alpha 透明文字) ──
 # add_subdirectory 源码编译，静态链接进 X_Y。关掉非必要外部依赖(zlib/png/svg…)。
 set(FT_DISABLE_ZLIB TRUE)

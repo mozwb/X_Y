@@ -1,9 +1,10 @@
 ﻿#pragma once
 
+#include "XCore/Decoder/Decode.h"
 #include "XCore/Memory/Buffer.h"
 #include "XCore/FilesSystem/FilesSystem.h"
 
-namespace X_Y
+namespace X_Y::Decode
 {
 
 	/**
@@ -28,7 +29,8 @@ namespace X_Y
 		FileNotFound
 	};
 
-	class Image
+	class Image : public DecoderBlueprint<const Buffer>,
+				  public DecoderBlueprint<const File>
 	{
 	public:
 		/* ── 从原始文件数据构造 ── */
@@ -36,14 +38,15 @@ namespace X_Y
 		explicit Image(const Buffer &fileData);
 		explicit Image(const File &filepath);
 
+		void Decode(const Buffer &fileData) override;
+		void Decode(const File &filepath) override;
+
 		Image() = default;
 		Image(Image &&other) noexcept;
 		Image &operator=(Image &&other) noexcept;
 
-		/* 禁止拷贝（像素数据可能很大，按需显式 Copy()） */
-
-		Image(const Image &) = delete;
-		Image &operator=(const Image &) = delete;
+		Image(const Image &) = default;
+		Image &operator=(const Image &) = default;
 
 		~Image() = default;
 
@@ -71,15 +74,11 @@ namespace X_Y
 		uint64_t GetPixelCount() const { return (uint64_t)m_Width * m_Height; }
 		uint64_t GetDataSize() const { return (uint64_t)m_Width * m_Height * m_Channels; }
 
-		/* 显式拷贝（返回一个新 Image 且拥有独立像素内存） */
+		/* 显式深拷贝 */
 
 		Image Copy() const;
 
 	private:
-		/* 内部：从已读取的 Buffer 解码 */
-
-		void DecodeFromBuffer(const Buffer &fileData);
-
 		Buffer m_Pixels; // 解码后的像素数据（owned）
 		uint32_t m_Width = 0;
 		uint32_t m_Height = 0;
