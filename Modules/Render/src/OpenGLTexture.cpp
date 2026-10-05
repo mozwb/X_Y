@@ -1,5 +1,5 @@
 ﻿#include "Render/OpenGL/OpenGLTexture.h"
-#include "Image/Image.h"
+#include "XCore/Decoder/Blueprint/Image.h"
 #include "Log/XYlog.h"
 
 #include <glad/glad.h>
@@ -16,6 +16,10 @@ namespace X_Y {
 		case ImageFormat::R8:
 			internal = GL_R8;
 			data = GL_RED;
+			break;
+		case ImageFormat::RG8:
+			internal = GL_RG8;
+			data = GL_RG;
 			break;
 		case ImageFormat::RGB8:
 			internal = GL_RGB8;
@@ -74,7 +78,7 @@ namespace X_Y {
 	OpenGLTexture2D::OpenGLTexture2D(const std::string& path)
 		: m_Path(path)
 	{
-		Image img(path);
+		Decode::Image img(path);
 		if (!img.IsLoaded())
 		{
 			XFATAL("OpenGLTexture2D: failed to load image: {0}", path);
@@ -91,6 +95,16 @@ namespace X_Y {
 		/* ── 根据通道数决定格式 ── */
 		switch (img.GetChannels())
 		{
+		case 1:
+			m_Specification.Format = ImageFormat::R8;
+			m_InternalFormat = GL_R8;
+			m_DataFormat = GL_RED;
+			break;
+		case 2:
+			m_Specification.Format = ImageFormat::RG8;
+			m_InternalFormat = GL_RG8;
+			m_DataFormat = GL_RG;
+			break;
 		case 3:
 			m_Specification.Format = ImageFormat::RGB8;
 			m_InternalFormat = GL_RGB8;
@@ -118,6 +132,17 @@ namespace X_Y {
 		glTextureParameteri(m_RendererID, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 		glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTextureParameteri(m_RendererID, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		if (img.GetChannels() == 1)
+		{
+			glTextureParameteri(m_RendererID, GL_TEXTURE_SWIZZLE_G, GL_RED);
+			glTextureParameteri(m_RendererID, GL_TEXTURE_SWIZZLE_B, GL_RED);
+		}
+		else if (img.GetChannels() == 2)
+		{
+			glTextureParameteri(m_RendererID, GL_TEXTURE_SWIZZLE_G, GL_RED);
+			glTextureParameteri(m_RendererID, GL_TEXTURE_SWIZZLE_B, GL_RED);
+			glTextureParameteri(m_RendererID, GL_TEXTURE_SWIZZLE_A, GL_GREEN);
+		}
 
 		/* ── 上传像素数据 ── */
 		const Buffer& pixels = img.GetPixelBuffer();
@@ -152,7 +177,8 @@ namespace X_Y {
 	{
 		uint32_t expected = m_Width * m_Height * (
 			m_DataFormat == GL_RGBA ? 4 :
-			m_DataFormat == GL_RGB  ? 3 : 1
+			m_DataFormat == GL_RGB  ? 3 :
+			m_DataFormat == GL_RG   ? 2 : 1
 		);
 		XY_CORE_ASSERT(size == expected, "OpenGLTexture2D::SetData: size mismatch ({0} != {1})", size, expected);
 

@@ -8,6 +8,7 @@ namespace X_Y {
 	{
 		None = 0,
 		R8,
+		RG8,
 		RGB8,
 		RGBA8,
 		RGBA32F

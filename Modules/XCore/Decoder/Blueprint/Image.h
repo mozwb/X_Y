@@ -10,7 +10,8 @@ namespace X_Y::Decode
 	/**
 	 * Image — 引擎图片抽象层
 	 *
-	 * 封装 PNG 解码（及其他图片格式），提供像素数据、元信息。
+	 * 封装常见栅格图片格式解码，提供像素数据、元信息。
+	 * 当前由 stb_image 支持 JPEG、PNG、BMP、GIF、TGA、PSD、HDR、PIC、PNM。
 	 * 设计目标：① 内存加载 ② 不暴露底层解码器 ③ 可直接喂给 Texture2D 创建 OpenGL 纹理。
 	 *
 	 * 典型用法：

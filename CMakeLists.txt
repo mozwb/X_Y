@@ -157,6 +157,11 @@ xy_module(Physics)
 target_link_libraries(Physics PUBLIC XCore)
 
 # ══════════════════════════════════════════════════════
+# 仓库内工具与测试
+include(CTest)
+add_subdirectory(test "${PROJECT_SOURCE_DIR}/test/build")
+
+# ══════════════════════════════════════════════════════
 # 分发：把头文件安装到 dist/include（构建后执行，替代旧 MoveFiles.py）
 # 用法：cmake --install build --prefix "D:/workbench/X_Y/dist"
 #   或  cmake --install build --config Debug --prefix "D:/workbench/X_Y/dist"
@@ -167,4 +172,3 @@ install(DIRECTORY "${PROJECT_SOURCE_DIR}/Modules/"
         FILES_MATCHING
         PATTERN "*.h"
         PATTERN "*.hpp")
-

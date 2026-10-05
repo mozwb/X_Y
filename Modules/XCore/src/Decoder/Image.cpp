@@ -1,14 +1,12 @@
-﻿#include "XCore/Decoder/Blueprint/Image.h"
+#include "XCore/Decoder/Blueprint/Image.h"
 
-extern "C"
-{
-#include "__pngdec.h"
-}
+#define STB_IMAGE_IMPLEMENTATION
+#include "vendor/stb/stb_image.h"
 
 #include "XCore/FilesSystem/FilesSystem.h"
-#include <cstdlib>
+#include <limits>
 
-namespace X_Y
+namespace X_Y::Decode
 {
 	Image::Image(const File &filepath)
 	{
@@ -56,32 +54,43 @@ namespace X_Y
 			return;
 		}
 
-		unsigned char *rgba = nullptr;
-		unsigned int width = 0, height = 0, channels = 0;
-		const int result = png_decode(
-			fileData.Data,
-			static_cast<size_t>(fileData.Size),
-			&rgba,
-			&width, &height, &channels);
-
-		if (result != PNG_OK)
+		if (fileData.Size > static_cast<uint64_t>(std::numeric_limits<int>::max()))
 		{
 			m_Error = ImageError::DecodeFailed;
 			return;
 		}
 
-		const uint64_t pixelSize = static_cast<uint64_t>(width) * height * channels;
-		m_Pixels.Overwrite(rgba, pixelSize);
-		std::free(rgba);
+		int width = 0;
+		int height = 0;
+		int channels = 0;
+		stbi_uc *pixels = stbi_load_from_memory(
+			fileData.Data,
+			static_cast<int>(fileData.Size),
+			&width,
+			&height,
+			&channels,
+			0);
+		if (!pixels)
+		{
+			m_Error = ImageError::DecodeFailed;
+			return;
+		}
+
+		const uint64_t pixelSize =
+			static_cast<uint64_t>(width) *
+			static_cast<uint64_t>(height) *
+			static_cast<uint64_t>(channels);
+		m_Pixels.Overwrite(pixels, pixelSize);
+		stbi_image_free(pixels);
 		if (m_Pixels.Size != pixelSize)
 		{
 			m_Error = ImageError::DecodeFailed;
 			return;
 		}
 
-		m_Width = width;
-		m_Height = height;
-		m_Channels = channels;
+		m_Width = static_cast<uint32_t>(width);
+		m_Height = static_cast<uint32_t>(height);
+		m_Channels = static_cast<uint32_t>(channels);
 		m_Loaded = true;
 	}
 
@@ -120,4 +129,9 @@ namespace X_Y
 		return *this;
 	}
 
-} // namespace X_Y
+	Image Image::Copy() const
+	{
+		return *this;
+	}
+
+} // namespace X_Y::Decode

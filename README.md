@@ -47,3 +47,12 @@ X_Y/Modules
 - cmake -S . -B build -G "MinGW Makefiles"
 - cmake --build build
 
+### 图片解码工具
+
+仓库内的 `XYImageTool` 可用于运行解码自检，或检查图片文件的尺寸、通道数、像素数据大小和 FNV-1a 校验值：
+
+- `test/build/XYImageTool.exe --self-test`
+- `test/build/XYImageTool.exe path/to/image.png [path/to/another-image.jpg ...]`
+
+自检也已注册到 CTest：配置并构建后运行 `ctest --test-dir build --output-on-failure`。
+图片格式由 `vendor/stb/stb_image.h` 提供。
