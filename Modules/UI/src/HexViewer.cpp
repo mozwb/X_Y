@@ -132,7 +132,7 @@ namespace X_Y
     };
 
     HexViewer::HexViewer()
-        : Panel(),
+        : FileDropPanel(),
           m_Content(std::make_unique<BinaryContent>())
     {
         m_FileBar = new Horizontal();
@@ -298,40 +298,15 @@ namespace X_Y
         ProcessPendingClose();
         // HexViewer 是 Panel：宿主（Dock）已压过 origin，一律按 Panel 局部 (0,0) 起画。
         canvas.FillRect(0, 0, GetWidth(), GetHeight(), 0xFF11151A);
-        Panel::OnPaint(canvas);
-        if (m_FileDragHover)
-        {
-            canvas.FillRect(0, 0, GetWidth(), 3, 0xFF36A3FF);
-            canvas.FillRect(0, GetHeight() - 3, GetWidth(), 3, 0xFF36A3FF);
-        }
+        FileDropPanel::OnPaint(canvas);
     }
 
-    void HexViewer::OnFileDragEnter(const std::vector<XPath> &files, int x, int y)
+    bool HexViewer::OnOpenFiles(const std::vector<XPath> &files)
     {
-        (void)x;
-        (void)y;
-        m_FileDragHover = !files.empty();
-        RequestRepaint();
-    }
-
-    void HexViewer::OnFileDragOver(const std::vector<XPath> &files, int x, int y)
-    {
-        OnFileDragEnter(files, x, y);
-    }
-
-    void HexViewer::OnFileDragLeave()
-    {
-        m_FileDragHover = false;
-        RequestRepaint();
-    }
-
-    void HexViewer::OnFileDrop(const std::vector<XPath> &files, int x, int y)
-    {
-        (void)x;
-        (void)y;
-        m_FileDragHover = false;
+        bool opened = false;
         for (const XPath &file : files)
-            OpenFile(file);
+            opened = OpenFile(file) || opened;
         RequestRepaint();
+        return opened;
     }
 }

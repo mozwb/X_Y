@@ -1,4 +1,6 @@
 #include "XCore/Decoder/Blueprint/Image.h"
+#include "Widget/Canvas.h"
+#include "UI/Component/ImageView.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -116,6 +118,65 @@ namespace
 		passed &= Check(!image.IsLoaded() &&
 							image.GetError() == X_Y::Decode::ImageError::InvalidData,
 						"Reject empty input");
+
+		X_Y::Canvas canvas(32, 16, nullptr);
+		const Image decodedRgb(bmp);
+		canvas.Clear(0xFF000000);
+		canvas.DrawImage(decodedRgb.GetPixelBuffer().Data,
+						 decodedRgb.GetPixelBuffer().Size,
+						 decodedRgb.GetWidth(), decodedRgb.GetHeight(),
+						 decodedRgb.GetChannels(), 0, 0, 4, 2);
+		const int scaledWidth = canvas.LToP(4);
+		const int greenStart = scaledWidth / 2;
+		uint32_t *canvasPixels = canvas.GetPixelBuffer();
+		passed &= Check(
+			canvasPixels[0] == 0xFFFF0000 &&
+				canvasPixels[greenStart] == 0xFF00FF00,
+			"Draw and nearest-neighbor scale RGB pixels");
+
+		const uint8_t translucentRed[] = {255, 0, 0, 128};
+		canvas.Clear(0xFF0000FF);
+		canvas.DrawImage(translucentRed, sizeof(translucentRed),
+						 1, 1, 4, 0, 0, 1, 1);
+		passed &= Check(
+			canvasPixels[0] == 0xFF80007F,
+			"Composite straight-alpha RGBA pixels");
+
+		const uint8_t opaqueRed[] = {255, 0, 0, 255};
+		canvas.Clear(0xFF000000);
+		canvas.SetClip(1, 0, 1, 1);
+		canvas.DrawImage(opaqueRed, sizeof(opaqueRed),
+						 1, 1, 4, 0, 0, 3, 1);
+		canvas.ResetClip();
+		passed &= Check(
+			canvasPixels[0] == 0xFF000000 &&
+				canvasPixels[canvas.LToP(1)] == 0xFFFF0000,
+			"Respect canvas clipping while drawing an image");
+
+		X_Y::ImageView imageView;
+		imageView.SetRect(0, 0, 4, 4);
+		imageView.SetImage(decodedRgb);
+		canvas.Clear(0xFF000000);
+		imageView.OnPaint(canvas);
+		const uint64_t rowOffset =
+			static_cast<uint64_t>(canvas.LToP(1)) * canvas.GetPhysicalWidth();
+		passed &= Check(
+			canvasPixels[rowOffset] == 0xFFFF0000 &&
+				canvasPixels[rowOffset + canvas.LToP(2)] == 0xFF00FF00 &&
+				canvasPixels[0] == 0xFF000000,
+			"ImageView contains and centers the image without distorting it");
+
+		imageView.SetScaleMode(X_Y::ImageScaleMode::Stretch);
+		canvas.Clear(0xFF000000);
+		imageView.OnPaint(canvas);
+		passed &= Check(
+			canvasPixels[0] == 0xFFFF0000 &&
+				canvasPixels[canvas.LToP(2)] == 0xFF00FF00,
+			"ImageView stretches the image to its component bounds");
+
+		imageView.ClearImage();
+		passed &= Check(!imageView.GetImage().IsLoaded(),
+						"ImageView clears its current image");
 
 		std::cout << (passed ? "Image decoder self-test passed\n"
 							 : "Image decoder self-test failed\n");

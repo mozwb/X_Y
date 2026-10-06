@@ -52,7 +52,7 @@ endif()
 # ══════════════════════════════════════════════════════
 function(xy_module NAME)
     set(_src_dir "${PROJECT_SOURCE_DIR}/Modules/${NAME}")
-    file(GLOB_RECURSE _src
+    file(GLOB_RECURSE _src CONFIGURE_DEPENDS
         "${_src_dir}/src/*.cpp"
         "${_src_dir}/src/*.h"
         "${_src_dir}/src/*.c")

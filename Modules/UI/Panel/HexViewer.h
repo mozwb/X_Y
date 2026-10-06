@@ -1,7 +1,6 @@
 #pragma once
 
-#include "UI/Panel/Panel.h"
-#include "XCore/FilesSystem/FilesSystem.h"
+#include "UI/Panel/FileDropPanel.h"
 #include <cstddef>
 #include <memory>
 #include <vector>
@@ -12,7 +11,7 @@ namespace X_Y
     class Horizontal;
     class ScrollArea;
 
-    class HexViewer final : public Panel
+    class HexViewer final : public FileDropPanel
     {
     public:
         HexViewer();
@@ -27,10 +26,7 @@ namespace X_Y
     protected:
         void OnLayout() override;
         void OnPaint(Canvas &canvas) override;
-        void OnFileDragEnter(const std::vector<XPath> &files, int x, int y) override;
-        void OnFileDragOver(const std::vector<XPath> &files, int x, int y) override;
-        void OnFileDragLeave() override;
-        void OnFileDrop(const std::vector<XPath> &files, int x, int y) override;
+        bool OnOpenFiles(const std::vector<XPath> &files) override;
 
     private:
         class BinaryContent;
@@ -48,7 +44,6 @@ namespace X_Y
         std::vector<XPath> m_Files;
         XPath m_ActiveFile;
         bool m_UpdatingSelection = false;
-        bool m_FileDragHover = false;
 
         // ── 待关闭队列（延迟关闭）──
         // ⚠️ 为什么延迟：Button::OnInput 正在 Horizontal::Components 的遍历栈里，

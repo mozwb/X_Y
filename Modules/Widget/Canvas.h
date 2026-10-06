@@ -48,6 +48,12 @@ namespace X_Y {
         void FillRect(int x, int y, int w, int h, uint32_t color) {
             m_Impl->FillRect(x, y, w, h, color);
         }
+        void DrawImage(const uint8_t* pixels, uint64_t dataSize,
+                       uint32_t sourceWidth, uint32_t sourceHeight,
+                       uint32_t channels, int x, int y, int w, int h) {
+            m_Impl->DrawImage(pixels, dataSize, sourceWidth, sourceHeight,
+                              channels, x, y, w, h);
+        }
         void FillRoundRect(int x, int y, int w, int h, int r, uint32_t color) {
             m_Impl->FillRoundRect(x, y, w, h, r, color);
         }

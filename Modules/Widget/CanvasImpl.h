@@ -46,6 +46,13 @@ namespace X_Y {
         // 填充实心矩形（逻辑坐标）
         virtual void FillRect(int x, int y, int w, int h, uint32_t color) = 0;
 
+        // 将 1/2 通道灰度(+alpha)、RGB 或 RGBA 像素绘制到逻辑坐标矩形。
+        // 源像素为自上而下、每通道 8-bit、alpha 为 straight alpha；
+        // 目标图像使用最近邻缩放，并遵守当前原点、裁剪区及画布边界。
+        virtual void DrawImage(const uint8_t *pixels, uint64_t dataSize,
+                               uint32_t sourceWidth, uint32_t sourceHeight,
+                               uint32_t channels, int x, int y, int w, int h) = 0;
+
         // 圆角矩形填充（r=圆角半径像素，逻辑坐标）
         virtual void FillRoundRect(int x, int y, int w, int h,
             int r, uint32_t color) = 0;

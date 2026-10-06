@@ -1,6 +1,7 @@
 #include "CanvasImpl.h"
 #include "Dpi.h"
 #include <windows.h>
+#include <algorithm>
 #include <cstring>
 #include <vector>
 
@@ -204,6 +205,84 @@ namespace X_Y
         {
             int px = S(x + m_OriginX), py = S(y + m_OriginY), pw = S(w), ph = S(h);
             FillRectPhys(px, py, pw, ph, color);
+        }
+
+        void DrawImage(const uint8_t *pixels, uint64_t dataSize,
+                       uint32_t sourceWidth, uint32_t sourceHeight,
+                       uint32_t channels, int x, int y, int w, int h) override
+        {
+            if (!m_Pixels || !pixels || sourceWidth == 0 || sourceHeight == 0 ||
+                w <= 0 || h <= 0 ||
+                (channels != 1 && channels != 2 && channels != 3 && channels != 4))
+                return;
+
+            const uint64_t pixelCount =
+                static_cast<uint64_t>(sourceWidth) * sourceHeight;
+            if (pixelCount > UINT64_MAX / channels ||
+                dataSize < pixelCount * channels)
+                return;
+
+            const int px = S(x + m_OriginX);
+            const int py = S(y + m_OriginY);
+            const int pw = S(w);
+            const int ph = S(h);
+            if (pw <= 0 || ph <= 0)
+                return;
+
+            int64_t left = std::max<int64_t>(px, 0);
+            int64_t top = std::max<int64_t>(py, 0);
+            int64_t right = std::min<int64_t>(static_cast<int64_t>(px) + pw, m_Width);
+            int64_t bottom = std::min<int64_t>(static_cast<int64_t>(py) + ph, m_Height);
+            if (m_ClipSet)
+            {
+                left = std::max<int64_t>(left, m_ClipX);
+                top = std::max<int64_t>(top, m_ClipY);
+                right = std::min<int64_t>(right, static_cast<int64_t>(m_ClipX) + m_ClipW);
+                bottom = std::min<int64_t>(bottom, static_cast<int64_t>(m_ClipY) + m_ClipH);
+            }
+            if (left >= right || top >= bottom)
+                return;
+
+            for (int64_t destY = top; destY < bottom; ++destY)
+            {
+                const uint32_t sourceY = static_cast<uint32_t>(
+                    (static_cast<uint64_t>(destY - py) * sourceHeight) /
+                    static_cast<uint32_t>(ph));
+                for (int64_t destX = left; destX < right; ++destX)
+                {
+                    const uint32_t sourceX = static_cast<uint32_t>(
+                        (static_cast<uint64_t>(destX - px) * sourceWidth) /
+                        static_cast<uint32_t>(pw));
+                    const uint8_t *source =
+                        pixels + (static_cast<uint64_t>(sourceY) * sourceWidth + sourceX) * channels;
+
+                    uint8_t red;
+                    uint8_t green;
+                    uint8_t blue;
+                    uint8_t alpha = 255;
+                    if (channels <= 2)
+                    {
+                        red = green = blue = source[0];
+                        if (channels == 2)
+                            alpha = source[1];
+                    }
+                    else
+                    {
+                        red = source[0];
+                        green = source[1];
+                        blue = source[2];
+                        if (channels == 4)
+                            alpha = source[3];
+                    }
+
+                    const uint32_t color =
+                        (static_cast<uint32_t>(alpha) << 24) |
+                        (static_cast<uint32_t>(red) << 16) |
+                        (static_cast<uint32_t>(green) << 8) |
+                        blue;
+                    BlitPixel(static_cast<int>(destX), static_cast<int>(destY), color);
+                }
+            }
         }
 
         void FillRoundRect(int x, int y, int w, int h, int r, uint32_t color) override

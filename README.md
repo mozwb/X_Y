@@ -56,3 +56,8 @@ X_Y/Modules
 
 自检也已注册到 CTest：配置并构建后运行 `ctest --test-dir build --output-on-failure`。
 图片格式由 `vendor/stb/stb_image.h` 提供。
+
+### UI 可视化测试窗口
+
+- `test/build/XYVisualTest.exe`：打开五 Dock 可视化测试窗口。
+- `test/build/XYVisualTest.exe path/to/image.png`：在中心 Dock 预览图片。
