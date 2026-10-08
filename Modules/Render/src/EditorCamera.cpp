@@ -3,7 +3,6 @@
 #include <algorithm>
 namespace X_Y
 {
-	using Input = Input_t::Input;
 	EditorCamera::EditorCamera(float fov, float aspectRatio, float nearClip, float farClip)
 		: m_FOV(fov), m_AspectRatio(aspectRatio), m_NearClip(nearClip), m_FarClip(farClip), Camera(RenderMath::Perspective(RenderMath::Radians(fov), aspectRatio, nearClip, farClip))
 	{
@@ -53,17 +52,17 @@ namespace X_Y
 
 	void EditorCamera::OnUpdate(Timestep ts)
 	{
-		if (Input::IsKeyPressed(Input_t::Key::LeftAlt))
+		if (Input::IsKeyPressed(Input::Key::LeftAlt))
 		{
 			const RenderMath::Vec2 &mouse{Input::GetMouseX(), Input::GetMouseY()};
 			RenderMath::Vec2 delta = (mouse - m_InitialMousePosition) * 0.003f;
 			m_InitialMousePosition = mouse;
 
-			if (Input::IsMouseButtonPressed(Input_t::Mouse::ButtonMiddle))
+			if (Input::IsMouseButtonPressed(Input::Mouse::ButtonMiddle))
 				MousePan(delta);
-			else if (Input::IsMouseButtonPressed(Input_t::Mouse::ButtonLeft))
+			else if (Input::IsMouseButtonPressed(Input::Mouse::ButtonLeft))
 				MouseRotate(delta);
-			else if (Input::IsMouseButtonPressed(Input_t::Mouse::ButtonRight))
+			else if (Input::IsMouseButtonPressed(Input::Mouse::ButtonRight))
 				MouseZoom(delta.y);
 		}
 

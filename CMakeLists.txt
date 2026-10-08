@@ -11,6 +11,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(X_Y LANGUAGES C CXX)
 
+include(ExternalProject)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -80,10 +82,100 @@ set_target_properties(glad PROPERTIES
 # ══════════════════════════════════════════════════════
 # 模块（按迁移进度逐步加入）
 # ── Core 底层 ──
+set(_xy_ffmpeg_source_dir "${PROJECT_SOURCE_DIR}/vendor/FFmpeg")
+if(NOT EXISTS "${_xy_ffmpeg_source_dir}/configure")
+    message(FATAL_ERROR
+        "FFmpeg source checkout is missing. Initialize submodules with "
+        "'git submodule update --init --recursive'.")
+endif()
+
+if(NOT MINGW)
+    message(FATAL_ERROR "The vendored FFmpeg source build currently requires the MinGW toolchain")
+endif()
+
+if(NOT XY_FFMPEG_BASH_EXECUTABLE)
+    find_program(XY_GIT_EXECUTABLE NAMES git.exe git)
+    if(XY_GIT_EXECUTABLE)
+        get_filename_component(_xy_git_cmd_dir "${XY_GIT_EXECUTABLE}" DIRECTORY)
+        get_filename_component(_xy_git_root "${_xy_git_cmd_dir}/.." ABSOLUTE)
+        foreach(_xy_bash_candidate
+                "${_xy_git_root}/bin/bash.exe"
+                "${_xy_git_root}/usr/bin/bash.exe")
+            if(EXISTS "${_xy_bash_candidate}")
+                set(XY_FFMPEG_BASH_EXECUTABLE "${_xy_bash_candidate}" CACHE FILEPATH
+                    "Git Bash executable used to build vendored FFmpeg")
+                break()
+            endif()
+        endforeach()
+    endif()
+endif()
+if(NOT XY_FFMPEG_BASH_EXECUTABLE)
+    message(FATAL_ERROR
+        "Git Bash is required to build vendored FFmpeg. Set XY_FFMPEG_BASH_EXECUTABLE "
+        "to the Git for Windows bash.exe path.")
+endif()
+
+get_filename_component(_xy_ffmpeg_bash_dir "${XY_FFMPEG_BASH_EXECUTABLE}" DIRECTORY)
+set(XY_FFMPEG_SH_EXECUTABLE "")
+foreach(_xy_sh_candidate
+        "${_xy_ffmpeg_bash_dir}/../usr/bin/sh.exe"
+        "${_xy_ffmpeg_bash_dir}/sh.exe")
+    get_filename_component(_xy_sh_candidate "${_xy_sh_candidate}" ABSOLUTE)
+    if(EXISTS "${_xy_sh_candidate}")
+        set(XY_FFMPEG_SH_EXECUTABLE "${_xy_sh_candidate}")
+        break()
+    endif()
+endforeach()
+if(NOT XY_FFMPEG_SH_EXECUTABLE)
+    message(FATAL_ERROR
+        "Git Bash's usr/bin/sh.exe is required by the FFmpeg Makefiles.")
+endif()
+
+function(xy_ffmpeg_msys_path INPUT_PATH OUTPUT_VARIABLE)
+    file(TO_CMAKE_PATH "${INPUT_PATH}" _xy_path)
+    if(_xy_path MATCHES "^([A-Za-z]):/(.*)$")
+        string(TOLOWER "${CMAKE_MATCH_1}" _xy_drive)
+        set(_xy_path "/${_xy_drive}/${CMAKE_MATCH_2}")
+    endif()
+    set(${OUTPUT_VARIABLE} "${_xy_path}" PARENT_SCOPE)
+endfunction()
+
+xy_ffmpeg_msys_path("${_xy_ffmpeg_source_dir}" _xy_ffmpeg_source_msys)
+xy_ffmpeg_msys_path("${CMAKE_C_COMPILER}" _xy_ffmpeg_cc_msys)
+xy_ffmpeg_msys_path("${CMAKE_CXX_COMPILER}" _xy_ffmpeg_cxx_msys)
+xy_ffmpeg_msys_path("${CMAKE_MAKE_PROGRAM}" _xy_ffmpeg_make_msys)
+file(TO_CMAKE_PATH "${XY_FFMPEG_SH_EXECUTABLE}" _xy_ffmpeg_sh_make)
+
+ExternalProject_Add(XYFFmpegBuild
+    SOURCE_DIR "${_xy_ffmpeg_source_dir}"
+    DOWNLOAD_COMMAND ""
+    UPDATE_COMMAND ""
+    CONFIGURE_COMMAND
+        "${XY_FFMPEG_BASH_EXECUTABLE}" -c
+        "cd '${_xy_ffmpeg_source_msys}' && '${_xy_ffmpeg_source_msys}/configure' --cc='${_xy_ffmpeg_cc_msys}' --cxx='${_xy_ffmpeg_cxx_msys}' --arch=x86_64 --target-os=mingw64 --disable-autodetect --disable-network --disable-programs --disable-doc --disable-debug --disable-x86asm --disable-avdevice --disable-avfilter --disable-encoders --disable-muxers --disable-filters --enable-static --disable-shared"
+    BUILD_COMMAND
+        "${XY_FFMPEG_BASH_EXECUTABLE}" -c
+        "cd '${_xy_ffmpeg_source_msys}' && '${_xy_ffmpeg_make_msys}' -j4 'SHELL=${_xy_ffmpeg_sh_make}'"
+    INSTALL_COMMAND ""
+    BUILD_BYPRODUCTS
+        "${_xy_ffmpeg_source_dir}/libavformat/libavformat.a"
+        "${_xy_ffmpeg_source_dir}/libavcodec/libavcodec.a"
+        "${_xy_ffmpeg_source_dir}/libswscale/libswscale.a"
+        "${_xy_ffmpeg_source_dir}/libswresample/libswresample.a"
+        "${_xy_ffmpeg_source_dir}/libavutil/libavutil.a")
+
 xy_module(XCore)
 target_include_directories(XCore PUBLIC
     "${PROJECT_SOURCE_DIR}/vendor"
-    )
+    "${_xy_ffmpeg_source_dir}")
+target_link_libraries(XCore PUBLIC
+    "${_xy_ffmpeg_source_dir}/libavformat/libavformat.a"
+    "${_xy_ffmpeg_source_dir}/libavcodec/libavcodec.a"
+    "${_xy_ffmpeg_source_dir}/libswscale/libswscale.a"
+    "${_xy_ffmpeg_source_dir}/libswresample/libswresample.a"
+    "${_xy_ffmpeg_source_dir}/libavutil/libavutil.a"
+    m atomic ole32 uuid user32 bcrypt)
+add_dependencies(XCore XYFFmpegBuild)
 xy_module(Middle)
 
 
@@ -138,7 +230,10 @@ if(WIN32)
     target_link_libraries(UI PUBLIC opengl32)
 endif()
 # imgui 源码并入 UI 模块
-file(GLOB IMGUI_SRC "${PROJECT_SOURCE_DIR}/vendor/imgui/*.cpp" "${PROJECT_SOURCE_DIR}/vendor/imgui/backends/*.cpp")
+file(GLOB IMGUI_SRC "${PROJECT_SOURCE_DIR}/vendor/imgui/*.cpp")
+list(APPEND IMGUI_SRC
+    "${PROJECT_SOURCE_DIR}/vendor/imgui/backends/imgui_impl_win32.cpp"
+    "${PROJECT_SOURCE_DIR}/vendor/imgui/backends/imgui_impl_opengl3.cpp")
 target_sources(UI PRIVATE ${IMGUI_SRC})
 target_include_directories(UI PUBLIC
     "${PROJECT_SOURCE_DIR}/vendor/imgui"

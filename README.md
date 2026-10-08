@@ -13,7 +13,7 @@ X_Y/Modules
 │   ├── Log/               # 🟢 自研彩色日志系统（最成熟）+ DataStoreDevice 后端
 │   ├── Memory/            #   Buffer 内存池 + RingBuffer + LoopQueue 环形队列
 │   ├── Timer/             #   计时 / 性能分析（含 Ticker 周期线程定时器）
-│   ├── XCore/             #   通用工具（字符串转换、类型萃取等）
+│   ├── XCore/             #   通用核心、文件/内存和 image/audio/video 解码
 │   └── XMath/             #   数学库
 │
 │
@@ -37,13 +37,14 @@ X_Y/Modules
 ├── Physical/                    # 轻量物理引擎
 │
 ├── MD/                    # 📖 模块文档（Log、Window 等）
-├── vendor/                #   第三方库（glad, glm, imgui, premake等）
+├── vendor/                #   第三方库（含 stb_image 和 FFmpeg 源码）
 
 ```
 ---
 ## 构建
 
 - C++20
+- `git clone --recurse-submodules`（已有工作区运行 `git submodule update --init --recursive`）
 - cmake -S . -B build -G "MinGW Makefiles"
 - cmake --build build
 
@@ -56,6 +57,17 @@ X_Y/Modules
 
 自检也已注册到 CTest：配置并构建后运行 `ctest --test-dir build --output-on-failure`。
 图片格式由 `vendor/stb/stb_image.h` 提供。
+
+### 音视频解码
+
+`X_Y::Decode::MediaDecoder` 基于 `vendor/FFmpeg` 中的 FFmpeg 源码，可读取文件的音视频流信息并逐帧解码：
+
+- 视频帧以紧密排列的 RGBA8 像素返回。
+- 音频帧以交错排列的 float32 PCM 返回，保留源采样率和声道数。
+- `MediaFrame::TimestampSeconds` 提供帧时间戳；该 API 不负责播放、同步或 UI。
+- `XYMediaTool --self-test` 和 CTest 中的 `XYMediaDecoderSelfTest` 覆盖 WAV 音频解码。
+
+构建会把 FFmpeg 静态编译到 `build/_deps`，因此当前 Windows 构建需要 x64 MinGW 和 Git for Windows（提供 Bash）。为避免依赖 NASM，源码构建关闭了独立 x86 汇编优化。FFmpeg 按 LGPL 2.1-or-later 配置；上游源码及其许可文件位于 `vendor/FFmpeg`。
 
 ### UI 可视化测试窗口
 

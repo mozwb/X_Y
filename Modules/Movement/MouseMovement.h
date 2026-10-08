@@ -3,7 +3,7 @@
 #include "XCore/Input/Input.h"
 namespace X_Y
 {
-	using MouseCode = Input_t::MouseCode;
+	using MouseCode = Input::MouseCode;
 	class MouseMoved : public Movement
 	{
 	public:

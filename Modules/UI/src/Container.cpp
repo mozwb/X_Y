@@ -44,7 +44,7 @@ namespace X_Y
             const auto &mb = dynamic_cast<const MouseButtonPressed &>(e);
             UIMouseEvent uie;
             uie.action = MouseAction::Press;
-            uie.button = static_cast<Input_t::MouseCode>(mb.GetMouseButton());
+            uie.button = static_cast<Input::MouseCode>(mb.GetMouseButton());
             uie.x = static_cast<int>(mb.GetX());
             uie.y = static_cast<int>(mb.GetY());
             ClientPhysicalToLogical(uie.x, uie.y);

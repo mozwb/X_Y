@@ -10,10 +10,16 @@
 
 namespace X_Y
 {
+    using KeyCode = Input::KeyCode;
+    using MouseCode = Input::MouseCode;
+    using EatMode = Input::EatMode;
+    using Key = Input::Key;
+    using Mouse = Input::Mouse;
+
     namespace
     {
-        std::array<std::atomic<Input_t::EatMode>, 256> s_keyModes{};
-        std::array<std::atomic<Input_t::EatMode>, 3> s_mouseModes{};
+        std::array<std::atomic<Input::EatMode>, 256> s_keyModes{};
+        std::array<std::atomic<Input::EatMode>, 3> s_mouseModes{};
         struct EatEvent
         {
             uint32_t code;
@@ -41,15 +47,15 @@ namespace X_Y
                     (event->flags & LLKHF_INJECTED) == 0)
                 {
                     const auto mode = s_keyModes[event->vkCode].load();
-                    if (mode == Input_t::EatMode::Pass || mode == Input_t::EatMode::Capture)
+                    if (mode == Input::EatMode::Pass || mode == Input::EatMode::Capture)
                     {
                         std::lock_guard lock(s_eatQueueMutex);
                         s_keyQueue.push_back({event->vkCode,
                                               wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN});
-                        if (mode == Input_t::EatMode::Capture)
+                        if (mode == Input::EatMode::Capture)
                             return 1;
                     }
-                    if (mode == Input_t::EatMode::Block)
+                    if (mode == Input::EatMode::Block)
                         return 1;
                 }
             }
@@ -73,7 +79,7 @@ namespace X_Y
                     if (button >= 0)
                     {
                         const auto mode = s_mouseModes[button].load();
-                        if (mode == Input_t::EatMode::Pass || mode == Input_t::EatMode::Capture)
+                        if (mode == Input::EatMode::Pass || mode == Input::EatMode::Capture)
                         {
                             std::lock_guard lock(s_eatQueueMutex);
                             const uint32_t virtualButton = button == 0 ? VK_LBUTTON : button == 1 ? VK_RBUTTON
@@ -82,10 +88,10 @@ namespace X_Y
                                                     wParam == WM_LBUTTONDOWN ||
                                                         wParam == WM_RBUTTONDOWN ||
                                                         wParam == WM_MBUTTONDOWN});
-                            if (mode == Input_t::EatMode::Capture)
+                            if (mode == Input::EatMode::Capture)
                                 return 1;
                         }
-                        if (mode == Input_t::EatMode::Block)
+                        if (mode == Input::EatMode::Block)
                             return 1;
                     }
                 }
@@ -172,25 +178,25 @@ namespace X_Y
     // namespace InputMapping
     // {
 
-    //     Input_t::KeyCode Translate(uint32_t platformKey)
+    //     Input::KeyCode Translate(uint32_t platformKey)
     //     {
     //         auto *mapper = GetMapper();
-    //         return static_cast<Input_t::KeyCode>(mapper->PlatformToKey(platformKey));
+    //         return static_cast<Input::KeyCode>(mapper->PlatformToKey(platformKey));
     //     }
 
-    //     uint32_t TranslateKey(Input_t::KeyCode key)
+    //     uint32_t TranslateKey(Input::KeyCode key)
     //     {
     //         auto *mapper = GetMapper();
     //         return mapper->KeyToPlatform(static_cast<uint32_t>(key));
     //     }
 
-    //     Input_t::MouseCode TranslateMouse(uint32_t platformButton)
+    //     Input::MouseCode TranslateMouse(uint32_t platformButton)
     //     {
     //         auto *mapper = GetMapper();
-    //         return static_cast<Input_t::MouseCode>(mapper->PlatformToMouse(platformButton));
+    //         return static_cast<Input::MouseCode>(mapper->PlatformToMouse(platformButton));
     //     }
 
-    //     uint32_t TranslateMouseKey(Input_t::MouseCode button)
+    //     uint32_t TranslateMouseKey(Input::MouseCode button)
     //     {
     //         auto *mapper = GetMapper();
     //         return mapper->MouseToPlatform(static_cast<uint32_t>(button));
@@ -205,8 +211,6 @@ namespace X_Y
     public:
         uint32_t PlatformToKey(uint32_t platformKey) const override
         {
-            using namespace Input_t;
-
             // 字母 A-Z
             if (platformKey >= 'A' && platformKey <= 'Z')
                 return platformKey;
@@ -264,8 +268,6 @@ namespace X_Y
 
         uint32_t KeyToPlatform(uint32_t keyCode) const override
         {
-            using namespace Input_t;
-
             if (keyCode >= 'A' && keyCode <= 'Z')
                 return keyCode;
             if (keyCode >= '0' && keyCode <= '9')
@@ -320,7 +322,6 @@ namespace X_Y
 
         uint32_t PlatformToMouse(uint32_t platformButton) const override
         {
-            using namespace Input_t;
             if (platformButton == VK_LBUTTON)
                 return Mouse::ButtonLeft;
             if (platformButton == VK_RBUTTON)
@@ -332,7 +333,6 @@ namespace X_Y
 
         uint32_t MouseToPlatform(uint32_t mouseCode) const override
         {
-            using namespace Input_t;
             if (mouseCode == Mouse::ButtonLeft)
                 return VK_LBUTTON;
             if (mouseCode == Mouse::ButtonRight)
@@ -515,22 +515,22 @@ namespace X_Y
             return ::SendInput(1, &inp, sizeof(INPUT)) == 1;
         }
 
-        bool EatKey(uint32_t keyCode, Input_t::EatMode mode) override
+        bool EatKey(uint32_t keyCode, Input::EatMode mode) override
         {
             const uint32_t vk = KeyToPlatform(keyCode);
             if (vk == 0 || vk >= s_keyModes.size())
                 return false;
-            if (mode != Input_t::EatMode::Pass && !EnsureHookThread())
+            if (mode != Input::EatMode::Pass && !EnsureHookThread())
                 return false;
             s_keyModes[vk].store(mode);
             return true;
         }
 
-        bool EatMouse(uint32_t mouseCode, Input_t::EatMode mode) override
+        bool EatMouse(uint32_t mouseCode, Input::EatMode mode) override
         {
-            if (mouseCode > Input_t::Mouse::ButtonMiddle)
+            if (mouseCode > Input::Mouse::ButtonMiddle)
                 return false;
-            if (mode != Input_t::EatMode::Pass && !EnsureHookThread())
+            if (mode != Input::EatMode::Pass && !EnsureHookThread())
                 return false;
             s_mouseModes[mouseCode].store(mode);
             return true;
@@ -573,9 +573,9 @@ namespace X_Y
         void ResetEatState() override
         {
             for (auto &mode : s_keyModes)
-                mode.store(Input_t::EatMode::Pass);
+                mode.store(Input::EatMode::Pass);
             for (auto &mode : s_mouseModes)
-                mode.store(Input_t::EatMode::Pass);
+                mode.store(Input::EatMode::Pass);
 
             std::lock_guard lock(s_eatQueueMutex);
             s_keyQueue.clear();

@@ -1,31 +1,94 @@
 ﻿#pragma once
-#include <stdint.h>
+#include <cstdint>
+#include <filesystem>
+#include <functional>
+#include <memory>
 #include <string>
+
 namespace X_Y
 {
-	namespace Input_t
+	class Input
 	{
+	public:
 		using KeyCode = unsigned int;
 		using MouseCode = unsigned int;
+
 		enum class EatMode : unsigned char
 		{
 			Pass,
 			Block,
 			Capture
 		};
-		struct xpos
+		struct MousePosition
 		{
 			float x, y;
 		};
-		class Input
+
+		struct AudioFormat
+		{
+			uint32_t SampleRate = 48000;
+			uint32_t Channels = 2;
+		};
+
+		// Samples are interleaved IEEE float32 in the normalized range [-1, 1].
+		// frameCount counts samples per channel, not individual float values.
+		// The device clears the output to silence before calling this function.
+		// It runs on the audio worker thread: keep it short and do not block or allocate.
+		using RenderCallback = std::function<void(
+			float *interleavedSamples,
+			uint32_t frameCount,
+			const AudioFormat &format)>;
+
+		class AudioOutputDevice
 		{
 		public:
-			// pressed适合Ui,窗口行为，否则建议使用down的相关函数
-			//  检测按键/鼠标按下状态。返回 true 表示当前帧按下，false 表示未按下。
-			//   注意：IsKeyPressed/IsMouseButtonPressed 走 KeyMapper(供 UI/窗口事件)，
-			//       与 IsKeyDown/IsMouseDown 走硬件轮询并存，各司其职。
-			static bool IsKeyPressed(KeyCode key);
-			static bool IsMouseButtonPressed(MouseCode button);
+			virtual ~AudioOutputDevice() = default;
+
+			virtual bool Open(const AudioFormat &format, RenderCallback callback) = 0;
+			virtual bool Start() = 0;
+			virtual void Stop() = 0;
+			virtual void Close() = 0;
+			virtual bool IsOpen() const = 0;
+			virtual AudioFormat GetFormat() const = 0;
+			virtual std::string GetErrorMessage() const = 0;
+		};
+
+		class AudioOutputDeviceFactory
+		{
+		public:
+			static std::unique_ptr<AudioOutputDevice> CreateDefault();
+		};
+
+		class AudioPlayer
+		{
+		public:
+			AudioPlayer();
+			~AudioPlayer();
+
+			AudioPlayer(const AudioPlayer &) = delete;
+			AudioPlayer &operator=(const AudioPlayer &) = delete;
+
+			bool Open(const std::filesystem::path &filePath);
+			bool Play();
+			void Pause();
+			bool Stop();
+			void Close();
+
+			bool IsOpen() const;
+			bool IsPlaying() const;
+			std::string GetErrorMessage() const;
+
+		private:
+			struct Impl;
+			std::unique_ptr<Impl> m_Impl;
+		};
+
+		// pressed适合Ui,窗口行为，否则建议使用down的相关函数
+		// 检测按键/鼠标按下状态。返回 true 表示当前帧按下，false 表示未按下。
+		// 注意：IsKeyPressed/IsMouseButtonPressed 走 KeyMapper(供 UI/窗口事件)，
+		// 与 IsKeyDown/IsMouseDown 走硬件轮询并存，各司其职。
+		static bool IsKeyPressed(KeyCode key);
+		static bool IsMouseButtonPressed(MouseCode button);
 			// 返回当前按下的键码/鼠标按键码,如果没有按下返回0
 			// 多个按键同时按下时,返回第一个或者键码值小的，反正只能获取一个
 			static KeyCode GetKeyPressed();
@@ -33,7 +96,7 @@ namespace X_Y
 
 			// 获取鼠标位置。返回的是全局屏幕坐标，非窗口客户区坐标。
 			// 需要窗口客户区坐标时，去 BaseWin 找 ScreenToClient / GetMouseScreenPos 等接口。
-			static xpos GetMousePosition();
+		static MousePosition GetMousePosition();
 			static float GetMouseX();
 			static float GetMouseY();
 
@@ -60,16 +123,16 @@ namespace X_Y
 			static KeyCode GetKeyDown();			   // GetAsyncKeyState 直读
 			static MouseCode GetMouseDown();		   // GetAsyncKeyState 直读
 			// 平台键 → 内部键（接收 uint32_t 类型键码）
-			static Input_t::KeyCode Translate(uint32_t platformKey);
+		static KeyCode Translate(uint32_t platformKey);
 
 			// 内部键 → 平台键
-			static uint32_t TranslateKey(Input_t::KeyCode key);
+		static uint32_t TranslateKey(KeyCode key);
 
 			// 平台鼠标键 → 内部鼠标键
-			static Input_t::MouseCode TranslateMouse(uint32_t platformButton);
+		static MouseCode TranslateMouse(uint32_t platformButton);
 
 			// 内部鼠标键 → 平台键
-			static uint32_t TranslateMouseKey(Input_t::MouseCode button);
+		static uint32_t TranslateMouseKey(MouseCode button);
 
 			// 给Input添加模拟输入的方法,直接输入到系统输入流,不依赖窗口焦点,可用于全局输入
 			/**
@@ -117,9 +180,8 @@ namespace X_Y
 			static void ClearEatMouseQueue();
 			static void ResetEatState();
 			static void StopHooks();
-		};
 
-		namespace Key
+		struct Key
 		{
 			enum : KeyCode
 			{
@@ -255,10 +317,10 @@ namespace X_Y
 				RightSuper = 347,
 				Menu = 348
 			};
-		}
-		namespace Mouse
-		{
+		};
 
+		struct Mouse
+		{
 			enum : MouseCode
 			{
 				// From glfw3.h
@@ -276,6 +338,6 @@ namespace X_Y
 				ButtonRight = Button1,
 				ButtonMiddle = Button2
 			};
-		}
-	}
+		};
+	};
 }

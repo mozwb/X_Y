@@ -3,7 +3,7 @@
 #include "XCore/Input/Input.h"
 namespace X_Y
 {
-	using KeyCode = Input_t::KeyCode;
+	using KeyCode = Input::KeyCode;
 	class KeyMovement : public Movement
 	{
 	public:

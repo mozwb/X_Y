@@ -24,14 +24,14 @@ enum class MouseAction { Press, Move, Release, Scroll };
 struct UIMouseEvent : public UIInputEvent
 {
     MouseAction action = MouseAction::Move;
-    Input_t::MouseCode button = Input_t::Mouse::ButtonLeft;  // 有效（Press/Release/Scroll 用）
+    Input::MouseCode button = Input::Mouse::ButtonLeft;  // 有效（Press/Release/Scroll 用）
     int scrollDelta = 0;   // 滚轮增量（单击=1格，>0 向上，<0 向下）
 };
 
 // 按键事件
 struct UIKeyEvent : public UIInputEvent
 {
-    Input_t::KeyCode key = 0;   // 0 = 无（仅字符）
+    Input::KeyCode key = 0;   // 0 = 无（仅字符）
     wchar_t ch = 0;
     bool isChar = false;        // true=字符输入(WM_CHAR)，false=按键(WM_KEYDOWN)
 };

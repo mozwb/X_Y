@@ -103,8 +103,7 @@ namespace X_Y
             return;
         }
 
-        using namespace Input_t;
-        Input_t::KeyCode key = ke->key;
+        Input::KeyCode key = ke->key;
         bool changed = false;
 
         // 光标按 UTF-8 字符边界步进
@@ -130,23 +129,23 @@ namespace X_Y
 
         switch (key)
         {
-        case Key::Left:
+        case Input::Key::Left:
             m_CursorPos = prevCharStart(m_Text, m_CursorPos);
             break;
-        case Key::Right:
+        case Input::Key::Right:
             m_CursorPos = nextCharEnd(m_Text, m_CursorPos);
             break;
-        case Key::Home:
+        case Input::Key::Home:
             m_CursorPos = 0;
             break;
-        case Key::Enter:
+        case Input::Key::Enter:
             if (OnEnter)
                 OnEnter();
             break;
-        case Key::End:
+        case Input::Key::End:
             m_CursorPos = (int)m_Text.size();
             break;
-        case Key::Delete:
+        case Input::Key::Delete:
         {
             if (m_CursorPos < (int)m_Text.size())
             {
@@ -156,7 +155,7 @@ namespace X_Y
             }
             break;
         }
-        case Key::Backspace:
+        case Input::Key::Backspace:
         {
             if (m_CursorPos > 0)
             {

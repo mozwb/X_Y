@@ -86,5 +86,20 @@ namespace X_Y
                 return (target);
             }
         }
+
+        template <typename Blueprint, typename Target>
+        static decltype(auto) DecodeNext(Blueprint &blueprint, Target &target)
+        {
+            if constexpr (requires {
+                              blueprint.DecodeNext(target);
+                          })
+            {
+                return blueprint.DecodeNext(target);
+            }
+            else
+            {
+                return blueprint.ReadNext(target);
+            }
+        }
     };
 }

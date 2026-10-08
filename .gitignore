@@ -2,7 +2,7 @@
 **/.vscode/
 **/build/
 **/dist/
-
+**/DataStore/
 #忽略当前目录某文件
 git_push.bat
 

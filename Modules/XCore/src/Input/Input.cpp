@@ -23,8 +23,10 @@ namespace X_Y
         return s_Mapper;
     }
 
-    namespace Input_t
-    {
+        using KeyCode = Input::KeyCode;
+        using MouseCode = Input::MouseCode;
+        using EatMode = Input::EatMode;
+        using MousePosition = Input::MousePosition;
 
         bool Input::IsKeyPressed(KeyCode key)
         {
@@ -48,7 +50,7 @@ namespace X_Y
             return static_cast<MouseCode>(mapper->GetMouseButtonPressed());
         }
 
-        xpos Input::GetMousePosition()
+        MousePosition Input::GetMousePosition()
         {
             float x, y;
             GetMapper()->GetMousePos(x, y);
@@ -161,25 +163,25 @@ namespace X_Y
             return static_cast<MouseCode>(mapper->GetMouseDown());
         }
 
-        Input_t::KeyCode Input::Translate(uint32_t platformKey)
+        Input::KeyCode Input::Translate(uint32_t platformKey)
         {
             auto *mapper = GetMapper();
-            return static_cast<Input_t::KeyCode>(mapper->PlatformToKey(platformKey));
+            return static_cast<Input::KeyCode>(mapper->PlatformToKey(platformKey));
         }
 
-        uint32_t Input::TranslateKey(Input_t::KeyCode key)
+        uint32_t Input::TranslateKey(Input::KeyCode key)
         {
             auto *mapper = GetMapper();
             return mapper->KeyToPlatform(static_cast<uint32_t>(key));
         }
 
-        Input_t::MouseCode Input::TranslateMouse(uint32_t platformButton)
+        Input::MouseCode Input::TranslateMouse(uint32_t platformButton)
         {
             auto *mapper = GetMapper();
-            return static_cast<Input_t::MouseCode>(mapper->PlatformToMouse(platformButton));
+            return static_cast<Input::MouseCode>(mapper->PlatformToMouse(platformButton));
         }
 
-        uint32_t Input::TranslateMouseKey(Input_t::MouseCode button)
+        uint32_t Input::TranslateMouseKey(Input::MouseCode button)
         {
             auto *mapper = GetMapper();
             return mapper->MouseToPlatform(static_cast<uint32_t>(button));
@@ -279,5 +281,4 @@ namespace X_Y
         {
             return SimulateTypeText(utf8Str.c_str(), charIntervalMs);
         }
-    } // namespace Input_t
 } // namespace X_Y

@@ -1,0 +1,9 @@
+[submodule "vendor/imgui"]
+	path = vendor/imgui
+	url = https://github.com/ocornut/imgui.git
+[submodule "vendor/stb"]
+	path = vendor/stb
+	url = https://github.com/nothings/stb.git
+[submodule "vendor/FFmpeg"]
+	path = vendor/FFmpeg
+	url = https://github.com/FFmpeg/FFmpeg.git

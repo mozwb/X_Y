@@ -173,7 +173,7 @@ namespace X_Y
         // 物理客户区 → 物理屏幕(全局坐标)
         ClientToScreenPhysical(x, y);
         // 复用 Input 层搬光标，不在此重复封装 Win32 API
-        Input_t::Input::SetMousePosition((float)x, (float)y);
+        Input::SetMousePosition((float)x, (float)y);
     }
 
     // ── 鼠标 & 光标 ───────────────────────────────

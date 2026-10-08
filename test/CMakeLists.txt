@@ -3,10 +3,20 @@ add_executable(XYImageTool
     src/ImageTool.cpp)
 target_link_libraries(XYImageTool PRIVATE UI)
 
+add_executable(XYMediaTool
+    src/MediaTool.cpp)
+target_link_libraries(XYMediaTool PRIVATE XCore)
+
+add_executable(XYAudioOutputTool
+    src/AudioOutputTool.cpp)
+target_link_libraries(XYAudioOutputTool PRIVATE XCore)
+
 add_executable(XYVisualTest
     src/main.cpp)
 target_link_libraries(XYVisualTest PRIVATE UI)
 
 if(BUILD_TESTING)
     add_test(NAME XYImageDecoderSelfTest COMMAND XYImageTool --self-test)
+    add_test(NAME XYMediaDecoderSelfTest COMMAND XYMediaTool --self-test)
+    add_test(NAME XYAudioOutputFactorySelfTest COMMAND XYAudioOutputTool)
 endif()

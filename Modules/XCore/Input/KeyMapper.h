@@ -42,8 +42,8 @@ namespace X_Y
         virtual bool SimulateKey(uint32_t keyCode, bool pressed) = 0;
         virtual bool SimulateMouse(uint32_t mouseCode, bool pressed) = 0;
         virtual bool SimulateMouseWheel(float delta) = 0;
-        virtual bool EatKey(uint32_t keyCode, Input_t::EatMode mode) = 0;
-        virtual bool EatMouse(uint32_t mouseCode, Input_t::EatMode mode) = 0;
+        virtual bool EatKey(uint32_t keyCode, Input::EatMode mode) = 0;
+        virtual bool EatMouse(uint32_t mouseCode, Input::EatMode mode) = 0;
         virtual bool TryGetEatKey(uint32_t &keyCode, bool &pressed) = 0;
         virtual bool TryGetEatMouse(uint32_t &mouseCode, bool &pressed) = 0;
         virtual void ClearEatKeyQueue() = 0;
