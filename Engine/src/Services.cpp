@@ -50,4 +50,17 @@ namespace xy
         const auto it = entries_.find(name);
         return it == entries_.end() ? std::string() : it->second.owner;
     }
+
+    std::vector<std::string> Services::NamesWithPrefix(const std::string& prefix) const
+    {
+        std::vector<std::string> out;
+        for (const auto& [name, e] : entries_)
+        {
+            if (name.compare(0, prefix.size(), prefix) == 0)
+            {
+                out.push_back(name);
+            }
+        }
+        return out;
+    }
 }

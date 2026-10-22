@@ -4,6 +4,70 @@
 
 ---
 
+## 2026-10-22（五）· B3 命令：内核只认 `run`
+
+### 定下来的模型（砚台的）
+
+```
+脚本 ──► 命令
+          ├─ 内核命令：alloc / free / mem / help / commands
+          └─ dll 命令：微指令（hello / fail …）
+
+内核只有一个动词：run <命令名> [参数...]
+「直接敲命令名」是解析器补的 run —— 以后写变量/表达式解析器时，只换解析器，内核不动。
+```
+
+### 三类入口 + 交互模式（都有了）
+
+| 入口 | 用法 | 验证 |
+| --- | --- | --- |
+| 微程序 | `--program X.dll [args]` | 原有，回归通过 |
+| 外部程序 | `--exec cmd.exe /c "exit 7"` | 退出码 7 原样返回 |
+| 单条指令 | `--run hello world` | dll 命令执行 |
+| 交互 | 无参数 | `> ` 提示符，内核命令与 dll 命令混用 |
+
+### 实现（约 400 行）
+
+- `Engine/include/xy_command.h`：`XyCommandV1 { size, name, help, invoke(self,argc,argv), self }`
+- 命令**不占用 host 新字段**：注册成服务 `cmd.<名字>`，命令表扫前缀即可。
+  这样 host 表仍是 64 字节，没有为「命令」再长一截。
+- `Engine/src/CommandTable.*`：每次查找前刷新，模块装卸后自动跟上，不留旧指针
+- `Engine/src/KernelCommands.*`：alloc/free/mem/help/commands，和 dll 命令走**同一个** `XyCommandV1`，没有特权分支
+- `Engine/src/Shell.*`：`ParseLine` → `Instruction{verb,args}` → `Execute`；内核只接受 `verb == "run"`
+- `free` 只认 `alloc` 登记过的地址，外部指针一律拒绝（守住「成对」这条线）
+
+### 实测
+
+```
+> help
+内核只认一个动词: run <命令> [参数...]
+
+命令列表:
+  alloc        分配一块内存，打印地址
+  commands     列出所有命令
+  fail         总是返回 42          ← 来自 HelloCmd.dll
+  free         释放 alloc 发出的地址
+  hello        打招呼：hello [名字...]  ← 来自 HelloCmd.dll
+  help         帮助：help 或 <命令>
+  mem          列出当前分配
+
+> alloc 256
+0x000002b8dc2c70b0  256 bytes
+> mem
+块数 1，共 256 字节
+```
+
+`--run fail` 也验过：命令返回 42，进程退出码就是 42。
+
+### 已知限制
+
+- **命令行里的中文会乱码**：Windows 的 `argv` 走 ANSI 代码页（本机 936），而程序内部一律 UTF-8。
+  修法是给 exe 加 UTF-8 manifest（`<activeCodePage>UTF-8</activeCodePage>`，Win10 1903+），待做。
+- 解析器目前只按空白切词，没有引号/转义。等写变量解析器时一起补。
+- `--exec` 只在必要时给参数加引号（无条件加会把 `cmd /c exit 7` 拆错，已经踩过一次）。
+
+---
+
 ## 2026-10-22（四）· B2 模块装载 + 内建/DLL 分界
 
 ### 定位（按你的划分落地）

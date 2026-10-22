@@ -19,6 +19,9 @@ namespace xy
         // 该注册者名下的所有服务名（卸载前反查用）
         std::vector<std::string> OwnedBy(const std::string& owner) const;
 
+        // 名字前缀匹配（命令表靠它把 cmd.* 全捞出来）
+        std::vector<std::string> NamesWithPrefix(const std::string& prefix) const;
+
         // 谁提供的这个服务（用于错误信息）
         std::string OwnerOf(const std::string& name) const;
 

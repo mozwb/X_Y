@@ -6,6 +6,7 @@
 
 #include "Services.h"
 
+#include <map>
 #include <string>
 
 namespace xy
@@ -14,10 +15,16 @@ namespace xy
     {
         Services services;
 
+        // 内核命令 alloc 发出的块：地址 → 字节数。free 只认这里登记过的地址。
+        std::map<void*, size_t> blocks;
+
         // 正在初始化的模块名。为空表示「内核自己在注册」。
         // 由 ModuleRegistry 在调用 xy_module_v1 前后设置，
         // 这样模块不需要自己报名字，也说不了谎。
         std::string currentModule;
+
+        // 交互模式：命令输出走 stdout；否则也可以再改
+        bool interactive = false;
 
         XyHostV1 host{};
     };
