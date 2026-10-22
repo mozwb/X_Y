@@ -94,6 +94,15 @@ if(EXISTS "${PROJECT_SOURCE_DIR}/Engine/CMakeLists.txt")
     add_subdirectory(Engine)
 endif()
 
+# ── 程序（被引擎载入的 DLL）──────────────────────────────────────────────────
+# Programs/<Name>/CMakeLists.txt 一出现就自动接进来。
+file(GLOB _xy_programs CONFIGURE_DEPENDS
+    "${PROJECT_SOURCE_DIR}/Programs/*/CMakeLists.txt")
+foreach(_p IN LISTS _xy_programs)
+    get_filename_component(_pdir "${_p}" DIRECTORY)
+    add_subdirectory("${_pdir}")
+endforeach()
+
 # ── 模块选择器：-DXY_MODULES=Log 只编这条链 ─────────────────────────────────
 if(XY_MODULES)
     string(REPLACE "," ";" _xy_wanted "${XY_MODULES}")
@@ -116,7 +125,22 @@ endif()
 
 # ── 配置摘要 ─────────────────────────────────────────────────────────────────
 get_property(_xy_all GLOBAL PROPERTY XY_DECLARED_MODULES)
-message(STATUS "模块产物: ${XY_MODULE_LINKAGE}（${_xy_all}）")
+set(_xy_shared "")
+set(_xy_static "")
+set(_xy_interface "")
+foreach(_m IN LISTS _xy_all)
+    get_target_property(_k ${_m} XY_ARTIFACT_KIND)
+    if(_k STREQUAL "SHARED")
+        list(APPEND _xy_shared ${_m})
+    elseif(_k STREQUAL "STATIC")
+        list(APPEND _xy_static ${_m})
+    else()
+        list(APPEND _xy_interface ${_m})
+    endif()
+endforeach()
+message(STATUS "产物 dll : ${_xy_shared}")
+message(STATUS "产物 lib : ${_xy_static}")
+message(STATUS "header   : ${_xy_interface}")
 if(XY_MODULE_LINKAGE STREQUAL "SHARED" AND XY_STRICT_EXPORTS)
     message(STATUS
         "注意: dll 只导出显式 __declspec(dllexport) 的符号（XY_STRICT_EXPORTS=ON）。"

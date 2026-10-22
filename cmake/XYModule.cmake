@@ -52,11 +52,16 @@ endfunction()
 
 
 # ── 模块：lib 或 dll ─────────────────────────────────────────────────────────
-# xy_module(<Name> [HEADER_ONLY] [STATIC] [SHARED] [DEPS <target>...] [EXCLUDE <regex>...])
+# xy_module(<Name> [HEADER_ONLY] [STATIC] [SHARED] [DIR <dir>]
+#           [DEPS <target>...] [EXCLUDE <regex>...])
+#   DIR 默认 Modules/<Name>；程序 DLL 可以用 DIR 指到 Programs/<Name>
 function(xy_module NAME)
-    cmake_parse_arguments(M "HEADER_ONLY;STATIC;SHARED" "" "DEPS;EXCLUDE" ${ARGN})
+    cmake_parse_arguments(M "HEADER_ONLY;STATIC;SHARED" "DIR" "DEPS;EXCLUDE" ${ARGN})
 
-    set(_dir "${XY_MODULES_ROOT}/${NAME}")
+    set(_dir "${M_DIR}")
+    if(NOT _dir)
+        set(_dir "${XY_MODULES_ROOT}/${NAME}")
+    endif()
     if(NOT IS_DIRECTORY "${_dir}")
         message(FATAL_ERROR "xy_module(${NAME}): 模块目录不存在 -> ${_dir}")
     endif()

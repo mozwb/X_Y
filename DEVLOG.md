@@ -4,6 +4,64 @@
 
 ---
 
+## 2026-10-22（三）· 仓库分家 + 最小引擎跑通
+
+### 仓库结构（已定）
+
+| 仓库 | 角色 | 内容 |
+| --- | --- | --- |
+| `X_Y` | **引擎侧** | 引擎自身产物的源码：`Engine/`（xy_engine.exe，将来还有 xy.exe 构建器）、`Modules/`（引擎内建模块）、`cmake/` |
+| `Modules`（原 `X_YB`） | **工具源码仓库** | 自己写的工具模块源码（UI / Render / Widget / Media / Network …），不是引擎的一部分 |
+
+- `Tools/` 取消：构建器是引擎的一部分，源码直接放 `Engine/`，产物 `xy.exe` 也从这里出。
+- 改名有一个**真实副作用**：vendor 回退路径原本指向 `../X_YB/vendor`，改名后直接断掉（configure 报「找不到 vendor」）。已修成候选列表 + 命中外部路径时显式告警：`vendor/` → `../Modules/vendor` → `../X_YB/vendor`。
+  **这不是长久之计**：引擎仓库应当自带 vendor（glm 1.6MB、stb 11MB、FFmpeg 头 9.5MB + `.a` 22MB，总共约 44MB，不含 FFmpeg 的 136MB 源码）。
+- 空壳 `D:\workbench\X_YB` 目录已删。
+
+### B1 最小运行器（已跑通）
+
+新增：
+
+```
+Engine/include/xy_api.h      引擎与模块/程序之间唯一的 ABI 契约（C 头，C/C++ 共用）
+Engine/src/Host.{h,cpp}      host 表的日志 / 分配器实现
+Engine/src/main.cpp          xy_engine.exe：解析参数 → LoadLibrary → 调入口 → 退出
+Engine/CMakeLists.txt        xy_program(xy_engine EXPORTS)
+Programs/HelloXy/            最小程序 DLL，只认 xy_api.h，不链引擎
+```
+
+ABI 契约的三条硬规则（写在 `xy_api.h` 顶部）：
+
+1. 跨边界只传 C 类型（POD / 函数指针 / C 字符串），不传 `std::string`、容器、异常。
+2. 内存成对：`host->alloc` 发的只由 `host->free` 还。
+3. 结构体只在**尾部追加**字段，使用方先看 `size` 再读；`abi_version` 不等就拒绝加载。
+
+`XyHostV1` 目前 40 字节：`size / abi_version / user / log / alloc / free`。
+
+### 实测结果
+
+| 项 | 结果 |
+| --- | --- |
+| `xy_engine --version` | `abi=1 host_size=40` |
+| `xy_engine --program HelloXy.dll a b c` | 日志打印 + argv 透传 + `host->alloc/free` 走一遍，exit 0 |
+| 缺 `--program` | 打印用法，exit 64 |
+| 载入不存在的 dll | 报错码 126，exit 65 |
+| **严格导出** | `HelloXy.dll` 导出表**只有 1 个符号**：`xy_program_v1` |
+
+最后一条是本轮最重要的验证：`-Wl,--exclude-all-symbols` 生效，模块内部符号（含 `std::` 实例化）全部不导出。这意味着之前担心的「两个 dll 符号冲突」在结构上被堵死——每个 dll 只交出一个入口名。
+
+### 踩到的编译坑
+
+- `FreeLibrary` / `GetProcAddress` 要 `HMODULE` 不是 `void*`，句柄得用平台原生类型（`NativeHandle`）。
+- `alignof(std::max_align_t)` 需要 `<cstddef>`。
+- `_aligned_malloc` 必须配 `_aligned_free`（`malloc` 的指针不能交给 `_aligned_free`）。Hash 到的结论：**分配器只留一条路径**——Windows 一律 `_aligned_malloc`，POSIX 一律 `posix_memalign`，这样 `HostFree` 不需要知道调用方的 `align`。
+
+### 下一步
+
+B2：模块装载。用 `Modules/` 里的真实模块（先 `Timer` 这种无依赖的）验证 `xy_module_v1` 装载 + 卸载，重点看**卸载后静态注册表有没有悬垂指针**——这是文档里列的头号风险。
+
+---
+
 ## 2026-10-22（二）· dll / exe / lib 三类产物 + 平台接线下方到模块
 
 ### 需求
