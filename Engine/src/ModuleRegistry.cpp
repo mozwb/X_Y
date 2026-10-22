@@ -71,6 +71,8 @@ namespace xy
         Module m;
         m.path = path;
         m.name = BaseName(path, true);
+        // 归属键带序号：不同目录下的同名 dll 不会互相冒领服务
+        m.owner = m.name + "#" + std::to_string(++seq_);
 
         m.handle = OpenLibrary(path);
         if (!m.handle)
@@ -94,7 +96,7 @@ namespace xy
             FindSymbol(AsHandle(m.handle), XY_MODULE_SHUTDOWN_ENTRY));
 
         // 归属由引擎标注，模块无法伪装
-        ctx_.currentModule = m.name;
+        ctx_.currentModule = m.owner;
         const int rc = init(&ctx_.host);
         ctx_.currentModule.clear();
 
@@ -116,7 +118,7 @@ namespace xy
     bool ModuleRegistry::Unload(Module& m, int& leaks)
     {
         // 1. 先让模块自己反注册
-        ctx_.currentModule = m.name;
+        ctx_.currentModule = m.owner;
         if (m.shutdown)
         {
             m.shutdown();
@@ -130,7 +132,7 @@ namespace xy
         ctx_.currentModule.clear();
 
         // 2. 反查它名下还剩下的服务 —— 这些指针马上就要悬垂了
-        const auto left = ctx_.services.OwnedBy(m.name);
+        const auto left = ctx_.services.OwnedBy(m.owner);
         for (const auto& s : left)
         {
             std::fprintf(stderr,

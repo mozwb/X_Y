@@ -32,7 +32,8 @@ namespace xy
         struct Module
         {
             std::string path;
-            std::string name;
+            std::string name;  // 显示用（文件名）
+            std::string owner; // 归属键：name#序号，保证同名 dll 不串味
             void* handle = nullptr;
             xy_module_shutdown_v1_fn shutdown = nullptr;
         };
@@ -42,5 +43,6 @@ namespace xy
 
         EngineContext& ctx_;
         std::vector<Module> modules_;
+        unsigned seq_ = 0;
     };
 }

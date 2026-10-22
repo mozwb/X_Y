@@ -83,10 +83,24 @@ namespace
     void HostRemoveService(void* user, const char* name)
     {
         auto* ctx = static_cast<EngineContext*>(user);
-        if (ctx && name)
+        if (!ctx || !name)
         {
-            ctx->services.Remove(name);
+            return;
         }
+        // 注册时引擎标注了归属，删除时必须验，否则模块 B 能删掉模块 A 的服务。
+        // currentModule 为空 = 引擎自己在删，放行。
+        if (!ctx->currentModule.empty())
+        {
+            const std::string owner = ctx->services.OwnerOf(name);
+            if (!owner.empty() && owner != ctx->currentModule)
+            {
+                std::fprintf(stderr,
+                             "xy_engine: 拒绝 %s 删除他人服务 '%s'（归属 %s）\n",
+                             ctx->currentModule.c_str(), name, owner.c_str());
+                return;
+            }
+        }
+        ctx->services.Remove(name);
     }
 }
 

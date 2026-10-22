@@ -66,6 +66,25 @@ XyRemoveServiceFn remove_service;
 2. 模块里的 `HMODULE` 不能存成 `void*` 再直接传给 `FreeLibrary`，要有 `AsHandle()` 过渡；
    头文件里保留 `void*` 是为了不把平台类型漏进公共头。
 
+### 补充 · 注册表「只增」的真实代价（2026-10-22 晚）
+
+砚台问「注册表只增会不会有问题」，答案是会，分两层：
+
+**host 表只追加**（ABI 层）
+- 忘了 `XY_HOST_HAS` 不是读到 NULL，而是读到结构体**后面的内存**当函数指针用 → 静默越界。
+- 字段签名一旦发布不可改，加能力只能 `xxx2`；老字段语义永久冻死。
+- 真冻结的做法是把 host 面积压到最小，只留 `log/alloc/free/query`，
+  能力全部走 `query(iface_id, ver)`。**`query` 还没实现，是下一步候选。**
+
+**服务表只增**（运行期层）
+- 有界：`Unload` 强制 `erase`，`modules_` 会 `clear()`，反复装卸不会涨。
+- 但查出两个真洞，已修：
+
+| 洞 | 修法 | 验证 |
+| --- | --- | --- |
+| `remove_service` 不校验归属，模块 B 能删掉模块 A 的服务 | `HostRemoveService` 比对 owner；引擎自己（`currentModule` 为空）放行 | `test/thief`：`拒绝 Thief#2 删除他人服务 'probe.marker'（归属 Probe#1）` |
+| owner 用文件名，`a/Foo.dll` 与 `b/Foo.dll` 归因串味 | owner 键改为 `名称#装载序号` | 同上，日志里能看到 `Probe#1` / `Thief#2` |
+
 ### 还没做（下一步的真正岔路口）
 
 DataStore / Decoder / Input 现在是 `lib`，因为一旦切 `SHARED` 就有两条路，必须先选：
