@@ -1,6 +1,6 @@
 #include "Services.h"
 
-namespace xy
+namespace X_Y
 {
     int Services::Add(const std::string& name, void* ptr, const std::string& owner)
     {

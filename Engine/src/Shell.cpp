@@ -9,7 +9,7 @@
 #include <cstring>
 #include <iostream>
 
-namespace xy
+namespace X_Y
 {
     namespace
     {

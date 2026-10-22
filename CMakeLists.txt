@@ -89,7 +89,7 @@ endforeach()
 
 # ── 可执行产物 ───────────────────────────────────────────────────────────────
 # 构建器（xy）是引擎的一部分，不是外部工具，所以也放在 Engine/ 下，
-# 和 xy_engine.exe 共用 Engine/CMakeLists.txt。目录里有 CMakeLists.txt 才接进来。
+# 和 X_Y.exe 共用 Engine/CMakeLists.txt。目录里有 CMakeLists.txt 才接进来。
 if(EXISTS "${PROJECT_SOURCE_DIR}/Engine/CMakeLists.txt")
     add_subdirectory(Engine)
 endif()

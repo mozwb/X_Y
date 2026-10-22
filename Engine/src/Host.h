@@ -9,7 +9,7 @@
 #include <map>
 #include <string>
 
-namespace xy
+namespace X_Y
 {
     struct EngineContext
     {

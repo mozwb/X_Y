@@ -25,7 +25,7 @@ namespace
         }
     }
 
-    using xy::EngineContext;
+    using X_Y::EngineContext;
 
     void HostLog(void*, int level, const char* message)
     {
@@ -95,7 +95,7 @@ namespace
             if (!owner.empty() && owner != ctx->currentModule)
             {
                 std::fprintf(stderr,
-                             "xy_engine: 拒绝 %s 删除他人服务 '%s'（归属 %s）\n",
+                             "X_Y: 拒绝 %s 删除他人服务 '%s'（归属 %s）\n",
                              ctx->currentModule.c_str(), name, owner.c_str());
                 return;
             }
@@ -104,7 +104,7 @@ namespace
     }
 }
 
-namespace xy
+namespace X_Y
 {
     const XyHostV1* BuildHost(EngineContext& ctx)
     {

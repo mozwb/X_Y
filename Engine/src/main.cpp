@@ -1,4 +1,4 @@
-// xy_engine.exe —— 运行期宿主。四种入口，共用同一个命令表和模块注册表：
+// X_Y.exe —— 运行期宿主。四种入口，共用同一个命令表和模块注册表：
 //
 //   --program <dll> [参数...]   跑一个微程序（dll，导出 xy_program_v1）
 //   --exec    <exe> [参数...]   把可执行程序当子进程拉起（我们不管它之后怎么跑）
@@ -51,15 +51,15 @@ namespace
     void PrintUsage()
     {
         std::fputs(
-            "xy_engine —— X_Y 运行期宿主\n"
+            "X_Y —— X_Y 运行期宿主\n"
             "\n"
             "用法:\n"
-            "  xy_engine                                 进入交互模式\n"
-            "  xy_engine --program <dll>  [参数...]      跑微程序\n"
-            "  xy_engine --exec    <exe>  [参数...]      拉起可执行程序\n"
-            "  xy_engine --run     <命令> [参数...]      执行一条命令\n"
-            "  xy_engine --module  <dll>                 装载模块（可重复，先装先卸）\n"
-            "  xy_engine --version | --help\n"
+            "  X_Y                                 进入交互模式\n"
+            "  X_Y --program <dll>  [参数...]      跑微程序\n"
+            "  X_Y --exec    <exe>  [参数...]      拉起可执行程序\n"
+            "  X_Y --run     <命令> [参数...]      执行一条命令\n"
+            "  X_Y --module  <dll>                 装载模块（可重复，先装先卸）\n"
+            "  X_Y --version | --help\n"
             "\n"
             "内核只认一个动词: run <命令> [参数...]\n",
             stderr);
@@ -69,7 +69,7 @@ namespace
     {
         if (i + 1 >= argc)
         {
-            std::fprintf(stderr, "xy_engine: %s 缺少值\n", what);
+            std::fprintf(stderr, "X_Y: %s 缺少值\n", what);
             return false;
         }
         out = argv[++i];
@@ -119,7 +119,7 @@ namespace
                 break;
             }
 
-            std::fprintf(stderr, "xy_engine: 不认识的参数 '%s'\n", a);
+            std::fprintf(stderr, "X_Y: 不认识的参数 '%s'\n", a);
             return false;
         }
         return true;
@@ -171,7 +171,7 @@ namespace
         if (!::CreateProcessA(nullptr, buf.data(), nullptr, nullptr, TRUE, 0,
                               nullptr, nullptr, &si, &pi))
         {
-            std::fprintf(stderr, "xy_engine: 拉起 %s 失败，错误码 %lu\n",
+            std::fprintf(stderr, "X_Y: 拉起 %s 失败，错误码 %lu\n",
                          exe.c_str(), ::GetLastError());
             return 68;
         }
@@ -185,7 +185,7 @@ namespace
         const pid_t pid = ::fork();
         if (pid < 0)
         {
-            std::fputs("xy_engine: fork 失败\n", stderr);
+            std::fputs("X_Y: fork 失败\n", stderr);
             return 68;
         }
         if (pid == 0)
@@ -287,18 +287,18 @@ int main(int argc, char** argv)
     }
     if (opt.mode == Mode::Version)
     {
-        std::printf("xy_engine  abi=%u  host_size=%zu\n", XY_ABI_VERSION, sizeof(XyHostV1));
+        std::printf("X_Y  abi=%u  host_size=%zu\n", XY_ABI_VERSION, sizeof(XyHostV1));
         return 0;
     }
 
-    xy::EngineContext ctx;
-    const XyHostV1* host = xy::BuildHost(ctx);
+    X_Y::EngineContext ctx;
+    const XyHostV1* host = X_Y::BuildHost(ctx);
     ctx.services.AddBuiltin("xy.host", const_cast<XyHostV1*>(host));
-    xy::RegisterKernelCommands(ctx);
+    X_Y::RegisterKernelCommands(ctx);
 
     int status = 0;
     {
-        xy::ModuleRegistry modules(ctx);
+        X_Y::ModuleRegistry modules(ctx);
         for (const auto& m : opt.modules)
         {
             if (!modules.Load(m))
@@ -315,11 +315,11 @@ int main(int argc, char** argv)
 
         case Mode::Run:
         {
-            xy::Instruction ins;
+            X_Y::Instruction ins;
             ins.verb = "run";
             ins.args.push_back(opt.target);
             ins.args.insert(ins.args.end(), opt.args.begin(), opt.args.end());
-            status = xy::Execute(ctx, ins);
+            status = X_Y::Execute(ctx, ins);
             break;
         }
 
@@ -329,14 +329,14 @@ int main(int argc, char** argv)
             std::string err;
             if (!lib.Open(opt.target, err))
             {
-                std::fprintf(stderr, "xy_engine: 载入 %s 失败: %s\n",
+                std::fprintf(stderr, "X_Y: 载入 %s 失败: %s\n",
                              opt.target.c_str(), err.c_str());
                 return 65;
             }
             auto entry = reinterpret_cast<xy_program_v1_fn>(lib.Symbol(XY_PROGRAM_ENTRY));
             if (!entry)
             {
-                std::fprintf(stderr, "xy_engine: %s 没有导出 %s\n",
+                std::fprintf(stderr, "X_Y: %s 没有导出 %s\n",
                              opt.target.c_str(), XY_PROGRAM_ENTRY);
                 return 66;
             }
@@ -363,7 +363,7 @@ int main(int argc, char** argv)
         case Mode::Shell:
         default:
             ctx.interactive = true;
-            status = xy::RunShell(ctx, true);
+            status = X_Y::RunShell(ctx, true);
             break;
         }
     }

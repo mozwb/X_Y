@@ -2,7 +2,7 @@
 
 #include "Services.h"
 
-namespace xy
+namespace X_Y
 {
     void CommandTable::Refresh(const Services& services)
     {

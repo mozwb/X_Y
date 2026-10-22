@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace xy
+namespace X_Y
 {
     class Services;
 

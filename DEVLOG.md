@@ -4,6 +4,23 @@
 
 ---
 
+## 2026-10-22（六）· 命名改回 X_Y
+
+我之前自己把命名写成了 `xy`，是我的错。现在统一：
+
+| 我写的 | 改回 |
+| --- | --- |
+| `namespace xy` | `namespace X_Y`（和 `Core.h` 一致） |
+| target `xy_engine` / 产物 `xy_engine.exe` | target `X_Y` / 产物 `X_Y.exe` |
+| 日志前缀 `xy_engine:` | `X_Y:` |
+
+文件名 `xy_api.h` / `xy_command.h` 按你的意思**不动**。
+`XY_` 开头的大写宏（`XY_ABI_VERSION`、`XY_LOG_ERROR`…）保留，和你文档里的 `XY_API`、`XY_PLATFORM_*` 一致。
+
+冒烟：`X_Y --version` → `abi=1 host_size=64`；`--run hello world`、`--program HelloXy.dll`、交互 `alloc 128` 均正常。
+
+---
+
 ## 2026-10-22（五）· B3 命令：内核只认 `run`
 
 ### 定下来的模型（砚台的）
@@ -156,7 +173,7 @@ DataStore / Decoder / Input 现在是 `lib`，因为一旦切 `SHARED` 就有两
 | 方案 | 做法 | 代价 |
 | --- | --- | --- |
 | **(a) 走 host 服务表** | dll 只依赖 `XyHostV1`，不链 `Files`/`Memory` | 要给每个内建能力写接口，模块不能直接用 C++ 类型 |
-| **(b) 链 engine 的 import lib** | engine 导出内建符号（`ENABLE_EXPORTS` + `--whole-archive`），dll 链 `xy_engine` | 简单，但 dll 与 engine 版本死死绑定，且内建一旦改名就全炸 |
+| **(b) 链 engine 的 import lib** | engine 导出内建符号（`ENABLE_EXPORTS` + `--whole-archive`），dll 链 `X_Y` | 简单，但 dll 与 engine 版本死死绑定，且内建一旦改名就全炸 |
 
 ABI spike 证明 (b) 在 MinGW 下可行；`xy_api.h` 的服务表证明 (a) 也可行。
 **这一条决定了后面所有模块的写法，得先定。**
@@ -169,7 +186,7 @@ ABI spike 证明 (b) 在 MinGW 下可行；`xy_api.h` 的服务表证明 (a) 也
 
 | 仓库 | 角色 | 内容 |
 | --- | --- | --- |
-| `X_Y` | **引擎侧** | 引擎自身产物的源码：`Engine/`（xy_engine.exe，将来还有 xy.exe 构建器）、`Modules/`（引擎内建模块）、`cmake/` |
+| `X_Y` | **引擎侧** | 引擎自身产物的源码：`Engine/`（X_Y.exe，将来还有 xy.exe 构建器）、`Modules/`（引擎内建模块）、`cmake/` |
 | `Modules`（原 `X_YB`） | **工具源码仓库** | 自己写的工具模块源码（UI / Render / Widget / Media / Network …），不是引擎的一部分 |
 
 - `Tools/` 取消：构建器是引擎的一部分，源码直接放 `Engine/`，产物 `xy.exe` 也从这里出。
@@ -184,8 +201,8 @@ ABI spike 证明 (b) 在 MinGW 下可行；`xy_api.h` 的服务表证明 (a) 也
 ```
 Engine/include/xy_api.h      引擎与模块/程序之间唯一的 ABI 契约（C 头，C/C++ 共用）
 Engine/src/Host.{h,cpp}      host 表的日志 / 分配器实现
-Engine/src/main.cpp          xy_engine.exe：解析参数 → LoadLibrary → 调入口 → 退出
-Engine/CMakeLists.txt        xy_program(xy_engine EXPORTS)
+Engine/src/main.cpp          X_Y.exe：解析参数 → LoadLibrary → 调入口 → 退出
+Engine/CMakeLists.txt        xy_program(X_Y EXPORTS)
 Programs/HelloXy/            最小程序 DLL，只认 xy_api.h，不链引擎
 ```
 
@@ -201,8 +218,8 @@ ABI 契约的三条硬规则（写在 `xy_api.h` 顶部）：
 
 | 项 | 结果 |
 | --- | --- |
-| `xy_engine --version` | `abi=1 host_size=40` |
-| `xy_engine --program HelloXy.dll a b c` | 日志打印 + argv 透传 + `host->alloc/free` 走一遍，exit 0 |
+| `X_Y --version` | `abi=1 host_size=40` |
+| `X_Y --program HelloXy.dll a b c` | 日志打印 + argv 透传 + `host->alloc/free` 走一遍，exit 0 |
 | 缺 `--program` | 打印用法，exit 64 |
 | 载入不存在的 dll | 报错码 126，exit 65 |
 | **严格导出** | `HelloXy.dll` 导出表**只有 1 个符号**：`xy_program_v1` |
@@ -234,7 +251,7 @@ CMakeLists.txt              全局选项 + 依赖顺序 + 进目录
 cmake/XYModule.cmake        xy_module / xy_program / 产物属性
 cmake/XYVendor.cmake        xy_vendor_glm / _stb / _ffmpeg 接线目标
 Modules/<Name>/CMakeLists.txt   本模块的依赖 + 平台差异
-Engine/CMakeLists.txt       （将来）xy_program(xy_engine EXPORTS ...) → xy_engine.exe
+Engine/CMakeLists.txt       （将来）xy_program(X_Y EXPORTS ...) → X_Y.exe
 Tools/xy/CMakeLists.txt     （将来）xy.exe
 ```
 
@@ -316,5 +333,5 @@ Decoder / Files / DataStore 同理，被跳过的模块会在下游链式 `retur
 
 ### 下一步
 
-手工编 `HelloXy.dll` + 最小 `xy_engine.exe`：`LoadLibrary` → 调 `xy_program_v1(host)` → 退出。
+手工编 `HelloXy.dll` + 最小 `X_Y.exe`：`LoadLibrary` → 调 `xy_program_v1(host)` → 退出。
 顺手验证：`-Wl,--exclude-all-symbols` 能否让模块只导出入口符号（`objdump -p xxx.dll | findstr /i export`），以及 `XyHost` 结构体 + 首字段 size 的版本化写法。

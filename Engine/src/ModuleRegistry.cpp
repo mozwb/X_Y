@@ -10,7 +10,7 @@
 #  include <dlfcn.h>
 #endif
 
-namespace xy
+namespace X_Y
 {
 #if defined(_WIN32)
     using NativeHandle = ::HMODULE;
@@ -77,7 +77,7 @@ namespace xy
         m.handle = OpenLibrary(path);
         if (!m.handle)
         {
-            std::fprintf(stderr, "xy_engine: 载入模块 %s 失败\n", path.c_str());
+            std::fprintf(stderr, "X_Y: 载入模块 %s 失败\n", path.c_str());
             return false;
         }
 
@@ -85,7 +85,7 @@ namespace xy
             FindSymbol(AsHandle(m.handle), XY_MODULE_ENTRY));
         if (!init)
         {
-            std::fprintf(stderr, "xy_engine: %s 没有导出 %s\n",
+            std::fprintf(stderr, "X_Y: %s 没有导出 %s\n",
                          m.name.c_str(), XY_MODULE_ENTRY);
             CloseLibrary(AsHandle(m.handle));
             return false;
@@ -102,7 +102,7 @@ namespace xy
 
         if (rc != 0)
         {
-            std::fprintf(stderr, "xy_engine: 模块 %s 初始化失败 rc=%d\n",
+            std::fprintf(stderr, "X_Y: 模块 %s 初始化失败 rc=%d\n",
                          m.name.c_str(), rc);
             // 初始化失败也可能已经注册了一半，按卸载流程回滚
             int leaks = 0;
@@ -126,7 +126,7 @@ namespace xy
         else
         {
             std::fprintf(stderr,
-                         "xy_engine: 警告 %s 未导出 %s，只能靠引擎代查泄漏\n",
+                         "X_Y: 警告 %s 未导出 %s，只能靠引擎代查泄漏\n",
                          m.name.c_str(), XY_MODULE_SHUTDOWN_ENTRY);
         }
         ctx_.currentModule.clear();
@@ -136,7 +136,7 @@ namespace xy
         for (const auto& s : left)
         {
             std::fprintf(stderr,
-                         "xy_engine: 泄漏 %s 注册的服务 '%s'（未反注册，已强制移除）\n",
+                         "X_Y: 泄漏 %s 注册的服务 '%s'（未反注册，已强制移除）\n",
                          m.name.c_str(), s.c_str());
             ctx_.services.Remove(s);
             ++leaks;

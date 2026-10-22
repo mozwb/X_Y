@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace xy
+namespace X_Y
 {
     struct EngineContext;
 

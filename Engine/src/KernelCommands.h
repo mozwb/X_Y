@@ -2,7 +2,7 @@
 // 它们和 dll 命令走同一个 XyCommandV1 形状、同一张命令表，没有特权分支。
 #pragma once
 
-namespace xy
+namespace X_Y
 {
     struct EngineContext;
 
