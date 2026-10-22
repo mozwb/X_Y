@@ -1,2 +1,3 @@
-# Core —— 零依赖基础：字符串/类型工具。任何模块都可以放心依赖它。
-xy_module(Core)
+# Core —— 引擎内建（builtin）：编译进 xy_engine.exe，模块通过导出符号或 host 服务使用。
+# 不跟随 -DXY_MODULE_LINKAGE，内建就是内建。
+xy_module(Core STATIC)

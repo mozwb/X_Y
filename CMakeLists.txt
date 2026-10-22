@@ -69,7 +69,7 @@ endif()
 # ── cmake 层 ─────────────────────────────────────────────────────────────────
 include(cmake/XYModule.cmake)
 include(cmake/XYVendor.cmake)
-xy_vendor_init()
+xy_vendor_probe()
 
 # ── 模块：**顺序 = 依赖顺序**（被依赖的在前）────────────────────────────────
 set(XY_MODULE_ORDER

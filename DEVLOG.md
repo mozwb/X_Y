@@ -4,6 +4,82 @@
 
 ---
 
+## 2026-10-22（四）· B2 模块装载 + 内建/DLL 分界
+
+### 定位（按你的划分落地）
+
+| 类别 | 模块 | 产物 | 说明 |
+| --- | --- | --- | --- |
+| **引擎内建** | Core / Memory / Timer / Log / Files | `lib*.a` 或 header | 写死 `STATIC`，不跟随 `-DXY_MODULE_LINKAGE` |
+| **工具侧（将来 dll）** | Math / DataStore / Decoder / Input | 现在仍是 `lib` | 切 `SHARED` 前必须先解决「内建符号从哪来」，见下 |
+| **可运行程序** | `Programs/*` | `*.dll` + `xy_program_v1` | |
+| **测试夹具** | `test/probe`、`test/leaky` | `*.dll` | 只验证装载机制，不是产品 |
+
+vendor 也解耦了：`xy_vendor_probe()` 只探测、不 FATAL。引擎内核不需要 vendor，
+依赖第三方的模块（Math / Decoder / Input）自己判断 `TARGET` 在不在，不在就跳过。
+目录按 `<workspace>/Vendor` 与 `<workspace>/Modules` 的形状找，大小写都认。
+
+### 做了什么
+
+**host 表追加了服务表**（遵守「只尾部追加」，`size` 从 40 变 64）：
+
+```c
+XyAddServiceFn    add_service;      /* 重名返回非 0 */
+XyGetServiceFn    get_service;      /* 找不到返回 NULL */
+XyRemoveServiceFn remove_service;
+```
+
+配合 `XY_HOST_HAS(host, field)` 宏：老模块能用新引擎，新模块在老引擎上会自己降级。
+
+**归属由引擎判定，模块说不了谎**：`host->add_service` 不看模块自报的名字，
+而是读 `EngineContext::currentModule`——引擎在调用 `xy_module_v1` 前后设置它。
+
+**卸载流程把「悬垂」变成可检测的**：
+
+```
+1. 调用 xy_module_shutdown_v1（可选）
+2. 反查该模块名下还剩下的服务 → 逐个强制移除并计泄漏
+3. FreeLibrary
+```
+
+**顺序**：`Programs` 的 DLL 先卸载（作用域先析构），再逆序卸载模块。
+反过来的话，程序对象析构时会去摸已经 FreeLibrary 掉的模块，必崩。
+
+### 实测
+
+| 场景 | 结果 |
+| --- | --- |
+| `--module Probe.dll --program HelloXy.dll` | 装载 → 注册 → 运行程序 → 反注册 → 卸载，exit 0，无泄漏报告 |
+| `--module Leaky.dll`（故意不导出 shutdown） | `警告 Leaky 未导出 xy_module_shutdown_v1` + `泄漏 Leaky 注册的服务 'leaky.marker'（已强制移除）` |
+| `--module Nope.dll` | 报错，exit 67 |
+| 导出表 | `Probe.dll` 只有 `xy_module_v1` + `xy_module_shutdown_v1` 两个符号 |
+
+第三条是这一轮的核心收获：**文档 §7 里排第一的风险（卸载后注册表悬垂）现在是引擎自动检测的**，不靠自觉。
+
+### 踩到的坑（重要）
+
+1. **`Set-Content` 把源文件写成 GBK**。PowerShell 5.1 的 `Set-Content` 默认 ANSI（本机 936），
+   我用它改过一次 `ModuleRegistry.cpp`，中文立刻变成乱码字节，而编译仍按 `-finput-charset=UTF-8`，
+   于是运行时打印 `未导�?`。
+   **规矩：改源码只用编辑工具（写 UTF-8），不要用 PowerShell 的 `Set-Content` / `Out-File` 回写。**
+   检查办法：用 `UTF8Encoding($false,$true)` 严格解码，抛异常就是坏了。
+2. 模块里的 `HMODULE` 不能存成 `void*` 再直接传给 `FreeLibrary`，要有 `AsHandle()` 过渡；
+   头文件里保留 `void*` 是为了不把平台类型漏进公共头。
+
+### 还没做（下一步的真正岔路口）
+
+DataStore / Decoder / Input 现在是 `lib`，因为一旦切 `SHARED` 就有两条路，必须先选：
+
+| 方案 | 做法 | 代价 |
+| --- | --- | --- |
+| **(a) 走 host 服务表** | dll 只依赖 `XyHostV1`，不链 `Files`/`Memory` | 要给每个内建能力写接口，模块不能直接用 C++ 类型 |
+| **(b) 链 engine 的 import lib** | engine 导出内建符号（`ENABLE_EXPORTS` + `--whole-archive`），dll 链 `xy_engine` | 简单，但 dll 与 engine 版本死死绑定，且内建一旦改名就全炸 |
+
+ABI spike 证明 (b) 在 MinGW 下可行；`xy_api.h` 的服务表证明 (a) 也可行。
+**这一条决定了后面所有模块的写法，得先定。**
+
+---
+
 ## 2026-10-22（三）· 仓库分家 + 最小引擎跑通
 
 ### 仓库结构（已定）

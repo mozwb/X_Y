@@ -9,6 +9,6 @@ if(NOT WIN32)
     return()
 endif()
 
-xy_module(Files DEPS Memory)
+xy_module(Files STATIC DEPS Memory)
 
 target_link_libraries(Files PUBLIC comdlg32)

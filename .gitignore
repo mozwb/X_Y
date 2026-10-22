@@ -21,8 +21,10 @@
 **/*.vcxproj.filters
 **/*.vcxproj.user
 
-# 运行期数据
-**/DataStore/
+# 运行期数据（注意：不能写成 **/DataStore/，那会把 Modules/DataStore 模块源码一起忽略）
+/DataStore/
+**/DataStore/*.log
+**/DataStore/*.tmp
 git_push.bat
 
 # 笔记（不纳入版本控制）

@@ -40,6 +40,9 @@ xy_api.h —— 引擎与 程序/模块 之间唯一的 ABI 契约。
 #define XY_PROGRAM_ENTRY "xy_program_v1"
 #define XY_MODULE_ENTRY "xy_module_v1"
 
+/* 可选：模块卸载前必须调用，用来反注册自己往 host 里塞的一切 */
+#define XY_MODULE_SHUTDOWN_ENTRY "xy_module_shutdown_v1"
+
 /* 日志级别 */
 enum XyLogLevel
 {
@@ -53,9 +56,14 @@ typedef void (*XyLogFn)(void* user, int level, const char* message);
 typedef void* (*XyAllocFn)(void* user, size_t size, size_t align);
 typedef void (*XyFreeFn)(void* user, void* ptr);
 
+/* 服务表：模块之间通信的唯一机制。内核只存名字→指针，不懂语义。 */
+typedef int (*XyAddServiceFn)(void* user, const char* name, void* ptr);
+typedef void* (*XyGetServiceFn)(void* user, const char* name);
+typedef void (*XyRemoveServiceFn)(void* user, const char* name);
+
 /*
  * host 服务表。引擎拥有实例，程序/模块只持 const 指针。
- * 只增不改：新能力一律追加在 free 之后，并把 size 算对。
+ * 只增不改：新能力一律追加在末尾，并把 size 算对。
  */
 typedef struct XyHostV1
 {
@@ -67,7 +75,16 @@ typedef struct XyHostV1
     XyLogFn log;    /* 不可为空 */
     XyAllocFn alloc;/* 不可为空；align 为 0 表示默认对齐 */
     XyFreeFn free;  /* 不可为空；只接受 alloc 发出的指针 */
+
+    /* v1 追加段 */
+    XyAddServiceFn add_service;      /* 名字重复返回非 0 */
+    XyGetServiceFn get_service;      /* 找不到返回 NULL */
+    XyRemoveServiceFn remove_service;/* 名字不存在忽略 */
 } XyHostV1;
+
+/* 使用方在读取上面追加段之前，用这个判断字段是否存在 */
+#define XY_HOST_HAS(host, field) \
+    ((host) && (host)->size >= (unsigned)(offsetof(XyHostV1, field) + sizeof((host)->field)))
 
 /*
  * 程序入口：引擎 LoadLibrary 后按 XY_PROGRAM_ENTRY 取符号并调用。
@@ -81,3 +98,10 @@ typedef int (*xy_program_v1_fn)(const XyHostV1* host, int argc, const char* cons
  * 返回 0 表示成功。
  */
 typedef int (*xy_module_v1_fn)(const XyHostV1* host);
+
+/*
+ * 模块卸载入口（可选）：引擎在 FreeLibrary **之前**调用。
+ * 模块必须在这里把 xy_module_v1 里注册的东西全部反注册，否则 engine 侧会留悬垂指针。
+ * 引擎会检查：卸载后若仍能查到该模块注册的服务，判定为泄漏并报警。
+ */
+typedef void (*xy_module_shutdown_v1_fn)(void);

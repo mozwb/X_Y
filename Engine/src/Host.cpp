@@ -24,10 +24,9 @@ namespace
         default:           return "?";
         }
     }
-}
 
-namespace xy
-{
+    using xy::EngineContext;
+
     void HostLog(void*, int level, const char* message)
     {
         std::fprintf(stderr, "[%s] %s\n", LevelTag(level), message ? message : "(null)");
@@ -63,16 +62,47 @@ namespace xy
 #endif
     }
 
-    const XyHostV1* Host()
+    int HostAddService(void* user, const char* name, void* ptr)
     {
-        static const XyHostV1 kHost = {
-            sizeof(XyHostV1),
-            XY_ABI_VERSION,
-            nullptr,
-            &HostLog,
-            &HostAlloc,
-            &HostFree,
-        };
-        return &kHost;
+        auto* ctx = static_cast<EngineContext*>(user);
+        if (!ctx || !name)
+        {
+            return -1;
+        }
+        // 归属由引擎判定，模块无法伪装
+        const std::string owner = ctx->currentModule.empty() ? "engine" : ctx->currentModule;
+        return ctx->services.Add(name, ptr, owner);
+    }
+
+    void* HostGetService(void* user, const char* name)
+    {
+        auto* ctx = static_cast<EngineContext*>(user);
+        return (ctx && name) ? ctx->services.Get(name) : nullptr;
+    }
+
+    void HostRemoveService(void* user, const char* name)
+    {
+        auto* ctx = static_cast<EngineContext*>(user);
+        if (ctx && name)
+        {
+            ctx->services.Remove(name);
+        }
+    }
+}
+
+namespace xy
+{
+    const XyHostV1* BuildHost(EngineContext& ctx)
+    {
+        ctx.host.size = sizeof(XyHostV1);
+        ctx.host.abi_version = XY_ABI_VERSION;
+        ctx.host.user = &ctx;
+        ctx.host.log = &HostLog;
+        ctx.host.alloc = &HostAlloc;
+        ctx.host.free = &HostFree;
+        ctx.host.add_service = &HostAddService;
+        ctx.host.get_service = &HostGetService;
+        ctx.host.remove_service = &HostRemoveService;
+        return &ctx.host;
     }
 }
