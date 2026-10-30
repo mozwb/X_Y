@@ -1,17 +1,34 @@
 #pragma once
 /*
-xy_api.h —— 引擎与 程序/模块 之间唯一的 ABI 契约。
+xy_api.h —— X_Y 内核与 DLL 之间唯一的 ABI 底座。
 
-规则（违反即 UB，不救）：
-  1. 跨边界只传 C 类型：POD、函数指针、C 字符串、裸字节。不传 std::string / 容器 / 异常。
-  2. 内存成对：host->alloc 发的只能 host->free 还；谁 new 的谁 delete。别跨堆。
-  3. 结构体只允许在**尾部追加**字段。使用方先看 size，够长才读。
-  4. abi_version 不等 = 拒绝加载，不做兼容。
+这个头只回答三件事：
+  1. DLL 怎么被内核认出来（入口名、版本）
+  2. DLL 能从内核拿到什么（host 表）
+  3. 跨边界传参的规矩
 
-本文件同时被 C 和 C++ 包含，不得出现 C++ 语法。
+它不包含：
+  - 命令的形状            -> xy_command.h
+  - 内核实现              -> Host / ModuleRegistry / CommandTable
+  - 任何 C++ 类型、STL、平台头
+
+【使用时刻】
+  载入：内核调 xy_abi_version_v1()，版本不等直接拒载。
+  装载：内核把 XyHostV1 交给 xy_commands_v1(host)，换回命令表。
+  运行：内核调 xy_program_v1(host, argc, argv)，argv[0] 是程序名。
+  卸载：内核摘命令、摘服务、FreeLibrary；v1 没有 DLL 清理回调。
+
+【硬规矩】
+  1. 只传 C 类型。不传 std::string / 容器 / 异常 / 引用。
+  2. 内存成对：host->alloc 发的只能 host->free；DLL new 的自己 delete。
+  3. 结构体只允许尾部追加字段；读之前先用 size 判断。
+  4. abi_version 不等 = 拒载，不做兼容。
+  5. 字符串（argv、服务名、log 文本）只在调用期间有效，DLL 不得存指针。
+  6. host 指针进程内唯一且一直有效，DLL 不得释放它。
 */
 
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 #  define XY_EXTERN_C extern "C"
@@ -21,87 +38,94 @@ xy_api.h —— 引擎与 程序/模块 之间唯一的 ABI 契约。
 
 #if defined(_WIN32)
 #  define XY_EXPORT_SYMBOL __declspec(dllexport)
-#  define XY_IMPORT_SYMBOL __declspec(dllimport)
 #elif defined(__GNUC__) || defined(__clang__)
 #  define XY_EXPORT_SYMBOL __attribute__((visibility("default")))
-#  define XY_IMPORT_SYMBOL
 #else
 #  define XY_EXPORT_SYMBOL
-#  define XY_IMPORT_SYMBOL
 #endif
 
-/* 模块/程序导出入口时用 */
+/* 导出入口时用：XY_EXPORT uint32_t xy_abi_version_v1(void) { ... } */
 #define XY_EXPORT XY_EXTERN_C XY_EXPORT_SYMBOL
 
-/* 引擎 ABI 版本。任何一次不向后兼容的改动都必须 +1。 */
+/* 任何不向后兼容的改动都必须 +1。 */
 #define XY_ABI_VERSION 1u
 
-/* 入口符号名 —— 文件名只负责定位，符号名负责演进 */
-#define XY_PROGRAM_ENTRY "xy_program_v1"
-#define XY_MODULE_ENTRY "xy_module_v1"
+/* 入口符号名。文件名只负责定位，符号名负责演进。 */
+#define XY_ABI_VERSION_ENTRY "xy_abi_version_v1"
+#define XY_PROGRAM_ENTRY     "xy_program_v1"
+/* 命令表入口在 xy_command.h：XY_COMMANDS_ENTRY */
 
-/* 可选：模块卸载前必须调用，用来反注册自己往 host 里塞的一切 */
-#define XY_MODULE_SHUTDOWN_ENTRY "xy_module_shutdown_v1"
-
-/* 日志级别 */
+/* 日志级别。 */
 enum XyLogLevel
 {
     XY_LOG_TRACE = 0,
-    XY_LOG_INFO = 1,
-    XY_LOG_WARN = 2,
+    XY_LOG_INFO  = 1,
+    XY_LOG_WARN  = 2,
     XY_LOG_ERROR = 3
 };
 
-typedef void (*XyLogFn)(void* user, int level, const char* message);
-typedef void* (*XyAllocFn)(void* user, size_t size, size_t align);
-typedef void (*XyFreeFn)(void* user, void* ptr);
-
-/* 服务表：模块之间通信的唯一机制。内核只存名字→指针，不懂语义。 */
-typedef int (*XyAddServiceFn)(void* user, const char* name, void* ptr);
-typedef void* (*XyGetServiceFn)(void* user, const char* name);
-typedef void (*XyRemoveServiceFn)(void* user, const char* name);
-
 /*
- * host 服务表。引擎拥有实例，程序/模块只持 const 指针。
- * 只增不改：新能力一律追加在末尾，并把 size 算对。
+ * host 服务表。
+ *
+ * 内核启动时填一次，之后指针不变；DLL 只持 const 指针。
+ * 字段只增不改：新能力追加到末尾，并把 size 算对。
+ *
+ * alloc:
+ *   align = 0 表示默认对齐。v1 只支持 <= 平台 max_align 的对齐；
+ *   超出返回 NULL（Memory 目前不支持 over-align）。
+ *   发出的指针只能交给 free。
+ *
+ * free:
+ *   只接受 alloc 发出的指针。
+ *
+ * log:
+ *   message 是 UTF-8 C 字符串，内核立刻打印/复制，不保留指针。
+ *
+ * add_service / get_service / remove_service:
+ *   模块之间通信的唯一机制。内核只存 名字 -> void*，不懂语义。
+ *   add 成功返回 0，重名返回非 0。
+ *   get 找不到返回 NULL。
+ *   remove 只能删自己注册的；名字不存在忽略。
+ *   服务指针的生命周期由注册方保证，至少到 remove / 卸载。
  */
+typedef void* (*XyAllocFn)(void* user, size_t size, size_t align);
+typedef void  (*XyFreeFn)(void* user, void* ptr);
+typedef void  (*XyLogFn)(void* user, int level, const char* message);
+
+typedef int   (*XyAddServiceFn)(void* user, const char* name, void* ptr);
+typedef void* (*XyGetServiceFn)(void* user, const char* name);
+typedef void  (*XyRemoveServiceFn)(void* user, const char* name);
+
 typedef struct XyHostV1
 {
-    unsigned size;        /* = sizeof(XyHostV1)，使用方据此判断字段是否存在 */
-    unsigned abi_version; /* 必须等于 XY_ABI_VERSION */
+    uint32_t size;        /* = sizeof(XyHostV1)，使用方据此判断字段是否存在 */
+    uint32_t abi_version; /* 必须等于 XY_ABI_VERSION */
 
-    void* user; /* 引擎私有，回传给下面所有回调 */
+    void* user; /* 内核私有，原样回传给下面所有回调 */
 
-    XyLogFn log;    /* 不可为空 */
-    XyAllocFn alloc;/* 不可为空；align 为 0 表示默认对齐 */
-    XyFreeFn free;  /* 不可为空；只接受 alloc 发出的指针 */
+    XyAllocFn alloc;
+    XyFreeFn  free;
+    XyLogFn   log;
 
-    /* v1 追加段 */
-    XyAddServiceFn add_service;      /* 名字重复返回非 0 */
-    XyGetServiceFn get_service;      /* 找不到返回 NULL */
-    XyRemoveServiceFn remove_service;/* 名字不存在忽略 */
+    XyAddServiceFn    add_service;
+    XyGetServiceFn    get_service;
+    XyRemoveServiceFn remove_service;
 } XyHostV1;
 
-/* 使用方在读取上面追加段之前，用这个判断字段是否存在 */
 #define XY_HOST_HAS(host, field) \
-    ((host) && (host)->size >= (unsigned)(offsetof(XyHostV1, field) + sizeof((host)->field)))
+    ((host) != NULL && (host)->size >= (uint32_t)(offsetof(XyHostV1, field) + sizeof((host)->field)))
 
 /*
- * 程序入口：引擎 LoadLibrary 后按 XY_PROGRAM_ENTRY 取符号并调用。
- * 返回值即进程退出码。
- * argv[0] 是程序名（不是 dll 路径），argv[argc] 保证为 NULL。
+ * 版本入口：DLL 必须导出。
+ * 内核在调用任何别的入口之前先调它；版本不等直接拒载。
+ * xy doctor 也可以不执行 DLL 就查它的 ABI。
+ */
+typedef uint32_t (*xy_abi_version_v1_fn)(void);
+
+/*
+ * 微程序入口：DLL 可选导出。
+ *   argv[0] 是程序名（DLL 文件名，不含路径），argv[argc] 保证为 NULL。
+ *   返回值就是退出码，0 = 成功。
+ *   host 在调用期间及之后都有效；argv 只在调用期间有效。
  */
 typedef int (*xy_program_v1_fn)(const XyHostV1* host, int argc, const char* const* argv);
-
-/*
- * 模块入口：引擎装载模块后调用，用于注册服务/命令。
- * 返回 0 表示成功。
- */
-typedef int (*xy_module_v1_fn)(const XyHostV1* host);
-
-/*
- * 模块卸载入口（可选）：引擎在 FreeLibrary **之前**调用。
- * 模块必须在这里把 xy_module_v1 里注册的东西全部反注册，否则 engine 侧会留悬垂指针。
- * 引擎会检查：卸载后若仍能查到该模块注册的服务，判定为泄漏并报警。
- */
-typedef void (*xy_module_shutdown_v1_fn)(void);
