@@ -343,7 +343,7 @@ namespace
         return "g++";
     }
 
-    fs::path ResolvePath(const char* argument, const char* envName, const char* fallback)
+    fs::path ResolvePath(const char* argument, const char* envName, const fs::path& fallback)
     {
         if (argument != nullptr && argument[0] != '\0')
         {
@@ -353,7 +353,7 @@ namespace
         {
             return fs::path(env);
         }
-        return fs::path(fallback);
+        return fallback;
     }
 
     fs::path ExecutableDir(const char* argv0)
@@ -381,7 +381,13 @@ namespace
 #if defined(_WIN32)
         return exeDir / "pkg.dll";
 #else
-        return exeDir / "pkg.so";
+        const fs::path sibling = exeDir / "pkg.so";
+        std::error_code ec;
+        if (fs::is_regular_file(sibling, ec) && !ec)
+        {
+            return sibling;
+        }
+        return exeDir / "../lib/pkg.so";
 #endif
     }
 
@@ -633,7 +639,7 @@ namespace
             "             [--x-y <X_Y.exe>] [--pkg <pkg.dll>]\n"
             "  xy help\n"
             "\n"
-            "install 的 repo 默认 XY_REPO 或 ./Modules，root 默认 XY_MODULES 或 ./Modules。\n"
+            "install 的 repo 默认 XY_REPO 或 ./Modules，root 默认 XY_MODULES 或 <xy 目录>/../modules。\n"
             "有二进制直接交给 pkg install；只有源码或 --build 时先 build 再 install。\n");
     }
 
@@ -909,7 +915,7 @@ namespace
             "XY_REPO", "Modules");
         const fs::path root = ResolvePath(
             rootArgument.empty() ? nullptr : rootArgument.c_str(),
-            "XY_MODULES", "Modules");
+            "XY_MODULES", (exeDir / "../modules").lexically_normal());
         const fs::path outputRoot =
             outArgument.empty() ? fs::path(".cache/out") : fs::path(outArgument);
 

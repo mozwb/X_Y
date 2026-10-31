@@ -379,7 +379,8 @@ namespace
             "  pkg install <源目录> [--root <dir>] [--force]\n"
             "  pkg remove  <name> [version] [--root <dir>] [--all]\n"
             "\n"
-            "root / --repo 指定仓库，默认取环境变量 XY_MODULES，没有就用 ./Modules\n"
+            "root / --repo 指定仓库，默认 XY_MODULES（X_Y 启动时设为 bin/../modules），\n"
+            "没有就用 ./Modules\n"
             "安装布局: <root>/<name>/<version>/package.xy + 包内文件\n");
     }
 

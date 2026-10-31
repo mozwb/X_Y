@@ -22,8 +22,10 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 # ── 输出目录 ────────────────────────────────────────────────────────────────
+# out/bin：所有能跑 / 能加载的东西（exe + dll/so），xy 和 pkg 永远同目录。
+# out/lib：只放编译期库（.a / .lib / import lib）。
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/out/bin")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/out/lib")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/out/bin")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/out/lib")
 
 # ── 平台宏 / 编码 ───────────────────────────────────────────────────────────

@@ -18,7 +18,9 @@
 #include <xy_api.h>
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <string>
 #include <utility>
 #include <vector>
@@ -114,6 +116,37 @@ namespace
         }
         return true;
     }
+
+    // 固定布局：X_Y 在 bin/，pkg 默认装到 bin/../modules。
+    // 通过环境变量交给 pkg（pkg 是 DLL，拿不到 argv[0]）。
+    void SetDefaultModuleRoot(const char* argv0)
+    {
+        if (std::getenv("XY_MODULES") != nullptr)
+        {
+            return;
+        }
+
+        std::error_code ec;
+        const std::filesystem::path exe = std::filesystem::absolute(argv0, ec);
+        if (ec || exe.empty())
+        {
+            return;
+        }
+
+        const std::filesystem::path modules = exe.parent_path() / "../modules";
+        std::filesystem::create_directories(modules, ec);
+
+        std::error_code canonEc;
+        const std::filesystem::path normalized =
+            std::filesystem::weakly_canonical(modules, canonEc);
+        const std::string text = (canonEc ? modules : normalized).string();
+
+#if defined(_WIN32)
+        _putenv_s("XY_MODULES", text.c_str());
+#else
+        setenv("XY_MODULES", text.c_str(), 0);
+#endif
+    }
 }
 
 int main(int argc, char** argv)
@@ -137,6 +170,8 @@ int main(int argc, char** argv)
                     static_cast<unsigned long long>(sizeof(XyHostV1)));
         return 0;
     }
+
+    SetDefaultModuleRoot(argv[0]);
 
     X_Y::EngineContext ctx;
     const XyHostV1* host = X_Y::BuildHost(ctx);
