@@ -50,22 +50,62 @@ endif()
 # ── Modules：过渡期路径 ─────────────────────────────────────────────────────
 set(XY_MODULES_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/../Modules/Modules"
     CACHE PATH "Modules 公开头的 include 根")
-set(XY_MEMORY_LIB "${CMAKE_CURRENT_SOURCE_DIR}/../Modules/build/out/lib/libMemory.a"
-    CACHE FILEPATH "Memory 静态库")
+
+if(WIN32)
+    set(_xy_memory_lib_default
+        "${CMAKE_CURRENT_SOURCE_DIR}/../Modules/build/out/lib/libMemory.dll.a")
+    set(_xy_memory_dll_default
+        "${CMAKE_CURRENT_SOURCE_DIR}/../Modules/build/out/bin/Memory.dll")
+else()
+    set(_xy_memory_lib_default
+        "${CMAKE_CURRENT_SOURCE_DIR}/../Modules/build-linux/out/lib/libMemory.so")
+    set(_xy_memory_dll_default
+        "${CMAKE_CURRENT_SOURCE_DIR}/../Modules/build-linux/out/lib/libMemory.so")
+endif()
+
+set(XY_MEMORY_LIB "${_xy_memory_lib_default}"
+    CACHE FILEPATH "Memory import lib / 共享库")
+set(XY_MEMORY_DLL "${_xy_memory_dll_default}"
+    CACHE FILEPATH "Memory 运行期 DLL")
 
 if(NOT EXISTS "${XY_MEMORY_LIB}")
     message(FATAL_ERROR
-        "找不到 Memory 静态库：${XY_MEMORY_LIB}\n"
+        "找不到 Memory 共享库：${XY_MEMORY_LIB}\n"
         "先在 Modules 里编 Memory（cmake --build Modules/build --target Memory）")
 endif()
 
-add_library(xy_memory STATIC IMPORTED)
-set_target_properties(xy_memory PROPERTIES
-    IMPORTED_LOCATION "${XY_MEMORY_LIB}"
-    INTERFACE_INCLUDE_DIRECTORIES "${XY_MODULES_INCLUDE}")
+# ── Memory 依赖包：out/modules/Memory/{include,bin,lib} ─────────────────────
+set(XY_OUT_MODULES "${CMAKE_BINARY_DIR}/out/modules")
+set(XY_MEMORY_PACKAGE "${XY_OUT_MODULES}/Memory")
+file(MAKE_DIRECTORY "${XY_MEMORY_PACKAGE}/include/Memory")
+file(COPY "${XY_MODULES_INCLUDE}/Memory/Memory.h"
+     DESTINATION "${XY_MEMORY_PACKAGE}/include/Memory")
 
 if(WIN32)
-    target_link_libraries(xy_memory INTERFACE psapi)
+    set(_xy_memory_package_file "bin/Memory.dll")
+else()
+    set(_xy_memory_package_file "bin/libMemory.so")
+endif()
+
+file(WRITE "${XY_MEMORY_PACKAGE}/package.xy"
+"name = Memory\n"
+"version = 0.0.1\n"
+"kind = library\n"
+"abi = 1\n"
+"include = include\n"
+"lib = lib\n"
+"file = ${_xy_memory_package_file}\n")
+
+add_library(xy_memory SHARED IMPORTED)
+if(WIN32)
+    set_target_properties(xy_memory PROPERTIES
+        IMPORTED_IMPLIB "${XY_MEMORY_LIB}"
+        IMPORTED_LOCATION "${XY_MEMORY_DLL}"
+        INTERFACE_INCLUDE_DIRECTORIES "${XY_MEMORY_PACKAGE}/include;${XY_MODULES_INCLUDE}")
+else()
+    set_target_properties(xy_memory PROPERTIES
+        IMPORTED_LOCATION "${XY_MEMORY_LIB}"
+        INTERFACE_INCLUDE_DIRECTORIES "${XY_MEMORY_PACKAGE}/include;${XY_MODULES_INCLUDE}")
 endif()
 
 # ── 内核 ────────────────────────────────────────────────────────────────────
@@ -97,11 +137,26 @@ endif()
 
 if(NOT WIN32)
     target_link_options(X_Y PRIVATE "-rdynamic")
+    target_link_options(X_Y PRIVATE "-Wl,-rpath,$ORIGIN")
 endif()
 
-# Memory 必须整库进 exe：DLL 用到的 Buffer/统计符号 exe 也得有。
-target_link_libraries(X_Y PRIVATE
-    "$<LINK_LIBRARY:WHOLE_ARCHIVE,xy_memory>")
+# Memory 是独立共享库：X_Y、IO、consumer 共用同一份。
+target_link_libraries(X_Y PRIVATE xy_memory)
+
+if(WIN32)
+    add_custom_command(TARGET X_Y POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${XY_MEMORY_DLL}" "$<TARGET_FILE_DIR:X_Y>")
+endif()
+
+# Memory 依赖包的 bin/lib 随 X_Y 一起落盘。
+add_custom_command(TARGET X_Y POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${XY_MEMORY_PACKAGE}/bin" "${XY_MEMORY_PACKAGE}/lib"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${XY_MEMORY_DLL}" "${XY_MEMORY_PACKAGE}/bin"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${XY_MEMORY_LIB}" "${XY_MEMORY_PACKAGE}/lib")
 
 # ── 程序（微程序 DLL）──────────────────────────────────────────────────────
 # Programs/<Name>/CMakeLists.txt 一出现就接进来。

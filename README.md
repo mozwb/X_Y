@@ -25,6 +25,7 @@ X_Y/
 ├─ bin/
 │  ├─ X_Y.exe
 │  ├─ pkg.dll
+│  ├─ Memory.dll
 │  ├─ libstdc++-6.dll
 │  ├─ libgcc_s_seh-1.dll
 │  └─ libwinpthread-1.dll
@@ -44,7 +45,8 @@ X_Y/
 X_Y/
 ├─ bin/
 │  ├─ X_Y
-│  └─ pkg.so
+│  ├─ pkg.so
+│  └─ libMemory.so
 │
 ├─ modules/
 │  └─ HelloXy/
@@ -58,6 +60,7 @@ X_Y/
 ### 约定
 
 - `X_Y` 和 `pkg` 永远在 `bin/` 同目录。
+- `Memory.dll` / `libMemory.so` 也在 `bin/`；X_Y、IO、consumer 共用这一份。
 - 所有可加载的包/模块都在 `modules/<name>/<version>/`。
 - `pkg` 默认 root 是 `bin/../modules`；`X_Y` 启动时会把 `XY_MODULES` 设成这个路径。
 - 用户包里没有 `xy`、`include/`、`cache/`、`repo/`、源码。
@@ -136,7 +139,7 @@ X_Y/
 ├─ test/                        # 容器冒烟测试
 │  ├─ container_smoke.ps1
 │  ├─ container_smoke.sh
-│  └─ fixtures/                 # echo_service / echo_client 测试 DLL
+│  └─ fixtures/
 │     ├─ echo_api.h
 │     ├─ echo_service.c
 │     └─ echo_client.c
@@ -148,9 +151,12 @@ X_Y/
 │
 ├─ build/                       # 构建树（不进版本控制）
 │  └─ out/
-│     ├─ bin/                   # X_Y、xy、pkg、HelloXy（当前构建产物）
+│     ├─ bin/                   # X_Y、xy、pkg、HelloXy、Memory.dll
 │     ├─ lib/                   # .a / .lib / import lib
-│     └─ modules/               # pkg install 的安装目标
+│     └─ modules/
+│        ├─ Memory/              # 第三方依赖包：include + bin + lib
+│        ├─ IO/                  # 第三方 C++ 库：include + bin + lib
+│        └─ ...                  # pkg install 的安装目标
 │
 ├─ .cache/                      # xy build 的临时产物（不进版本控制）
 │  └─ out/
@@ -189,9 +195,10 @@ Windows 的 `.dll`、Linux 的 `.so` 都在 `out/bin`；`out/lib` 只放静态�
 | `Engine/src/main.cpp` | 参数、启动、模式选择 |
 | `Engine/src/Platform/*` | 动态库和外部进程的平台差异 |
 | `Apps/Pkg` | `pkg list/info/verify/install/remove` |
-| `Builder` | `xy build/install/doctor` |
+| `Builder` | `xy build/module/install/doctor` |
 | `Programs/HelloXy` | 只认 `xy_api.h` 的最小微程序 |
-| `CMakeLists.txt` | 目标、输出目录、Memory 链接、程序/应用接入 |
+| `test/` | 容器冒烟测试和 echo fixture |
+| `CMakeLists.txt` | 目标、输出目录、Memory 共享库、程序/应用接入 |
 
 ---
 
@@ -202,7 +209,7 @@ Windows 的 `.dll`、Linux 的 `.so` 都在 `out/bin`；`out/lib` 只放静态�
 - C++20 编译器（MinGW g++ 13 / Linux g++）
 - CMake >= 3.24
 - Ninja 或 Make
-- `Modules/` 里先编出 `libMemory.a`
+- `Modules/` 里先编出共享的 `Memory.dll` / `libMemory.so` 和 import lib
 
 ### Linux
 
@@ -216,7 +223,8 @@ cmake --build Modules/build-linux --target Memory
 
 cmake -S X_Y -B X_Y/build-linux -G Ninja \
   -DCMAKE_BUILD_TYPE=Debug \
-  -DXY_MEMORY_LIB="$PWD/Modules/build-linux/out/lib/libMemory.a"
+  -DXY_MEMORY_LIB="$PWD/Modules/build-linux/out/lib/libMemory.so" \
+  -DXY_MEMORY_DLL="$PWD/Modules/build-linux/out/lib/libMemory.so"
 cmake --build X_Y/build-linux
 ```
 
@@ -227,6 +235,7 @@ X_Y/build-linux/out/bin/X_Y
 X_Y/build-linux/out/bin/xy
 X_Y/build-linux/out/bin/pkg.so
 X_Y/build-linux/out/bin/HelloXy.so
+X_Y/build-linux/out/bin/libMemory.so
 ```
 
 ### Windows（MinGW Makefiles）
@@ -237,7 +246,9 @@ $env:PATH = "D:\QT\Tools\mingw1310_64\bin;" + $env:PATH
 cmake -S X_Y -B X_Y/build -G "MinGW Makefiles" `
   -DCMAKE_BUILD_TYPE=Debug `
   -DCMAKE_CXX_COMPILER="D:/QT/Tools/mingw1310_64/bin/g++.exe" `
-  -DCMAKE_MAKE_PROGRAM="D:/QT/Tools/mingw1310_64/bin/mingw32-make.exe"
+  -DCMAKE_MAKE_PROGRAM="D:/QT/Tools/mingw1310_64/bin/mingw32-make.exe" `
+  -DXY_MEMORY_LIB="D:/workbench/Modules/build/out/lib/libMemory.dll.a" `
+  -DXY_MEMORY_DLL="D:/workbench/Modules/build/out/bin/Memory.dll"
 
 cmake --build X_Y/build
 ```
@@ -342,11 +353,63 @@ engine destroy net
 
 ```
 xy build   <源目录> [--out <目录>] [--include <Engine/include>] [--cxx <编译器>]
+xy module  <name> [--modules-root <Modules/Modules>] [--out <目录>] [--cxx <编译器>]
 xy install <name> [version] [--repo <仓库>] [--root <安装根>]
            [--build] [--force] [--include ...] [--cxx ...]
            [--x-y <X_Y>] [--pkg <pkg>]
 xy doctor  [--repo <仓库>] [--include ...] [--cxx ...]
 ```
+
+### Modules 构建
+
+`xy module` 直接读 Modules 侧的 `module.xy`，先建依赖，再建自己：
+
+```bash
+xy module IO
+```
+
+`Modules/Modules/IO/module.xy`：
+
+```
+name = IO
+version = 0.0.1
+kind = library
+sources = src
+include = ..
+headers = .
+exclude = src/FilesSystem.cpp
+deps = Memory
+libs =
+defines =
+```
+
+流程：
+
+```
+xy module IO
+  ├─ 读 Modules/Modules/IO/module.xy
+  ├─ deps = Memory
+  │  └─ xy module Memory -> out/modules/Memory
+  └─ 编 IO -> out/modules/IO
+```
+
+产物：
+
+```
+out/modules/IO/
+├─ include/IO/{Files.h,Stream.h}
+├─ bin/IO.dll
+├─ lib/libIO.dll.a
+└─ package.xy
+```
+
+`--modules-root` 默认找 `../../../../Modules/Modules` 或 `./Modules/Modules`；
+`--out` 默认 `<xy>/../modules`。
+
+`xy install IO` 也会先查 Modules 侧的 `IO/module.xy`，有就直接走依赖构建，不要求 `package.xy` 仓库。
+
+`xy` 启动时会把 `TMP` / `TEMP` / `TMPDIR` 指到当前目录的 `.cache/tmp`，
+编译器和链接器的临时文件不再落到系统 TEMP；沙箱里系统 TEMP 不可写也能构建。
 
 ### 仓库
 
@@ -394,7 +457,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File X_Y\test\container_smoke.ps1
 bash X_Y/test/container_smoke.sh
 ```
 
-脚本会编 `test/fixtures/echo_service` / `echo_client` 到 `build/test-fixtures`，然后跑：
+`container_smoke` 会编 `echo_service` / `echo_client` 到 `build/test-fixtures`，跑：
 create → load → services → run → share → shared → unload 拦截 → unshare → unload → destroy。
 
 ---
@@ -430,6 +493,79 @@ create → load → services → run → share → shared → unload 拦截 → 
 - 一次性 program 禁止 `add_service`
 - 服务在 `xy_module_v1` 注册，`xy_module_shutdown_v1` 反注册；漏掉的由内核按 owner 清理并报泄漏
 
+### Memory 第三方库
+
+`Memory` 现在是共享库，不再是 X_Y 整库链进去的静态库：
+
+```cpp
+#include <Memory/Memory.h>
+
+auto* w = X_Y::New<Widget>(args...);
+X_Y::Delete(w);
+
+void* p = X_Y::Malloc(1024);
+X_Y::Free(p);
+
+X_Y::Buffer buffer;
+```
+
+- `New` / `Delete` 成对，`Malloc` / `Free` 成对
+- 不再重载全局 `operator new/delete`；裸 `new` 不归 Memory 统计
+- `mem` 的“门面”只统计显式 Memory API；“进程”仍是 OS 口径的 RSS / private
+- `Memory.dll` 必须和 X_Y / IO / consumer 一起分发；一个进程共用一份
+
+Memory 包在 `out/modules/Memory/`：
+
+```
+Memory/
+├─ include/Memory/Memory.h
+├─ bin/Memory.dll
+├─ lib/libMemory.dll.a
+└─ package.xy
+```
+
+X_Y 的 `Engine/include` 不复制 `Memory.h`；consumer 的 include 路径是：
+
+```
+-I X_Y/Engine/include
+-I out/modules/Memory/include
+```
+
+### IO 第三方库
+
+IO 不是命令、不是服务，是 C++ 共享库，构建到：
+
+```
+out/modules/IO/
+├─ include/IO/        # Files.h / Stream.h
+├─ bin/IO.dll         # libIO.so
+└─ lib/libIO.dll.a    # import lib
+```
+
+consumer：
+
+```cpp
+#include <IO/Stream.h>
+#include <IO/Files.h>
+
+X_Y::FileStream file("a.bin");
+X_Y::Buffer data = X_Y::FilesSystem::ReadFileBinary("a.bin");
+```
+
+链接：
+
+```
+-I out/modules/IO/include
+-L out/modules/IO/lib -lIO
+-L .../Memory -lMemory
+```
+
+- `IO.dll` 依赖 `Memory.dll`，不依赖 `X_Y.exe`
+- 当前 `IO.dll` 包含 `Stream` + 跨平台文件/目录核心（`Modules/IO/src/FilesCore.cpp`）
+- Windows 文件对话框（`OpenFileDialog/SaveFileDialog`）依赖 Decoder/UI，暂留在 `FilesSystem.cpp`，不进 `IO.dll`
+- 运行期还要让 loader 找到 `out/modules/IO/bin`；目前测试用 PATH，后面在 `LibraryWin32` 里加模块搜索路径
+- 构建入口是 `xy module IO`，不再是 X_Y 的 CMake 目标
+
 `XyHostV1` 是内核给扩展的能力表；它只放 alloc/free/log/service。
 网络、文件这类能力以后通过 **服务对象**（每个 engine 自己的 host + C 函数表）注入，
 不往全局 host 上堆。
@@ -446,19 +582,24 @@ v1.1.0-dev 已完成：
 - EngineContainer：单线程 `engine create/list/destroy/load/unload/run/services/shared/share/unshare`
 - 容器共享服务：`share` / `unshare`，provider 共享期间禁止销毁/卸载
 - 容器冒烟测试：`test/container_smoke.ps1` / `container_smoke.sh`
+- Memory 共享库：`Memory.dll` / `libMemory.so`，X_Y 不再整库链 Memory
+- Memory 依赖包：`out/modules/Memory/{include,bin,lib,package.xy}`
+- Memory 显式 API：`X_Y::New/Delete/Malloc/Free/Buffer`；全局 new 不再覆盖
+- IO 第三方 C++ 库：`out/modules/IO/{include,bin,lib,package.xy}`，链 IO + Memory
+- `pkg` 接受 `kind = library`，list/verify 能识别 Memory/IO
 - 跨 engine 服务查找：本地 → container.shared → root（子 Engine）
 - DLL 装载/卸载、微程序包装、命令 owner
 - 内建命令、shell、main
 - Windows 平台 Library / Process 实测
 - Linux 真机验收（用户确认已跑；验收输出未留档）
 - `pkg` v1：list / info / verify / install / remove
-- `xy` v1：build / install / doctor，仓库按 name/version 安装
+- `xy` v1：build / module / install / doctor，仓库按 name/version 安装；`install` 可识别 Modules 侧 `module.xy`
 - 固定运行目录：`out/bin` + `out/modules`，`X_Y` 自动设置 `XY_MODULES`
 
 未完成 / 下一步：
 
 - 懒启动 / 服务引用计数 / 线程
-- 服务对象 ABI（`net_api.h` 这类）
+- 更多服务对象 ABI（`net_api.h` 这类）
 - `provides` / `requires` 依赖顺序
 - `pkg` 联网下载（HTTP + 索引 + 校验）
 - 多线程策略（放 Modules，内核 v2 接入）

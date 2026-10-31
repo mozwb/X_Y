@@ -21,6 +21,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -367,6 +368,32 @@ namespace
         return path.parent_path();
     }
 
+    // 编译器（g++/ld）默认往系统 TEMP 写临时文件；沙箱里那个目录可能不可写。
+    // 统一改到当前目录的 .cache/tmp，子进程继承环境变量。
+    void SetBuildTempDir()
+    {
+        std::error_code ec;
+        const fs::path dir = fs::current_path(ec) / ".cache/tmp";
+        if (ec)
+        {
+            return;
+        }
+
+        fs::create_directories(dir, ec);
+        if (ec)
+        {
+            return;
+        }
+
+        const std::string text = dir.string();
+#if defined(_WIN32)
+        ::_putenv_s("TMP", text.c_str());
+        ::_putenv_s("TEMP", text.c_str());
+#else
+        setenv("TMPDIR", text.c_str(), 1);
+#endif
+    }
+
     fs::path DefaultXyPath(const fs::path& exeDir)
     {
 #if defined(_WIN32)
@@ -625,6 +652,483 @@ namespace
         return true;
     }
 
+    struct ModuleManifest
+    {
+        std::string name;
+        std::string version = "0.0.1";
+        std::string kind = "library";
+        std::string sources = "src";
+        std::string include = ".";
+        std::string headers = ".";
+        std::string exclude;
+        std::string deps;
+        std::string libs;
+        std::string libsWindows;
+        std::string libsLinux;
+        std::string defines;
+    };
+
+    std::string TrimCopy(std::string text)
+    {
+        const std::size_t first = text.find_first_not_of(" \t\r\n");
+        if (first == std::string::npos)
+        {
+            return {};
+        }
+        const std::size_t last = text.find_last_not_of(" \t\r\n");
+        return text.substr(first, last - first + 1);
+    }
+
+    std::vector<std::string> SplitList(const std::string& text)
+    {
+        std::vector<std::string> out;
+        std::string current;
+        for (const char c : text)
+        {
+            if (c == ',' || c == ';')
+            {
+                const std::string item = TrimCopy(current);
+                if (!item.empty())
+                {
+                    out.push_back(item);
+                }
+                current.clear();
+            }
+            else
+            {
+                current.push_back(c);
+            }
+        }
+        const std::string item = TrimCopy(current);
+        if (!item.empty())
+        {
+            out.push_back(item);
+        }
+        return out;
+    }
+
+    bool LoadModuleManifest(const fs::path& path, ModuleManifest& out, std::string& error)
+    {
+        std::ifstream in(path);
+        if (!in)
+        {
+            error = "读不到 " + path.string();
+            return false;
+        }
+
+        std::string line;
+        while (std::getline(in, line))
+        {
+            const std::string trimmed = TrimCopy(line);
+            if (trimmed.empty() || trimmed[0] == '#')
+            {
+                continue;
+            }
+
+            const std::size_t eq = trimmed.find('=');
+            if (eq == std::string::npos)
+            {
+                continue;
+            }
+
+            const std::string key = TrimCopy(trimmed.substr(0, eq));
+            const std::string value = TrimCopy(trimmed.substr(eq + 1));
+
+            if (key == "name") out.name = value;
+            else if (key == "version") out.version = value;
+            else if (key == "kind") out.kind = value;
+            else if (key == "sources") out.sources = value;
+            else if (key == "include") out.include = value;
+            else if (key == "headers") out.headers = value;
+            else if (key == "exclude") out.exclude = value;
+            else if (key == "deps") out.deps = value;
+            else if (key == "libs") out.libs = value;
+            else if (key == "libs_windows") out.libsWindows = value;
+            else if (key == "libs_linux") out.libsLinux = value;
+            else if (key == "defines") out.defines = value;
+        }
+
+        if (out.name.empty())
+        {
+            error = path.string() + " 缺少 name";
+            return false;
+        }
+        if (out.kind != "library")
+        {
+            error = path.string() + " kind 必须是 library";
+            return false;
+        }
+        return true;
+    }
+
+    struct ModuleBuildContext
+    {
+        fs::path modulesRoot;
+        fs::path outRoot;
+        fs::path engineInclude;
+        std::string compiler;
+        std::set<std::string> built;
+        std::vector<std::string> stack;
+    };
+
+    bool CopyModuleHeaders(const fs::path& moduleDir,
+                           const ModuleManifest& manifest,
+                           const fs::path& destination,
+                           std::string& error)
+    {
+        const fs::path base = moduleDir / manifest.headers;
+        std::error_code ec;
+        if (!fs::is_directory(base, ec) || ec)
+        {
+            return true;
+        }
+
+        for (const auto& entry : fs::recursive_directory_iterator(base, ec))
+        {
+            if (ec || !entry.is_regular_file(ec))
+            {
+                continue;
+            }
+
+            const std::string ext = entry.path().extension().string();
+            if (ext != ".h" && ext != ".hpp" && ext != ".inl")
+            {
+                continue;
+            }
+
+            const fs::path relative = entry.path().lexically_relative(base);
+            if (relative.empty() ||
+                relative.generic_string().rfind("src/", 0) == 0)
+            {
+                continue;
+            }
+
+            const fs::path target = destination / relative;
+            fs::create_directories(target.parent_path(), ec);
+            if (ec)
+            {
+                error = "创建头文件目录失败: " + target.parent_path().string();
+                return false;
+            }
+            std::error_code removeEc;
+            fs::remove(target, removeEc);
+            fs::copy_file(entry.path(), target, fs::copy_options::overwrite_existing, ec);
+            if (ec)
+            {
+                error = "复制头文件失败: " + entry.path().string() + " -> " +
+                        target.string() + ": " + ec.message();
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool BuildModule(ModuleBuildContext& ctx, const std::string& requested,
+                     std::string& error)
+    {
+        const fs::path moduleDir = ctx.modulesRoot / requested;
+        const fs::path manifestPath = moduleDir / "module.xy";
+
+        ModuleManifest manifest;
+        if (!LoadModuleManifest(manifestPath, manifest, error))
+        {
+            return false;
+        }
+
+        const std::string& name = manifest.name;
+        if (ctx.built.count(name) != 0)
+        {
+            return true;
+        }
+        if (std::find(ctx.stack.begin(), ctx.stack.end(), name) != ctx.stack.end())
+        {
+            error = "模块依赖成环: " + name;
+            return false;
+        }
+
+        ctx.stack.push_back(name);
+
+        for (const std::string& dep : SplitList(manifest.deps))
+        {
+            if (!BuildModule(ctx, dep, error))
+            {
+                ctx.stack.pop_back();
+                return false;
+            }
+        }
+
+        const fs::path sourceRoot = moduleDir / manifest.sources;
+        std::vector<fs::path> sources;
+        std::error_code ec;
+        if (!fs::is_directory(sourceRoot, ec) || ec)
+        {
+            error = "模块源目录不存在: " + sourceRoot.string();
+            ctx.stack.pop_back();
+            return false;
+        }
+
+        const std::vector<std::string> excludes = SplitList(manifest.exclude);
+        for (const auto& entry : fs::recursive_directory_iterator(sourceRoot, ec))
+        {
+            if (ec || !entry.is_regular_file(ec) || entry.path().extension() != ".cpp")
+            {
+                continue;
+            }
+
+            const std::string relative =
+                entry.path().lexically_relative(moduleDir).generic_string();
+            bool skip = false;
+            for (const std::string& ex : excludes)
+            {
+                if (relative == ex || relative.rfind(ex, 0) == 0)
+                {
+                    skip = true;
+                    break;
+                }
+            }
+            if (!skip)
+            {
+                sources.push_back(entry.path());
+            }
+        }
+
+        if (sources.empty())
+        {
+            error = "模块 " + name + " 没有可编译的 .cpp";
+            ctx.stack.pop_back();
+            return false;
+        }
+
+        const fs::path moduleOut = ctx.outRoot / name;
+        const fs::path binDir = moduleOut / "bin";
+        const fs::path libDir = moduleOut / "lib";
+        fs::create_directories(binDir, ec);
+        fs::create_directories(libDir, ec);
+        if (ec)
+        {
+            error = "创建模块输出目录失败: " + moduleOut.string();
+            ctx.stack.pop_back();
+            return false;
+        }
+
+#if defined(_WIN32)
+        const std::string libraryFile = name + ".dll";
+#else
+        const std::string libraryFile = name + ".so";
+#endif
+        const fs::path target = binDir / libraryFile;
+
+        std::vector<std::string> arguments = {
+            "-std=c++20", "-shared", "-O0", "-g",
+            "-finput-charset=UTF-8", "-fexec-charset=UTF-8"
+        };
+#if !defined(_WIN32)
+        arguments.push_back("-fPIC");
+        arguments.push_back("-DXY_PLATFORM_LINUX");
+#else
+        arguments.push_back("-DXY_PLATFORM_WINDOWS");
+        arguments.push_back("-DUNICODE");
+        arguments.push_back("-D_UNICODE");
+#endif
+
+        arguments.push_back("-I");
+        arguments.push_back((moduleDir / manifest.include).string());
+        arguments.push_back("-I");
+        arguments.push_back(ctx.engineInclude.string());
+
+        for (const std::string& dep : SplitList(manifest.deps))
+        {
+            arguments.push_back("-I");
+            arguments.push_back((ctx.outRoot / dep / "include").string());
+        }
+
+        for (const std::string& define : SplitList(manifest.defines))
+        {
+            arguments.push_back("-D" + define);
+        }
+
+        arguments.push_back("-o");
+        arguments.push_back(target.string());
+
+#if defined(_WIN32)
+        arguments.push_back("-Wl,--out-implib," +
+                            (libDir / ("lib" + name + ".dll.a")).string());
+#endif
+
+        for (const auto& source : sources)
+        {
+            arguments.push_back(source.string());
+        }
+
+        for (const std::string& dep : SplitList(manifest.deps))
+        {
+            arguments.push_back("-L");
+            arguments.push_back((ctx.outRoot / dep / "lib").string());
+            arguments.push_back("-l" + dep);
+        }
+
+        for (const std::string& lib : SplitList(manifest.libs))
+        {
+            arguments.push_back("-l" + lib);
+        }
+#if defined(_WIN32)
+        for (const std::string& lib : SplitList(manifest.libsWindows))
+        {
+            arguments.push_back("-l" + lib);
+        }
+#else
+        for (const std::string& lib : SplitList(manifest.libsLinux))
+        {
+            arguments.push_back("-l" + lib);
+        }
+#endif
+
+        X_Y::Process::Options options;
+        options.Capture = true;
+        const X_Y::Process::Result result =
+            X_Y::Process::Run(ctx.compiler, arguments, options);
+        PrintText(result.Output);
+
+        if (!result.Started || !result.Error.empty() || result.ExitCode != 0)
+        {
+            error = "编译模块 " + name + " 失败";
+            ctx.stack.pop_back();
+            return false;
+        }
+
+        if (!CopyModuleHeaders(moduleDir, manifest, moduleOut / "include" / name, error))
+        {
+            ctx.stack.pop_back();
+            return false;
+        }
+
+        {
+            std::ofstream package(moduleOut / "package.xy");
+            if (!package)
+            {
+                error = "写 package.xy 失败: " + moduleOut.string();
+                ctx.stack.pop_back();
+                return false;
+            }
+            package << "name = " << name << '\n'
+                    << "version = " << manifest.version << '\n'
+                    << "kind = library\n"
+                    << "abi = 1\n"
+                    << "include = include\n"
+                    << "lib = lib\n"
+                    << "file = bin/" << libraryFile << '\n';
+            if (!manifest.deps.empty())
+            {
+                package << "deps = " << manifest.deps << '\n';
+            }
+        }
+
+        ctx.built.insert(name);
+        ctx.stack.pop_back();
+        std::printf("built module %s %s -> %s\n",
+                    name.c_str(), manifest.version.c_str(),
+                    moduleOut.string().c_str());
+        return true;
+    }
+
+    int CmdModule(int argc, char** argv, const fs::path& exeDir)
+    {
+        std::string requested;
+        fs::path modulesRoot;
+        fs::path outRoot = exeDir / "../modules";
+        const char* cxxOption = nullptr;
+
+        for (int i = 2; i < argc; ++i)
+        {
+            const std::string_view option = argv[i];
+            if (option == "--modules-root")
+            {
+                if (i + 1 >= argc)
+                {
+                    std::fprintf(stderr, "xy module: --modules-root 缺少值\n");
+                    return 2;
+                }
+                modulesRoot = argv[++i];
+            }
+            else if (option == "--out")
+            {
+                if (i + 1 >= argc)
+                {
+                    std::fprintf(stderr, "xy module: --out 缺少值\n");
+                    return 2;
+                }
+                outRoot = argv[++i];
+            }
+            else if (option == "--cxx")
+            {
+                if (i + 1 >= argc)
+                {
+                    std::fprintf(stderr, "xy module: --cxx 缺少值\n");
+                    return 2;
+                }
+                cxxOption = argv[++i];
+            }
+            else if (!option.empty() && option[0] != '-')
+            {
+                requested = option;
+            }
+            else
+            {
+                std::fprintf(stderr, "xy module: 未知参数 '%s'\n", argv[i]);
+                return 2;
+            }
+        }
+
+        if (requested.empty())
+        {
+            std::fprintf(stderr, "用法: xy module <name> [--modules-root <dir>] [--out <dir>] [--cxx <编译器>]\n");
+            return 2;
+        }
+
+        if (modulesRoot.empty())
+        {
+            const fs::path candidates[] = {
+                exeDir / "../../../../Modules/Modules",
+                fs::current_path() / "Modules/Modules"
+            };
+            for (const auto& candidate : candidates)
+            {
+                std::error_code ec;
+                if (fs::is_directory(candidate, ec) && !ec)
+                {
+                    modulesRoot = candidate;
+                    break;
+                }
+            }
+        }
+        if (modulesRoot.empty())
+        {
+            std::fprintf(stderr, "xy module: 找不到 Modules 根，用 --modules-root 指定\n");
+            return 2;
+        }
+
+        fs::path engineInclude = exeDir / "../../../Engine/include";
+        std::error_code ec;
+        if (!fs::is_directory(engineInclude, ec) || ec)
+        {
+            engineInclude = fs::current_path() / "X_Y/Engine/include";
+        }
+
+        ModuleBuildContext ctx;
+        ctx.modulesRoot = modulesRoot;
+        ctx.outRoot = outRoot;
+        ctx.engineInclude = engineInclude;
+        ctx.compiler = ResolveCompiler(cxxOption);
+
+        std::string error;
+        if (!BuildModule(ctx, requested, error))
+        {
+            std::fprintf(stderr, "xy module: %s\n", error.c_str());
+            return 3;
+        }
+        return 0;
+    }
+
     void Usage()
     {
         std::printf(
@@ -632,6 +1136,7 @@ namespace
             "\n"
             "用法:\n"
             "  xy build   <源目录> [--out <目录>] [--include <Engine/include>] [--cxx <编译器>]\n"
+            "  xy module  <name> [--modules-root <Modules/Modules>] [--out <目录>] [--cxx <编译器>]\n"
             "  xy install <name> [version] [--repo <仓库>] [--root <安装根>] [--out <目录>]\n"
             "             [--build] [--force] [--include <Engine/include>] [--cxx <编译器>]\n"
             "             [--x-y <X_Y.exe>] [--pkg <pkg.dll>]\n"
@@ -918,6 +1423,46 @@ namespace
             "XY_MODULES", (exeDir / "../modules").lexically_normal());
         const fs::path outputRoot =
             outArgument.empty() ? fs::path(".cache/out") : fs::path(outArgument);
+
+        // Modules 侧：如果仓库里有 <name>/module.xy，直接走 xy module 的依赖构建。
+        std::vector<fs::path> moduleRoots = {
+            repo,
+            repo / "Modules",
+            fs::current_path() / "Modules/Modules",
+            fs::current_path().parent_path() / "Modules/Modules",
+            exeDir / "../../../../Modules/Modules"
+        };
+        for (const fs::path& moduleRoot : moduleRoots)
+        {
+            std::error_code ec;
+            if (!fs::is_regular_file(moduleRoot / name / "module.xy", ec) || ec)
+            {
+                continue;
+            }
+
+            fs::path engineInclude = exeDir / "../../../Engine/include";
+            if (!fs::is_directory(engineInclude, ec) || ec)
+            {
+                engineInclude = fs::current_path() / "X_Y/Engine/include";
+            }
+
+            ModuleBuildContext ctx;
+            ctx.modulesRoot = moduleRoot;
+            ctx.outRoot = root;
+            ctx.engineInclude = engineInclude;
+            ctx.compiler = ResolveCompiler(
+                compilerArgument.empty() ? nullptr : compilerArgument.c_str());
+
+            std::string error;
+            if (!BuildModule(ctx, name, error))
+            {
+                std::fprintf(stderr, "xy install: %s\n", error.c_str());
+                return 3;
+            }
+            std::printf("installed module %s -> %s\n",
+                        name.c_str(), (root / name).string().c_str());
+            return 0;
+        }
 
         std::vector<RepoEntry> entries;
         std::vector<std::string> errors;
@@ -1234,6 +1779,7 @@ namespace
 int main(int argc, char** argv)
 {
     const fs::path exeDir = ExecutableDir(argv[0]);
+    SetBuildTempDir();
 
     if (argc < 2)
     {
@@ -1245,6 +1791,10 @@ int main(int argc, char** argv)
     if (command == "build")
     {
         return CmdBuild(argc, argv, exeDir);
+    }
+    if (command == "module")
+    {
+        return CmdModule(argc, argv, exeDir);
     }
     if (command == "install")
     {

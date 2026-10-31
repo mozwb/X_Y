@@ -331,9 +331,10 @@ namespace
             return false;
         }
         if (manifest.Get("kind") != "program" &&
-            manifest.Get("kind") != "module")
+            manifest.Get("kind") != "module" &&
+            manifest.Get("kind") != "library")
         {
-            error = "kind 必须是 program 或 module";
+            error = "kind 必须是 program、module 或 library";
             return false;
         }
 
@@ -522,9 +523,10 @@ namespace
                          "，内核是 " + std::to_string(XY_ABI_VERSION);
             }
             else if (manifest.Get("kind") != "program" &&
-                     manifest.Get("kind") != "module")
+                     manifest.Get("kind") != "module" &&
+                     manifest.Get("kind") != "library")
             {
-                reason = "kind 必须是 program 或 module";
+                reason = "kind 必须是 program、module 或 library";
             }
             else
             {
