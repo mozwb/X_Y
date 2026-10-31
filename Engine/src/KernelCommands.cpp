@@ -4,11 +4,13 @@
 #include "Host.h"
 #include "ModuleRegistry.h"
 #include "Platform/Library.h"
+#include "Platform/Process.h"
 
 #include <Memory/Memory.h>
 #include <xy_api.h>
 
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <utility>
 #include <vector>
@@ -279,10 +281,64 @@ namespace X_Y
             return rc;
         }
 
-        // ── mem / abi ─────────────────────────────────────────────────────────
-        int CmdMem(void* self, int, const char* const*)
+        // ── exec：外部进程 ─────────────────────────────────────────────────────
+        int CmdExec(void* self, int argc, const char* const* argv)
         {
             (void)self;
+
+            if (argc < 2)
+            {
+                std::fprintf(stderr, "用法: exec [--capture] <exe> [参数...]\n");
+                return 2;
+            }
+
+            bool capture = false;
+            int index = 1;
+            if (std::strcmp(argv[index], "--capture") == 0)
+            {
+                capture = true;
+                ++index;
+            }
+            if (index >= argc)
+            {
+                std::fprintf(stderr, "用法: exec [--capture] <exe> [参数...]\n");
+                return 2;
+            }
+
+            const std::string program = argv[index];
+            std::vector<std::string> arguments;
+            for (int i = index + 1; i < argc; ++i)
+            {
+                arguments.emplace_back(argv[i]);
+            }
+
+            Process::Options options;
+            options.Capture = capture;
+            const Process::Result result = Process::Run(program, arguments, options);
+
+            if (!result.Started)
+            {
+                std::fprintf(stderr, "启动失败: %s\n", result.Error.c_str());
+                return 3;
+            }
+            if (!result.Error.empty())
+            {
+                std::fprintf(stderr, "等待失败: %s\n", result.Error.c_str());
+                return 3;
+            }
+
+            if (capture && !result.Output.empty())
+            {
+                std::fwrite(result.Output.data(), 1, result.Output.size(), stdout);
+                std::fflush(stdout);
+            }
+
+            return result.ExitCode;
+        }
+
+        // ── mem / abi ─────────────────────────────────────────────────────────
+        int CmdMem(void* self, int, const char* const*)
+        {            (void)self;
             const auto stats = Memory::Instance().stats();
             std::printf("门面: used=%llu peak=%llu live=%llu allocs=%llu frees=%llu overhead=%llu\n",
                         static_cast<unsigned long long>(stats.UsedBytes),
@@ -332,6 +388,9 @@ namespace X_Y
         XyCommandV1 kProgram = {
             sizeof(XyCommandV1), "program", "一次性运行微程序 <dll> [参数...]", &CmdProgram, nullptr
         };
+        XyCommandV1 kExec = {
+            sizeof(XyCommandV1), "exec", "跑外部程序 [--capture] <exe> [参数...]", &CmdExec, nullptr
+        };
         XyCommandV1 kMem = {
             sizeof(XyCommandV1), "mem", "打印 Memory 统计", &CmdMem, nullptr
         };
@@ -344,7 +403,7 @@ namespace X_Y
     {
         XyCommandV1* const builtins[] = {
             &kCommands, &kHelp, &kModules, &kLoad,
-            &kUnload, &kProgram, &kMem, &kAbi,
+            &kUnload, &kProgram, &kExec, &kMem, &kAbi,
         };
 
         for (XyCommandV1* cmd : builtins)

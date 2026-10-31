@@ -100,3 +100,13 @@ endif()
 # Memory 必须整库进 exe：DLL 用到的 Buffer/统计符号 exe 也得有。
 target_link_libraries(X_Y PRIVATE
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,xy_memory>")
+
+# ── 程序（微程序 DLL）──────────────────────────────────────────────────────
+# Programs/<Name>/CMakeLists.txt 一出现就接进来。
+file(GLOB _xy_program_dirs CONFIGURE_DEPENDS LIST_DIRECTORIES true
+    "${CMAKE_CURRENT_SOURCE_DIR}/Programs/*")
+foreach(_dir IN LISTS _xy_program_dirs)
+    if(IS_DIRECTORY "${_dir}" AND EXISTS "${_dir}/CMakeLists.txt")
+        add_subdirectory("${_dir}")
+    endif()
+endforeach()
