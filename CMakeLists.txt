@@ -110,3 +110,16 @@ foreach(_dir IN LISTS _xy_program_dirs)
         add_subdirectory("${_dir}")
     endif()
 endforeach()
+
+# ── 应用（命令 DLL）────────────────────────────────────────────────────────
+# Apps/<Name>/CMakeLists.txt 一出现就接进来。
+file(GLOB _xy_app_dirs CONFIGURE_DEPENDS LIST_DIRECTORIES true
+    "${CMAKE_CURRENT_SOURCE_DIR}/Apps/*")
+foreach(_dir IN LISTS _xy_app_dirs)
+    if(IS_DIRECTORY "${_dir}" AND EXISTS "${_dir}/CMakeLists.txt")
+        add_subdirectory("${_dir}")
+    endif()
+endforeach()
+
+# ── 构建器 ─────────────────────────────────────────────────────────────────
+add_subdirectory(Builder)

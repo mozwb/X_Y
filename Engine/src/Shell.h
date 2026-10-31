@@ -5,6 +5,7 @@ Shell.h —— 内核的交互前端，不是命令分发本身。
 v1 只做薄壳：
   - stdin 逐行读（std::getline）
   - 分词支持单/双引号、反斜杠转义（路径带空格能过）
+    Windows 路径在 shell 里请用引号或正斜杠：引号外的 \ 是转义符
   - 第一个词是 run 就丢掉；其余查 ctx.commands
   - 调命令前把 currentModule 设成命令 owner，退出恢复
   - exit / quit 只由 RunShell 处理
