@@ -92,6 +92,8 @@ namespace X_Y
             std::string owner;
             Platform::Library library;
             xy_program_v1_fn program = nullptr;
+            xy_module_v1_fn moduleInit = nullptr;
+            xy_module_shutdown_v1_fn shutdown = nullptr;
 
             std::unique_ptr<ProgramBinding> binding;
             std::unique_ptr<XyCommandV1> programCommand; // 包出来的那条命令

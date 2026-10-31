@@ -138,9 +138,15 @@ namespace X_Y
             library.Symbol(XY_PROGRAM_ENTRY));
         auto commandEntry = reinterpret_cast<xy_commands_v1_fn>(
             library.Symbol(XY_COMMANDS_ENTRY));
-        if (program == nullptr && commandEntry == nullptr)
+        auto moduleInit = reinterpret_cast<xy_module_v1_fn>(
+            library.Symbol(XY_MODULE_ENTRY));
+        auto moduleShutdown = reinterpret_cast<xy_module_shutdown_v1_fn>(
+            library.Symbol(XY_MODULE_SHUTDOWN_ENTRY));
+
+        if (program == nullptr && commandEntry == nullptr && moduleInit == nullptr)
         {
-            error = name + " 既没有 " XY_PROGRAM_ENTRY "，也没有 " XY_COMMANDS_ENTRY;
+            error = name + " 既没有 " XY_PROGRAM_ENTRY "，" XY_COMMANDS_ENTRY
+                    "，也没有 " XY_MODULE_ENTRY;
             return false;
         }
 
@@ -148,26 +154,39 @@ namespace X_Y
         std::vector<std::string> added;
         bool ok = true;
 
-        if (commandEntry != nullptr)
         {
             OwnerScope scope(currentOwner_, owner);
-            const XyCommandV1* const* table = commandEntry(host_);
-            for (const XyCommandV1* const* it = table; it != nullptr && *it != nullptr; ++it)
+
+            if (moduleInit != nullptr)
             {
-                const XyCommandV1* cmd = *it;
-                if (!ValidCommand(cmd))
+                const int rc = moduleInit(host_);
+                if (rc != 0)
                 {
-                    error = name + " 的命令表里有非法命令";
+                    error = name + " 模块初始化失败 rc=" + std::to_string(rc);
                     ok = false;
-                    break;
                 }
-                if (!commands_.Add(cmd, owner))
+            }
+
+            if (ok && commandEntry != nullptr)
+            {
+                const XyCommandV1* const* table = commandEntry(host_);
+                for (const XyCommandV1* const* it = table; it != nullptr && *it != nullptr; ++it)
                 {
-                    error = "登记命令失败（重名或非法）: " + std::string(cmd->name);
-                    ok = false;
-                    break;
+                    const XyCommandV1* cmd = *it;
+                    if (!ValidCommand(cmd))
+                    {
+                        error = name + " 的命令表里有非法命令";
+                        ok = false;
+                        break;
+                    }
+                    if (!commands_.Add(cmd, owner))
+                    {
+                        error = "登记命令失败（重名或非法）: " + std::string(cmd->name);
+                        ok = false;
+                        break;
+                    }
+                    added.push_back(cmd->name);
                 }
-                added.push_back(cmd->name);
             }
         }
 
@@ -216,6 +235,8 @@ namespace X_Y
         module.owner = owner;
         module.library = std::move(library);
         module.program = program;
+        module.moduleInit = moduleInit;
+        module.shutdown = moduleShutdown;
         module.binding = std::move(binding);
         module.programCommand = std::move(programCommand);
         module.commands = std::move(added);
@@ -237,7 +258,15 @@ namespace X_Y
             return false;
         }
 
-        // 先摘命令，再摘服务，最后才销毁 Library —— 否则命令表会悬垂。
+        // 先让 provider 反注册，再摘命令/服务，最后才销毁 Library。
+        {
+            OwnerScope scope(currentOwner_, it->owner);
+            if (it->shutdown != nullptr)
+            {
+                it->shutdown();
+            }
+        }
+
         commands_.RemoveByOwner(it->owner);
         for (const auto& service : services_.OwnedBy(it->owner))
         {
@@ -254,6 +283,14 @@ namespace X_Y
         int leaks = 0;
         for (auto it = modules_.rbegin(); it != modules_.rend(); ++it)
         {
+            {
+                OwnerScope scope(currentOwner_, it->owner);
+                if (it->shutdown != nullptr)
+                {
+                    it->shutdown();
+                }
+            }
+
             commands_.RemoveByOwner(it->owner);
             for (const auto& service : services_.OwnedBy(it->owner))
             {

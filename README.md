@@ -5,7 +5,7 @@ X_Y 是一个运行期引擎：`X_Y` 负责装载 DLL/SO、收集命令、执行
 
 > **这份 README 是当前实现的契约**：目录、命令、默认 root、ABI 以这里为准。
 > 改代码必须同步改 README；“未完成 / 下一步”是规划，不算已实现。
-> 版本：**1.0.0**（2026-10-31）。最后核对：2026-10-31。
+> 版本：**1.1.0-dev**（基于 1.0.0，增加服务模块入口）。最后核对：2026-10-31。
 
 ![设计图](./X_Y设计图.jpg)
 
@@ -344,6 +344,11 @@ xy doctor --repo ../Modules
 | `xy_abi_version_v1` | 必须导出，返回 `XY_ABI_VERSION` |
 | `xy_program_v1` | 微程序入口 |
 | `xy_commands_v1` | 命令表入口 |
+| `xy_module_v1` | 可选：模块初始化，注册服务 |
+| `xy_module_shutdown_v1` | 可选：卸载前反注册服务 |
+
+加载顺序：验 ABI → `xy_module_v1(host)` → `xy_commands_v1(host)` → 登记命令。
+卸载顺序：`xy_module_shutdown_v1()` → 摘命令 → 摘服务 → `FreeLibrary`。
 
 规则：
 
@@ -352,6 +357,7 @@ xy doctor --repo ../Modules
 - `host->alloc` 的指针只能 `host->free`
 - 命令表、命令对象归 DLL 所有，卸载前必须有效
 - 一次性 program 禁止 `add_service`
+- 服务在 `xy_module_v1` 注册，`xy_module_shutdown_v1` 反注册；漏掉的由内核按 owner 清理并报泄漏
 
 `XyHostV1` 是内核给扩展的能力表；它只放 alloc/free/log/service。
 网络、文件这类能力以后通过 **服务对象**（每个 engine 自己的 host + C 函数表）注入，
@@ -361,9 +367,10 @@ xy doctor --repo ../Modules
 
 ## 8. 当前状态
 
-v1.0.0 已完成：
+v1.1.0-dev 已完成：
 
 - ABI 头、host、services、command table
+- 服务模块入口：`xy_module_v1` / `xy_module_shutdown_v1`
 - DLL 装载/卸载、微程序包装、命令 owner
 - 内建命令、shell、main
 - Windows 平台 Library / Process 实测

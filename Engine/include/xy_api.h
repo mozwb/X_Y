@@ -53,6 +53,8 @@ xy_api.h —— X_Y 内核与 DLL 之间唯一的 ABI 底座。
 /* 入口符号名。文件名只负责定位，符号名负责演进。 */
 #define XY_ABI_VERSION_ENTRY "xy_abi_version_v1"
 #define XY_PROGRAM_ENTRY     "xy_program_v1"
+#define XY_MODULE_ENTRY      "xy_module_v1"
+#define XY_MODULE_SHUTDOWN_ENTRY "xy_module_shutdown_v1"
 /* 命令表入口在 xy_command.h：XY_COMMANDS_ENTRY */
 
 /* 日志级别。 */
@@ -121,6 +123,22 @@ typedef struct XyHostV1
  * xy doctor 也可以不执行 DLL 就查它的 ABI。
  */
 typedef uint32_t (*xy_abi_version_v1_fn)(void);
+
+/*
+ * 模块入口：DLL 可选导出。
+ *   在版本检查之后、xy_commands_v1 之前调用，用来注册服务。
+ *   返回 0 表示成功；非 0 则整次装载回滚。
+ *   不要在这里注册命令；命令走 xy_commands_v1。
+ *   host 在进程内一直有效，可以存下来给 shutdown 用。
+ */
+typedef int (*xy_module_v1_fn)(const XyHostV1* host);
+
+/*
+ * 模块卸载入口：DLL 可选导出。
+ *   在摘命令/服务之前调用；provider 必须在这里把 xy_module_v1 注册的服务
+ *   全部 remove 掉。内核随后还会按 owner 反查一次，漏掉的算泄漏。
+ */
+typedef void (*xy_module_shutdown_v1_fn)(void);
 
 /*
  * 微程序入口：DLL 可选导出。
