@@ -24,17 +24,17 @@ v1 只做薄壳：
 
 namespace X_Y
 {
-    struct EngineContext;
+    struct Engine;
 
     // 直接执行一个已经分好词的 argv；给 --run / --program 用，
     // 不用把参数再拼回一行字符串。
-    int ExecuteArgs(EngineContext& ctx, const std::vector<std::string>& args);
+    int ExecuteArgs(Engine& engine, const std::vector<std::string>& args);
 
     // 执行一行；不处理 exit/quit。空行返回 0。
-    int ExecuteLine(EngineContext& ctx, const std::string& line);
+    int ExecuteLine(Engine& engine, const std::string& line);
 
     // 从 stdin 循环读，直到 EOF / exit / quit。
-    // prompt=true 且 ctx.interactive 时打 "> " 提示符。
+    // prompt=true 且 engine.interactive 时打 "> " 提示符。
     // 返回最后一条命令的退出码。
-    int RunShell(EngineContext& ctx, bool prompt);
+    int RunShell(Engine& engine, bool prompt);
 }

@@ -9,6 +9,7 @@
 // 内核只认一个动词：run <命令> [参数...]。
 // --run / --program 只是把命令行参数直接交给命令表，不重新拼字符串。
 
+#include "EngineContainer.h"
 #include "Host.h"
 #include "KernelCommands.h"
 #include "ModuleRegistry.h"
@@ -173,20 +174,14 @@ int main(int argc, char** argv)
 
     SetDefaultModuleRoot(argv[0]);
 
-    X_Y::EngineContext ctx;
-    const XyHostV1* host = X_Y::BuildHost(ctx);
-
-    // 启动期的分配不算进 mem 的“使用量”，但仍保留在进程统计里。
-    X_Y::Memory::Instance().markBaseline();
-
-    X_Y::ModuleRegistry modules(*host, ctx.services, ctx.commands, ctx.currentModule);
-    ctx.modules = &modules;
-    X_Y::RegisterKernelCommands(ctx);
+    X_Y::EngineContainer container;
+    X_Y::Engine& engine = container.Root();
+    engine.Start();
 
     for (const auto& path : opt.modules)
     {
         std::string error;
-        if (!modules.Load(path, error))
+        if (!engine.modules->Load(path, error))
         {
             std::fprintf(stderr, "X_Y: 装载模块 %s 失败: %s\n",
                          path.c_str(), error.c_str());
@@ -205,7 +200,7 @@ int main(int argc, char** argv)
         args.push_back("program");
         args.push_back(opt.target);
         args.insert(args.end(), opt.args.begin(), opt.args.end());
-        status = X_Y::ExecuteArgs(ctx, args);
+        status = X_Y::ExecuteArgs(engine, args);
         break;
     }
 
@@ -215,14 +210,14 @@ int main(int argc, char** argv)
         args.reserve(opt.args.size() + 1);
         args.push_back(opt.target);
         args.insert(args.end(), opt.args.begin(), opt.args.end());
-        status = X_Y::ExecuteArgs(ctx, args);
+        status = X_Y::ExecuteArgs(engine, args);
         break;
     }
 
     case Mode::Shell:
     default:
-        ctx.interactive = true;
-        status = X_Y::RunShell(ctx, true);
+        engine.interactive = true;
+        status = X_Y::RunShell(engine, true);
         break;
     }
 

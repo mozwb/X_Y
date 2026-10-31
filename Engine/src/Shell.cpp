@@ -158,7 +158,7 @@ namespace X_Y
             return true;
         }
 
-        int ExecuteTokens(EngineContext& ctx, const std::vector<std::string>& tokens)
+        int ExecuteTokens(Engine& ctx, const std::vector<std::string>& tokens)
         {
             if (tokens.empty())
             {
@@ -211,12 +211,12 @@ namespace X_Y
         }
     }
 
-    int ExecuteArgs(EngineContext& ctx, const std::vector<std::string>& args)
+    int ExecuteArgs(Engine& ctx, const std::vector<std::string>& args)
     {
         return ExecuteTokens(ctx, args);
     }
 
-    int ExecuteLine(EngineContext& ctx, const std::string& line)
+    int ExecuteLine(Engine& ctx, const std::string& line)
     {
         std::vector<std::string> tokens;
         std::string error;
@@ -228,7 +228,7 @@ namespace X_Y
         return ExecuteTokens(ctx, tokens);
     }
 
-    int RunShell(EngineContext& ctx, bool prompt)
+    int RunShell(Engine& ctx, bool prompt)
     {
         int last = 0;
         std::string line;

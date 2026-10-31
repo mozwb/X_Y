@@ -21,7 +21,7 @@ ModuleRegistry.h —— 内核的模块生命周期：装载 → 验 ABI → 登
 
 【生命周期】
   host / services / commands / currentOwner 都必须比本对象活得久。
-  典型持有者是 EngineContext：它拥有 Services、CommandTable、host 和
+  典型持有者是 Engine：它拥有 Services、CommandTable、host 和
   currentModule；main 里的 ModuleRegistry 最后析构。
 */
 

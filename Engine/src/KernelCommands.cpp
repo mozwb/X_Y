@@ -1,10 +1,12 @@
 #include "KernelCommands.h"
 
 #include "CommandTable.h"
+#include "EngineContainer.h"
 #include "Host.h"
 #include "ModuleRegistry.h"
 #include "Platform/Library.h"
 #include "Platform/Process.h"
+#include "Shell.h"
 
 #include <Memory/Memory.h>
 #include <xy_api.h>
@@ -19,9 +21,9 @@ namespace X_Y
 {
     namespace
     {
-        EngineContext* Ctx(void* self)
+        Engine* Ctx(void* self)
         {
-            return static_cast<EngineContext*>(self);
+            return static_cast<Engine*>(self);
         }
 
         std::string BaseName(const std::string& path)
@@ -141,6 +143,267 @@ namespace X_Y
             return 0;
         }
 
+        // ── engine container ─────────────────────────────────────────────────
+        int CmdEngine(void* self, int argc, const char* const* argv)
+        {
+            auto* ctx = Ctx(self);
+
+            if (ctx->container == nullptr)
+            {
+                std::fprintf(stderr, "内核没有挂 EngineContainer\n");
+                return 3;
+            }
+            if (argc < 2)
+            {
+                std::fprintf(stderr,
+                             "用法: engine list | create <name> | destroy <name> | "
+                             "load <name> <dll> | unload <name> <module> | "
+                             "run <name> <命令...> | services <name> | shared | "
+                             "share <name> <service> | unshare <service>\n");
+                return 2;
+            }
+
+            if (std::strcmp(argv[1], "list") == 0)
+            {
+                const auto engines = ctx->container->List();
+                std::printf("%-16s %8s %8s\n", "NAME", "MODULES", "COMMANDS");
+                for (const auto& engine : engines)
+                {
+                    std::printf("%-16s %8llu %8llu\n",
+                                engine.name.c_str(),
+                                static_cast<unsigned long long>(engine.modules),
+                                static_cast<unsigned long long>(engine.commands));
+                }
+                return 0;
+            }
+
+            if (std::strcmp(argv[1], "services") == 0)
+            {
+                if (argc < 3)
+                {
+                    std::fprintf(stderr, "用法: engine services <name>\n");
+                    return 2;
+                }
+
+                Engine* target = ctx->container->Find(argv[2]);
+                if (target == nullptr)
+                {
+                    std::fprintf(stderr, "engine services: 没有 engine %s\n", argv[2]);
+                    return 3;
+                }
+
+                const auto names = target->services.Names();
+                if (names.empty())
+                {
+                    std::printf("engine %s 没有本地服务\n", argv[2]);
+                    return 0;
+                }
+
+                std::printf("%-20s %s\n", "SERVICE", "OWNER");
+                for (const auto& name : names)
+                {
+                    std::printf("%-20s %s\n",
+                                name.c_str(),
+                                target->services.OwnerOf(name).c_str());
+                }
+                return 0;
+            }
+
+            if (std::strcmp(argv[1], "shared") == 0)
+            {
+                const auto shared = ctx->container->SharedList();
+                if (shared.empty())
+                {
+                    std::printf("容器没有共享服务\n");
+                    return 0;
+                }
+
+                std::printf("%-20s %s\n", "SERVICE", "PROVIDER");
+                for (const auto& item : shared)
+                {
+                    std::printf("%-20s %s\n",
+                                item.service.c_str(),
+                                item.provider.c_str());
+                }
+                return 0;
+            }
+
+            if (std::strcmp(argv[1], "create") == 0)
+            {
+                if (argc < 3)
+                {
+                    std::fprintf(stderr, "用法: engine create <name>\n");
+                    return 2;
+                }
+
+                std::string error;
+                Engine* created = ctx->container->Create(argv[2], error);
+                if (created == nullptr)
+                {
+                    std::fprintf(stderr, "engine create: %s\n", error.c_str());
+                    return 3;
+                }
+                std::printf("created engine %s\n", created->name.c_str());
+                return 0;
+            }
+
+            if (std::strcmp(argv[1], "destroy") == 0)
+            {
+                if (argc < 3)
+                {
+                    std::fprintf(stderr, "用法: engine destroy <name>\n");
+                    return 2;
+                }
+
+                std::string error;
+                if (!ctx->container->Destroy(argv[2], error))
+                {
+                    std::fprintf(stderr, "engine destroy: %s\n", error.c_str());
+                    return 3;
+                }
+                std::printf("destroyed engine %s\n", argv[2]);
+                return 0;
+            }
+
+            if (std::strcmp(argv[1], "load") == 0)
+            {
+                if (argc < 4)
+                {
+                    std::fprintf(stderr, "用法: engine load <name> <dll>\n");
+                    return 2;
+                }
+
+                Engine* target = ctx->container->Find(argv[2]);
+                if (target == nullptr)
+                {
+                    std::fprintf(stderr, "engine load: 没有 engine %s\n", argv[2]);
+                    return 3;
+                }
+                if (target->modules == nullptr)
+                {
+                    std::fprintf(stderr, "engine %s 没有 ModuleRegistry\n", argv[2]);
+                    return 3;
+                }
+
+                std::string error;
+                if (!target->modules->Load(argv[3], error))
+                {
+                    std::fprintf(stderr, "engine load: %s\n", error.c_str());
+                    return 3;
+                }
+                std::printf("engine %s: loaded %s\n",
+                            argv[2], BaseName(argv[3]).c_str());
+                return 0;
+            }
+
+            if (std::strcmp(argv[1], "unload") == 0)
+            {
+                if (argc < 4)
+                {
+                    std::fprintf(stderr, "用法: engine unload <name> <module>\n");
+                    return 2;
+                }
+
+                Engine* target = ctx->container->Find(argv[2]);
+                if (target == nullptr)
+                {
+                    std::fprintf(stderr, "engine unload: 没有 engine %s\n", argv[2]);
+                    return 3;
+                }
+                if (target->modules == nullptr)
+                {
+                    std::fprintf(stderr, "engine %s 没有 ModuleRegistry\n", argv[2]);
+                    return 3;
+                }
+                if (ctx->container->HasSharedServices(target))
+                {
+                    std::fprintf(stderr,
+                                 "engine %s 还有共享服务，先 engine unshare <service>\n",
+                                 argv[2]);
+                    return 3;
+                }
+
+                int leaks = 0;
+                std::string error;
+                if (!target->modules->Unload(argv[3], leaks, error))
+                {
+                    std::fprintf(stderr, "engine unload: %s\n", error.c_str());
+                    return 3;
+                }
+                if (leaks > 0)
+                {
+                    std::fprintf(stderr,
+                                 "警告: 卸载 %s 时有 %d 个服务未反注册（已强制移除）\n",
+                                 argv[3], leaks);
+                }
+                std::printf("engine %s: unloaded %s\n", argv[2], argv[3]);
+                return 0;
+            }
+
+            if (std::strcmp(argv[1], "run") == 0)
+            {
+                if (argc < 4)
+                {
+                    std::fprintf(stderr, "用法: engine run <name> <命令...>\n");
+                    return 2;
+                }
+
+                Engine* target = ctx->container->Find(argv[2]);
+                if (target == nullptr)
+                {
+                    std::fprintf(stderr, "engine run: 没有 engine %s\n", argv[2]);
+                    return 3;
+                }
+
+                std::vector<std::string> args;
+                args.reserve(static_cast<std::size_t>(argc - 3));
+                for (int i = 3; i < argc; ++i)
+                {
+                    args.emplace_back(argv[i]);
+                }
+                return ExecuteArgs(*target, args);
+            }
+
+            if (std::strcmp(argv[1], "share") == 0)
+            {
+                if (argc < 4)
+                {
+                    std::fprintf(stderr, "用法: engine share <name> <service>\n");
+                    return 2;
+                }
+
+                std::string error;
+                if (!ctx->container->Share(argv[2], argv[3], error))
+                {
+                    std::fprintf(stderr, "engine share: %s\n", error.c_str());
+                    return 3;
+                }
+                std::printf("shared service %s from engine %s\n", argv[3], argv[2]);
+                return 0;
+            }
+
+            if (std::strcmp(argv[1], "unshare") == 0)
+            {
+                if (argc < 3)
+                {
+                    std::fprintf(stderr, "用法: engine unshare <service>\n");
+                    return 2;
+                }
+
+                std::string error;
+                if (!ctx->container->Unshare(argv[2], error))
+                {
+                    std::fprintf(stderr, "engine unshare: %s\n", error.c_str());
+                    return 3;
+                }
+                std::printf("unshared service %s\n", argv[2]);
+                return 0;
+            }
+
+            std::fprintf(stderr, "engine: 未知子命令 '%s'\n", argv[1]);
+            return 2;
+        }
+
         int CmdLoad(void* self, int argc, const char* const* argv)
         {
             auto* ctx = Ctx(self);
@@ -177,6 +440,13 @@ namespace X_Y
             if (ctx->modules == nullptr)
             {
                 std::fprintf(stderr, "内核没有挂 ModuleRegistry\n");
+                return 3;
+            }
+
+            if (ctx->container != nullptr && ctx->container->HasSharedServices(ctx))
+            {
+                std::fprintf(stderr,
+                             "engine 还有共享服务，先 engine unshare <service> 再卸载模块\n");
                 return 3;
             }
 
@@ -391,6 +661,11 @@ namespace X_Y
         XyCommandV1 kExec = {
             sizeof(XyCommandV1), "exec", "跑外部程序 [--capture] <exe> [参数...]", &CmdExec, nullptr
         };
+        XyCommandV1 kEngine = {
+            sizeof(XyCommandV1), "engine",
+            "engine list/create/destroy/load/unload/run/services/shared/share/unshare",
+            &CmdEngine, nullptr
+        };
         XyCommandV1 kMem = {
             sizeof(XyCommandV1), "mem", "打印 Memory 统计", &CmdMem, nullptr
         };
@@ -399,10 +674,10 @@ namespace X_Y
         };
     }
 
-    void RegisterKernelCommands(EngineContext& ctx)
+    void RegisterKernelCommands(Engine& ctx)
     {
         XyCommandV1* const builtins[] = {
-            &kCommands, &kHelp, &kModules, &kLoad,
+            &kCommands, &kHelp, &kModules, &kEngine, &kLoad,
             &kUnload, &kProgram, &kExec, &kMem, &kAbi,
         };
 

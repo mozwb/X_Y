@@ -1,5 +1,8 @@
 #include "Host.h"
 
+#include "EngineContainer.h"
+#include "KernelCommands.h"
+
 #include <Memory/Memory.h>
 
 #include <cstddef>
@@ -63,7 +66,7 @@ namespace X_Y
 
         int HostAddService(void* user, const char* name, void* ptr)
         {
-            auto* ctx = static_cast<EngineContext*>(user);
+            auto* ctx = static_cast<Engine*>(user);
             if (ctx == nullptr || name == nullptr || ptr == nullptr)
             {
                 return -1;
@@ -87,13 +90,36 @@ namespace X_Y
 
         void* HostGetService(void* user, const char* name)
         {
-            auto* ctx = static_cast<EngineContext*>(user);
-            return (ctx != nullptr && name != nullptr) ? ctx->services.Get(name) : nullptr;
+            auto* ctx = static_cast<Engine*>(user);
+            if (ctx == nullptr || name == nullptr)
+            {
+                return nullptr;
+            }
+
+            // 先本地，再容器共享表；子 engine 最后再看 root。
+            if (void* local = ctx->services.Get(name); local != nullptr)
+            {
+                return local;
+            }
+            if (ctx->container != nullptr)
+            {
+                if (void* shared = ctx->container->GetShared(name); shared != nullptr)
+                {
+                    return shared;
+                }
+
+                Engine& root = ctx->container->Root();
+                if (&root != ctx)
+                {
+                    return root.services.Get(name);
+                }
+            }
+            return nullptr;
         }
 
         void HostRemoveService(void* user, const char* name)
         {
-            auto* ctx = static_cast<EngineContext*>(user);
+            auto* ctx = static_cast<Engine*>(user);
             if (ctx == nullptr || name == nullptr)
             {
                 return;
@@ -116,7 +142,22 @@ namespace X_Y
         }
     }
 
-    const XyHostV1* BuildHost(EngineContext& ctx)
+    void Engine::Start(bool withBuiltins)
+    {
+        BuildHost(*this);
+        if (withBuiltins)
+        {
+            Memory::Instance().markBaseline();
+        }
+        modules = std::make_unique<ModuleRegistry>(
+            host, services, commands, currentModule);
+        if (withBuiltins)
+        {
+            RegisterKernelCommands(*this);
+        }
+    }
+
+    const XyHostV1* BuildHost(Engine& ctx)
     {
         // host->alloc 的契约是失败返回 NULL，不能因为一次大分配 terminate 进程。
         Memory::Instance().setOOMAction(OOMAction::ReturnNull);

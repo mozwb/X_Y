@@ -101,7 +101,8 @@ X_Y/
 │  │  └─ xy_command.h           # 命令形状 / commands 入口
 │  └─ src/
 │     ├─ main.cpp               # 启动、参数、模式
-│     ├─ Host.h / Host.cpp      # EngineContext + host 回调
+│     ├─ Host.h / Host.cpp      # Engine + host 回调
+│     ├─ EngineContainer.h/.cpp # 单线程容器：create/load/run/share/unload
 │     ├─ Services.h / .cpp      # 名字 → 指针 + owner
 │     ├─ CommandTable.h / .cpp  # 命令名 → XyCommandV1* + owner
 │     ├─ ModuleRegistry.h/.cpp  # DLL 装载 / ABI 检查 / 卸载
@@ -131,6 +132,14 @@ X_Y/
 │     ├─ CMakeLists.txt
 │     ├─ package.xy
 │     └─ src/main.cpp
+│
+├─ test/                        # 容器冒烟测试
+│  ├─ container_smoke.ps1
+│  ├─ container_smoke.sh
+│  └─ fixtures/                 # echo_service / echo_client 测试 DLL
+│     ├─ echo_api.h
+│     ├─ echo_service.c
+│     └─ echo_client.c
 │
 ├─ _notes/                      # 不纳入版本控制
 │  ├─ KERNEL_MAP.md
@@ -170,11 +179,12 @@ Windows 的 `.dll`、Linux 的 `.so` 都在 `out/bin`；`out/lib` 只放静态�
 |---|---|
 | `Engine/include/xy_api.h` | ABI 底座：版本、导出宏、host 表、program 入口 |
 | `Engine/include/xy_command.h` | 命令形状、commands 入口 |
-| `Engine/src/Host.*` | `EngineContext`、alloc/free/log/service 回调 |
+| `Engine/src/Host.*` | `Engine`：services / commands / modules / host，以及 alloc/free/log/service 回调 |
+| `Engine/src/EngineContainer.*` | 单线程容器：root + 子 Engine 的 create/list/destroy/load/unload/run/services/shared/share/unshare |
 | `Engine/src/Services.*` | 名字 → 指针 + owner |
 | `Engine/src/CommandTable.*` | 命令名 → 命令对象 + owner |
 | `Engine/src/ModuleRegistry.*` | DLL 装载/卸载、ABI 检查、命令登记 |
-| `Engine/src/KernelCommands.*` | `help/commands/modules/load/unload/program/exec/mem/abi` |
+| `Engine/src/KernelCommands.*` | `help/commands/modules/engine/load/unload/program/exec/mem/abi` |
 | `Engine/src/Shell.*` | 分词、`run` 前缀、查表、owner、交互循环 |
 | `Engine/src/main.cpp` | 参数、启动、模式选择 |
 | `Engine/src/Platform/*` | 动态库和外部进程的平台差异 |
@@ -276,6 +286,54 @@ modules/<name>/<version>/
   <包内文件>
 ```
 
+### Engine 容器
+
+`engine` 是内建命令，管理子 Engine：
+
+```
+engine list
+engine create <name>
+engine load <name> <dll>
+engine unload <name> <module>
+engine run <name> <命令...>
+engine services <name>
+engine shared
+engine share <name> <service>
+engine unshare <service>
+engine destroy <name>
+```
+
+每个子 Engine 有自己的 host / services / commands / modules；`engine run` 只在该子 Engine 里查命令，不会串到 root。
+
+```bash
+# 装 / 跑：HelloXy 是当前真实存在的包
+engine create a
+engine load a modules/HelloXy/0.1.0/HelloXy.dll
+engine run a HelloXy a b
+engine destroy a
+
+# 共享：假设 net 包在它的 xy_module_v1 里注册了 "net" 服务
+engine create net
+engine load net modules/net/0.1.0/net.dll
+engine share net net
+engine create app
+engine load app modules/app/0.1.0/app.dll
+engine run app ...
+engine unshare net
+engine destroy net
+```
+
+服务查找规则：
+
+- 所有 Engine：先查本地，再查 `container.shared`
+- 子 Engine 本地和 shared 都没有，最后查 root
+- root 不反向看子 Engine；兄弟之间不直接互看
+- `engine share` 把 provider 的本地服务提升到 shared
+- `engine services <name>` 看本地服务；`engine shared` 看共享表和 provider
+- provider 还有共享服务时不能 `engine destroy`，也不能 `engine unload` 它的模块
+- root 有共享服务时，`unload` 同样被拒绝
+- 先 `engine unshare`，再销毁/卸载
+
 ---
 
 ## 6. xy
@@ -326,6 +384,19 @@ xy doctor --repo ../Modules
 
 检查：编译器、Engine include、X_Y、pkg、repo。
 
+### 容器冒烟测试
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File X_Y\test\container_smoke.ps1
+```
+
+```bash
+bash X_Y/test/container_smoke.sh
+```
+
+脚本会编 `test/fixtures/echo_service` / `echo_client` 到 `build/test-fixtures`，然后跑：
+create → load → services → run → share → shared → unload 拦截 → unshare → unload → destroy。
+
 ---
 
 ## 7. 扩展与 ABI
@@ -371,6 +442,11 @@ v1.1.0-dev 已完成：
 
 - ABI 头、host、services、command table
 - 服务模块入口：`xy_module_v1` / `xy_module_shutdown_v1`
+- Engine 实例化：每个 Engine 一份 host / services / commands；`ModuleRegistry` 也归 Engine 所有（`Start()` 里建）
+- EngineContainer：单线程 `engine create/list/destroy/load/unload/run/services/shared/share/unshare`
+- 容器共享服务：`share` / `unshare`，provider 共享期间禁止销毁/卸载
+- 容器冒烟测试：`test/container_smoke.ps1` / `container_smoke.sh`
+- 跨 engine 服务查找：本地 → container.shared → root（子 Engine）
 - DLL 装载/卸载、微程序包装、命令 owner
 - 内建命令、shell、main
 - Windows 平台 Library / Process 实测
@@ -381,7 +457,8 @@ v1.1.0-dev 已完成：
 
 未完成 / 下一步：
 
-- Engine 容器、per-engine host、服务对象 ABI（`net_api.h` 这类）
+- 懒启动 / 服务引用计数 / 线程
+- 服务对象 ABI（`net_api.h` 这类）
 - `provides` / `requires` 依赖顺序
 - `pkg` 联网下载（HTTP + 索引 + 校验）
 - 多线程策略（放 Modules，内核 v2 接入）
