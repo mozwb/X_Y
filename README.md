@@ -94,6 +94,7 @@ shell 里：
 ```
 X_Y/
 ├─ CMakeLists.txt               # 内核 + Apps + Programs + Builder
+├─ enve.json                    # 构建环境：root/bin/modules/lib/temp/source
 ├─ README.md
 ├─ X_Y设计图.jpg
 ├─ .gitignore
@@ -358,6 +359,7 @@ xy install <name> [version] [--repo <仓库>] [--root <安装根>]
            [--build] [--force] [--include ...] [--cxx ...]
            [--x-y <X_Y>] [--pkg <pkg>]
 xy doctor  [--repo <仓库>] [--include ...] [--cxx ...]
+xy env
 ```
 
 ### Modules 构建
@@ -408,8 +410,39 @@ out/modules/IO/
 
 `xy install IO` 也会先查 Modules 侧的 `IO/module.xy`，有就直接走依赖构建，不要求 `package.xy` 仓库。
 
-`xy` 启动时会把 `TMP` / `TEMP` / `TMPDIR` 指到当前目录的 `.cache/tmp`，
-编译器和链接器的临时文件不再落到系统 TEMP；沙箱里系统 TEMP 不可写也能构建。
+### 构建环境 enve.json
+
+`root` 就是 `out` 目录；`bin` / `modules` / `lib` / `temp` 默认都相对它：
+
+```json
+{
+    "root": "build/out",
+    "bin": "bin",
+    "modules": "modules",
+    "lib": "lib",
+    "temp": ".cache/tmp",
+    "source": "../Modules/Modules"
+}
+```
+
+- `root`：输出根，相当于 `out/`
+- `bin`：可执行文件和运行库
+- `modules`：模块/包安装目录
+- `lib`：库目录
+- `temp`：编译器和链接器的临时目录
+- `source`：Modules 源码根
+
+`xy env` 会打印当前解析结果：
+
+```powershell
+PS X_Y> ./build/out/bin/xy env
+config  = D:\workbench\X_Y\enve.json
+root    = D:\workbench\X_Y\build\out
+...
+```
+
+相对路径按 `enve.json` 所在目录解析；不写 `root` 时默认是配置文件所在目录。
+`xy` 启动时会把 `TMP` / `TEMP` / `TMPDIR` 指到 `temp`，编译器和链接器的临时文件不再落到系统 TEMP。
 
 ### 仓库
 
@@ -594,6 +627,7 @@ v1.1.0-dev 已完成：
 - Linux 真机验收（用户确认已跑；验收输出未留档）
 - `pkg` v1：list / info / verify / install / remove
 - `xy` v1：build / module / install / doctor，仓库按 name/version 安装；`install` 可识别 Modules 侧 `module.xy`
+- `enve.json` 环境：`root` = out，bin/modules/lib/temp/source 统一解析
 - 固定运行目录：`out/bin` + `out/modules`，`X_Y` 自动设置 `XY_MODULES`
 
 未完成 / 下一步：

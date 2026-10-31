@@ -24,6 +24,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -368,24 +369,165 @@ namespace
         return path.parent_path();
     }
 
-    // 编译器（g++/ld）默认往系统 TEMP 写临时文件；沙箱里那个目录可能不可写。
-    // 统一改到当前目录的 .cache/tmp，子进程继承环境变量。
-    void SetBuildTempDir()
+    struct BuildEnv
+    {
+        fs::path config;
+        fs::path root;
+        fs::path bin;
+        fs::path modules;
+        fs::path lib;
+        fs::path temp;
+        fs::path source;
+    };
+
+    std::string TrimCopy(std::string text);
+
+    std::unordered_map<std::string, std::string> ReadFlatJson(const fs::path& path)
+    {
+        std::unordered_map<std::string, std::string> out;
+        std::ifstream in(path);
+        if (!in)
+        {
+            return out;
+        }
+
+        std::string line;
+        while (std::getline(in, line))
+        {
+            const std::string trimmed = TrimCopy(line);
+            if (trimmed.empty() || trimmed == "{" || trimmed == "}")
+            {
+                continue;
+            }
+
+            const std::size_t colon = trimmed.find(':');
+            const std::size_t q1 = trimmed.find('"');
+            if (colon == std::string::npos || q1 == std::string::npos || q1 > colon)
+            {
+                continue;
+            }
+            const std::size_t q2 = trimmed.find('"', q1 + 1);
+            if (q2 == std::string::npos || q2 > colon)
+            {
+                continue;
+            }
+
+            const std::size_t q3 = trimmed.find('"', colon + 1);
+            if (q3 == std::string::npos)
+            {
+                continue;
+            }
+            const std::size_t q4 = trimmed.find('"', q3 + 1);
+            if (q4 == std::string::npos)
+            {
+                continue;
+            }
+
+            out[trimmed.substr(q1 + 1, q2 - q1 - 1)] =
+                trimmed.substr(q3 + 1, q4 - q3 - 1);
+        }
+        return out;
+    }
+
+    fs::path ResolveUnder(const fs::path& base, const std::string& value,
+                          const char* fallback)
+    {
+        fs::path path = value.empty() ? fs::path(fallback) : fs::path(value);
+        if (path.is_absolute())
+        {
+            return path.lexically_normal();
+        }
+        return (base / path).lexically_normal();
+    }
+
+    fs::path FindDefaultSource(const fs::path& exeDir)
+    {
+        const fs::path candidates[] = {
+            exeDir / "../../../../Modules/Modules",
+            fs::current_path() / "Modules/Modules",
+            fs::current_path().parent_path() / "Modules/Modules"
+        };
+        for (const auto& candidate : candidates)
+        {
+            std::error_code ec;
+            if (fs::is_directory(candidate, ec) && !ec)
+            {
+                return candidate.lexically_normal();
+            }
+        }
+        return (fs::current_path() / "Modules/Modules").lexically_normal();
+    }
+
+    BuildEnv LoadBuildEnv(const fs::path& exeDir)
+    {
+        BuildEnv env;
+        env.root = (exeDir / "..").lexically_normal();
+        env.bin = env.root / "bin";
+        env.modules = env.root / "modules";
+        env.lib = env.root / "lib";
+        env.temp = env.root / ".cache/tmp";
+        env.source = FindDefaultSource(exeDir);
+
+        const fs::path candidates[] = {
+            fs::current_path() / "enve.json",
+            exeDir / "enve.json",
+            exeDir / "../../../enve.json",
+            exeDir / "../../../../enve.json"
+        };
+        for (const auto& candidate : candidates)
+        {
+            std::error_code ec;
+            if (fs::is_regular_file(candidate, ec) && !ec)
+            {
+                env.config = candidate.lexically_normal();
+                break;
+            }
+        }
+        if (env.config.empty())
+        {
+            return env;
+        }
+
+        const auto kv = ReadFlatJson(env.config);
+        auto get = [&](std::initializer_list<const char*> keys) -> std::string
+        {
+            for (const char* key : keys)
+            {
+                const auto it = kv.find(key);
+                if (it != kv.end())
+                {
+                    return it->second;
+                }
+            }
+            return {};
+        };
+
+        const fs::path base = env.config.parent_path();
+        const std::string rootValue = get({"root"});
+        env.root = rootValue.empty() ? base : ResolveUnder(base, rootValue, ".");
+        env.bin = ResolveUnder(env.root, get({"BIN", "bin"}), "bin");
+        env.modules = ResolveUnder(env.root, get({"package", "modules"}), "modules");
+        env.lib = ResolveUnder(env.root, get({"lib"}), "lib");
+        env.temp = ResolveUnder(env.root, get({"temp"}), ".cache/tmp");
+
+        const std::string sourceValue = get({"Modules", "source"});
+        if (!sourceValue.empty())
+        {
+            env.source = ResolveUnder(base, sourceValue, "Modules/Modules");
+        }
+        return env;
+    }
+
+    void SetBuildTempDir(const BuildEnv& env)
     {
         std::error_code ec;
-        const fs::path dir = fs::current_path(ec) / ".cache/tmp";
+        fs::create_directories(env.temp, ec);
         if (ec)
         {
             return;
         }
 
-        fs::create_directories(dir, ec);
-        if (ec)
-        {
-            return;
-        }
-
-        const std::string text = dir.string();
+        const std::string text = env.temp.string();
 #if defined(_WIN32)
         ::_putenv_s("TMP", text.c_str());
         ::_putenv_s("TEMP", text.c_str());
@@ -1031,11 +1173,12 @@ namespace
         return true;
     }
 
-    int CmdModule(int argc, char** argv, const fs::path& exeDir)
+    int CmdModule(int argc, char** argv, const fs::path& exeDir,
+                  const BuildEnv& env)
     {
         std::string requested;
         fs::path modulesRoot;
-        fs::path outRoot = exeDir / "../modules";
+        fs::path outRoot = env.modules;
         const char* cxxOption = nullptr;
 
         for (int i = 2; i < argc; ++i)
@@ -1087,6 +1230,10 @@ namespace
 
         if (modulesRoot.empty())
         {
+            modulesRoot = env.source;
+        }
+        if (modulesRoot.empty())
+        {
             const fs::path candidates[] = {
                 exeDir / "../../../../Modules/Modules",
                 fs::current_path() / "Modules/Modules"
@@ -1129,6 +1276,19 @@ namespace
         return 0;
     }
 
+    int CmdEnv(const BuildEnv& env)
+    {
+        std::printf("config  = %s\n",
+                    env.config.empty() ? "(default)" : env.config.string().c_str());
+        std::printf("root    = %s\n", env.root.string().c_str());
+        std::printf("bin     = %s\n", env.bin.string().c_str());
+        std::printf("modules = %s\n", env.modules.string().c_str());
+        std::printf("lib     = %s\n", env.lib.string().c_str());
+        std::printf("temp    = %s\n", env.temp.string().c_str());
+        std::printf("source  = %s\n", env.source.string().c_str());
+        return 0;
+    }
+
     void Usage()
     {
         std::printf(
@@ -1142,6 +1302,7 @@ namespace
             "             [--x-y <X_Y.exe>] [--pkg <pkg.dll>]\n"
             "  xy doctor  [--repo <仓库>] [--include <Engine/include>] [--cxx <编译器>]\n"
             "             [--x-y <X_Y.exe>] [--pkg <pkg.dll>]\n"
+            "  xy env\n"
             "  xy help\n"
             "\n"
             "install 的 repo 默认 XY_REPO 或 ./Modules，root 默认 XY_MODULES 或 <xy 目录>/../modules。\n"
@@ -1248,7 +1409,8 @@ namespace
         return 0;
     }
 
-    int CmdBuild(int argc, const char* const* argv, const fs::path& exeDir)
+    int CmdBuild(int argc, const char* const* argv, const fs::path& exeDir,
+                 const BuildEnv& env)
     {
         if (argc < 3)
         {
@@ -1257,7 +1419,7 @@ namespace
         }
 
         const fs::path source = argv[2];
-        fs::path outputRoot = ".cache/out";
+        fs::path outputRoot = env.temp / "out";
         const char* includeOption = nullptr;
         const char* compilerOption = nullptr;
 
@@ -1310,7 +1472,8 @@ namespace
                             ResolveCompiler(compilerOption), true);
     }
 
-    int CmdInstall(int argc, const char* const* argv, const fs::path& exeDir)
+    int CmdInstall(int argc, const char* const* argv, const fs::path& exeDir,
+                   const BuildEnv& env)
     {
         if (argc < 3)
         {
@@ -1417,15 +1580,16 @@ namespace
 
         const fs::path repo = ResolvePath(
             repoArgument.empty() ? nullptr : repoArgument.c_str(),
-            "XY_REPO", "Modules");
+            "XY_REPO", env.source);
         const fs::path root = ResolvePath(
             rootArgument.empty() ? nullptr : rootArgument.c_str(),
-            "XY_MODULES", (exeDir / "../modules").lexically_normal());
+            "XY_MODULES", env.modules);
         const fs::path outputRoot =
-            outArgument.empty() ? fs::path(".cache/out") : fs::path(outArgument);
+            outArgument.empty() ? (env.temp / "out") : fs::path(outArgument);
 
         // Modules 侧：如果仓库里有 <name>/module.xy，直接走 xy module 的依赖构建。
         std::vector<fs::path> moduleRoots = {
+            env.source,
             repo,
             repo / "Modules",
             fs::current_path() / "Modules/Modules",
@@ -1578,7 +1742,8 @@ namespace
         return result.ExitCode;
     }
 
-    int CmdDoctor(int argc, const char* const* argv, const fs::path& exeDir)
+    int CmdDoctor(int argc, const char* const* argv, const fs::path& exeDir,
+                  const BuildEnv& env)
     {
         std::string repoArgument;
         std::string includeArgument;
@@ -1644,7 +1809,7 @@ namespace
 
         const fs::path repo = ResolvePath(
             repoArgument.empty() ? nullptr : repoArgument.c_str(),
-            "XY_REPO", "Modules");
+            "XY_REPO", env.source);
         const fs::path include = ResolveInclude(
             ".",
             includeArgument.empty() ? nullptr : includeArgument.c_str(),
@@ -1779,7 +1944,8 @@ namespace
 int main(int argc, char** argv)
 {
     const fs::path exeDir = ExecutableDir(argv[0]);
-    SetBuildTempDir();
+    const BuildEnv env = LoadBuildEnv(exeDir);
+    SetBuildTempDir(env);
 
     if (argc < 2)
     {
@@ -1790,19 +1956,23 @@ int main(int argc, char** argv)
     const std::string_view command = argv[1];
     if (command == "build")
     {
-        return CmdBuild(argc, argv, exeDir);
+        return CmdBuild(argc, argv, exeDir, env);
     }
     if (command == "module")
     {
-        return CmdModule(argc, argv, exeDir);
+        return CmdModule(argc, argv, exeDir, env);
     }
     if (command == "install")
     {
-        return CmdInstall(argc, argv, exeDir);
+        return CmdInstall(argc, argv, exeDir, env);
     }
     if (command == "doctor")
     {
-        return CmdDoctor(argc, argv, exeDir);
+        return CmdDoctor(argc, argv, exeDir, env);
+    }
+    if (command == "env")
+    {
+        return CmdEnv(env);
     }
     if (command == "help" || command == "--help" || command == "-h")
     {
