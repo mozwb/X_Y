@@ -30,8 +30,6 @@
 **/DataStore/*.tmp
 git_push.bat
 
-# 笔记（不纳入版本控制）
-_notes/
 
 # Python
 __pycache__/
