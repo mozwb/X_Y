@@ -40,6 +40,10 @@ namespace
         std::string abi;
         std::string file;
         std::string source;
+        std::string deps;
+        std::string libs;
+        std::string includes;
+        std::string libDirs;
     };
 
     struct RepoEntry
@@ -184,6 +188,22 @@ namespace
             else if (key == "source")
             {
                 manifest.source = value;
+            }
+            else if (key == "deps")
+            {
+                manifest.deps = value;
+            }
+            else if (key == "libs")
+            {
+                manifest.libs = value;
+            }
+            else if (key == "includes")
+            {
+                manifest.includes = value;
+            }
+            else if (key == "libDirs")
+            {
+                manifest.libDirs = value;
             }
         }
 
@@ -849,6 +869,30 @@ namespace
         return out;
     }
 
+    struct DependencySpec
+    {
+        std::string name;
+        std::string link = "auto";
+    };
+
+    DependencySpec ParseDependency(const std::string& token)
+    {
+        DependencySpec spec;
+        const std::size_t colon = token.rfind(':');
+        if (colon != std::string::npos)
+        {
+            const std::string mode = token.substr(colon + 1);
+            if (mode == "static" || mode == "shared" || mode == "auto")
+            {
+                spec.name = token.substr(0, colon);
+                spec.link = mode;
+                return spec;
+            }
+        }
+        spec.name = token;
+        return spec;
+    }
+
     bool LoadModuleManifest(const fs::path& path, ModuleManifest& out, std::string& error)
     {
         std::ifstream in(path);
@@ -1313,7 +1357,8 @@ namespace
                      const fs::path& outputRoot,
                      const fs::path& include,
                      const std::string& compiler,
-                     bool printNext)
+                     bool printNext,
+                     const BuildEnv& env)
     {
         Manifest manifest;
         std::string error;
@@ -1353,12 +1398,115 @@ namespace
 #endif
         arguments.push_back("-I");
         arguments.push_back(include.string());
+        arguments.push_back("-I");
+        arguments.push_back(env.source.string());
+
+        for (const std::string& extra : SplitList(manifest.includes))
+        {
+            arguments.push_back("-I");
+            arguments.push_back((source / extra).string());
+        }
+
+        for (const std::string& extra : SplitList(manifest.libDirs))
+        {
+            arguments.push_back("-L");
+            arguments.push_back((source / extra).string());
+        }
+
+        fs::path moduleLib = env.source.parent_path() / "build/out/lib";
+        std::error_code libEc;
+        if (!fs::is_directory(moduleLib, libEc) || libEc)
+        {
+            moduleLib = env.source.parent_path() / "build-linux/out/lib";
+        }
+        arguments.push_back("-L");
+        arguments.push_back(moduleLib.string());
+
         arguments.push_back("-o");
         arguments.push_back(target.string());
         for (const auto& path : sources)
         {
             arguments.push_back(path.string());
         }
+
+        auto findDependencyLibrary = [](const fs::path& dir,
+                                        const std::string& name,
+                                        const std::string& link) -> fs::path
+        {
+            std::error_code ec;
+            if (link == "static")
+            {
+                const fs::path candidate = dir / ("lib" + name + ".a");
+                return fs::is_regular_file(candidate, ec) && !ec ? candidate : fs::path{};
+            }
+            if (link == "shared")
+            {
+#if defined(_WIN32)
+                const fs::path candidates[] = {
+                    dir / ("lib" + name + ".dll.a"),
+                    dir / (name + ".lib")
+                };
+#else
+                const fs::path candidates[] = {
+                    dir / ("lib" + name + ".so"),
+                    dir / ("lib" + name + ".dylib")
+                };
+#endif
+                for (const auto& candidate : candidates)
+                {
+                    if (fs::is_regular_file(candidate, ec) && !ec)
+                    {
+                        return candidate;
+                    }
+                }
+            }
+            return {};
+        };
+
+        for (const std::string& token : SplitList(manifest.deps))
+        {
+            const DependencySpec dep = ParseDependency(token);
+            const fs::path depOut = env.modules / dep.name;
+            std::error_code depEc;
+            if (fs::is_directory(depOut / "include", depEc) && !depEc)
+            {
+                arguments.push_back("-I");
+                arguments.push_back((depOut / "include").string());
+            }
+            if (fs::is_directory(depOut / "lib", depEc) && !depEc)
+            {
+                arguments.push_back("-L");
+                arguments.push_back((depOut / "lib").string());
+            }
+
+            if (dep.link == "auto")
+            {
+                arguments.push_back("-l" + dep.name);
+                continue;
+            }
+
+            fs::path found = findDependencyLibrary(moduleLib, dep.name, dep.link);
+            if (found.empty())
+            {
+                found = findDependencyLibrary(depOut / "lib", dep.name, dep.link);
+            }
+            if (found.empty())
+            {
+                std::fprintf(stderr,
+                             "xy build: 找不到 %s 依赖 %s（期望 lib%s）\n",
+                             dep.link.c_str(), dep.name.c_str(), dep.name.c_str());
+                return 3;
+            }
+            arguments.push_back(found.string());
+        }
+
+        for (const std::string& lib : SplitList(manifest.libs))
+        {
+            arguments.push_back("-l" + lib);
+        }
+#if !defined(_WIN32)
+        arguments.push_back("-pthread");
+#endif
 #if defined(_WIN32)
         arguments.push_back("-Wl,--exclude-all-symbols");
 #endif
@@ -1386,6 +1534,8 @@ namespace
             return result.ExitCode;
         }
 
+        std::error_code copyEc;
+        fs::remove(destination / "package.xy", copyEc);
         fs::copy_file(source / "package.xy",
                       destination / "package.xy",
                       fs::copy_options::overwrite_existing,
@@ -1469,7 +1619,7 @@ namespace
         }
 
         return BuildPackage(source, outputRoot, include,
-                            ResolveCompiler(compilerOption), true);
+                            ResolveCompiler(compilerOption), true, env);
     }
 
     int CmdInstall(int argc, const char* const* argv, const fs::path& exeDir,
@@ -1679,7 +1829,8 @@ namespace
                 outputRoot,
                 include,
                 ResolveCompiler(compilerArgument.empty() ? nullptr : compilerArgument.c_str()),
-                false);
+                false,
+                env);
             if (built != 0)
             {
                 return built;

@@ -102,7 +102,8 @@ X_Y/
 ├─ Engine/                      # 内核源码
 │  ├─ include/
 │  │  ├─ xy_api.h               # ABI：版本 / host 表 / program 入口
-│  │  └─ xy_command.h           # 命令形状 / commands 入口
+│  │  ├─ xy_command.h           # 命令形状 / commands 入口
+│  │  └─ xy_kernel.h            # kernel 命令分发服务
 │  └─ src/
 │     ├─ main.cpp               # 启动、参数、模式
 │     ├─ Host.h / Host.cpp      # Engine + host 回调
@@ -137,6 +138,11 @@ X_Y/
 │     ├─ package.xy
 │     └─ src/main.cpp
 │
+├─ Plugins/
+│  └─ Shell/0.1.0/              # X_Y 专用插件：Modules Shell + kernel 回调
+│     ├─ package.xy
+│     └─ src/main.cpp
+│
 ├─ test/                        # 容器冒烟测试
 │  ├─ container_smoke.ps1
 │  ├─ container_smoke.sh
@@ -154,13 +160,12 @@ X_Y/
 │  └─ out/
 │     ├─ bin/                   # X_Y、xy、pkg、HelloXy、Memory.dll
 │     ├─ lib/                   # .a / .lib / import lib
+|     ├─ .cache/                # xy build 的临时产物（不进版本控制）
 │     └─ modules/
 │        ├─ Memory/              # 第三方依赖包：include + bin + lib
 │        ├─ IO/                  # 第三方 C++ 库：include + bin + lib
 │        └─ ...                  # pkg install 的安装目标
 │
-├─ .cache/                      # xy build 的临时产物（不进版本控制）
-│  └─ out/
 │
 └─ repo/                        # 可选：本地包仓库
    └─ HelloXy/0.1.0/...
@@ -168,13 +173,13 @@ X_Y/
 
 ### 构建目录 vs 发布目录
 
-| 开发构建 | 发布/用户 |
-|---|---|
-| `build/out/bin/` | `bin/` |
-| `build/out/modules/` | `modules/` |
-| `build/out/lib/` | 不发布（只放编译期库） |
-| `.cache/` | 不发布 |
-| `_notes/`、`Engine/`、`Apps/`、`Builder/` | 不发布 |
+| 开发构建                                  | 发布/用户              |
+| ----------------------------------------- | ---------------------- |
+| `build/out/bin/`                          | `bin/`                 |
+| `build/out/modules/`                      | `modules/`             |
+| `build/out/lib/`                          | 不发布（只放编译期库） |
+| `.cache/`                                 | 不发布                 |
+| `_notes/`、`Engine/`、`Apps/`、`Builder/` | 不发布                 |
 
 Windows 的 `.dll`、Linux 的 `.so` 都在 `out/bin`；`out/lib` 只放静态库/import lib。
 
@@ -182,24 +187,26 @@ Windows 的 `.dll`、Linux 的 `.so` 都在 `out/bin`；`out/lib` 只放静态�
 
 ## 3. 文件职责
 
-| 文件 | 负责 |
-|---|---|
-| `Engine/include/xy_api.h` | ABI 底座：版本、导出宏、host 表、program 入口 |
-| `Engine/include/xy_command.h` | 命令形状、commands 入口 |
-| `Engine/src/Host.*` | `Engine`：services / commands / modules / host，以及 alloc/free/log/service 回调 |
+| 文件                           | 负责                                                                                              |
+| ------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `Engine/include/xy_api.h`      | ABI 底座：版本、导出宏、host 表、program 入口                                                     |
+| `Engine/include/xy_command.h`  | 命令形状、commands 入口                                                                           |
+| `Engine/include/xy_kernel.h`   | `kernel` 服务：`run(argc, argv)` 命令分发                                                          |
+| `Engine/src/Host.*`            | `Engine`：services / commands / modules / host，以及 alloc/free/log/service 回调                  |
 | `Engine/src/EngineContainer.*` | 单线程容器：root + 子 Engine 的 create/list/destroy/load/unload/run/services/shared/share/unshare |
-| `Engine/src/Services.*` | 名字 → 指针 + owner |
-| `Engine/src/CommandTable.*` | 命令名 → 命令对象 + owner |
-| `Engine/src/ModuleRegistry.*` | DLL 装载/卸载、ABI 检查、命令登记 |
-| `Engine/src/KernelCommands.*` | `help/commands/modules/engine/load/unload/program/exec/mem/abi` |
-| `Engine/src/Shell.*` | 分词、`run` 前缀、查表、owner、交互循环 |
-| `Engine/src/main.cpp` | 参数、启动、模式选择 |
-| `Engine/src/Platform/*` | 动态库和外部进程的平台差异 |
-| `Apps/Pkg` | `pkg list/info/verify/install/remove` |
-| `Builder` | `xy build/module/install/doctor` |
-| `Programs/HelloXy` | 只认 `xy_api.h` 的最小微程序 |
-| `test/` | 容器冒烟测试和 echo fixture |
-| `CMakeLists.txt` | 目标、输出目录、Memory 共享库、程序/应用接入 |
+| `Engine/src/Services.*`        | 名字 → 指针 + owner                                                                               |
+| `Engine/src/CommandTable.*`    | 命令名 → 命令对象 + owner                                                                         |
+| `Engine/src/ModuleRegistry.*`  | DLL 装载/卸载、ABI 检查、命令登记                                                                 |
+| `Engine/src/KernelCommands.*`  | `help/commands/modules/engine/load/unload/program/exec/mem/abi`                                   |
+| `Engine/src/Shell.*`           | 分词、`run` 前缀、查表、owner、交互循环                                                           |
+| `Engine/src/main.cpp`          | 参数、启动、模式选择                                                                              |
+| `Engine/src/Platform/*`        | 动态库和外部进程的平台差异                                                                        |
+| `Apps/Pkg`                     | `pkg list/info/verify/install/remove`                                                             |
+| `Builder`                      | `xy build/module/install/doctor`                                                                  |
+| `Programs/HelloXy`             | 只认 `xy_api.h` 的最小微程序                                                                      |
+| `Plugins/Shell`                | Modules Shell + `kernel` 回调，作为 `xy_program_v1` 插件                                         |
+| `test/`                        | 容器冒烟测试和 echo fixture                                                                       |
+| `CMakeLists.txt`               | 目标、输出目录、Memory 共享库、程序/应用接入                                                      |
 
 ---
 
@@ -312,10 +319,14 @@ engine services <name>
 engine shared
 engine share <name> <service>
 engine unshare <service>
+engine share-command <name> <command>
+engine unshare-command <command>
+engine shared-commands
 engine destroy <name>
 ```
 
-每个子 Engine 有自己的 host / services / commands / modules；`engine run` 只在该子 Engine 里查命令，不会串到 root。
+每个子 Engine 有自己的 host / services / commands / modules；`engine run` 的查找顺序和服务一致：
+**本地 → container.shared → root**。
 
 ```bash
 # 装 / 跑：HelloXy 是当前真实存在的包
@@ -343,6 +354,14 @@ engine destroy net
 - `engine share` 把 provider 的本地服务提升到 shared
 - `engine services <name>` 看本地服务；`engine shared` 看共享表和 provider
 - provider 还有共享服务时不能 `engine destroy`，也不能 `engine unload` 它的模块
+
+命令查找规则相同：
+
+- 本地 `commands`
+- `container.shared` 命令（`engine share-command`）
+- 子 Engine 最后查 root 命令
+- `engine shared-commands` 看共享命令和 provider
+- `unshare-command` 之后才能销毁/卸载 provider
 - root 有共享服务时，`unload` 同样被拒绝
 - 先 `engine unshare`，再销毁/卸载
 
@@ -409,6 +428,74 @@ out/modules/IO/
 `--out` 默认 `<xy>/../modules`。
 
 `xy install IO` 也会先查 Modules 侧的 `IO/module.xy`，有就直接走依赖构建，不要求 `package.xy` 仓库。
+
+### Shell 插件
+
+`Plugins/Shell/0.1.0` 是第一个 X_Y 专用插件：
+
+```
+Plugins/Shell/0.1.0/
+├─ package.xy        # kind=program, deps 带 static/shared
+└─ src/main.cpp      # xy_program_v1 + Modules Shell + kernel fallback
+```
+
+构建安装：
+
+```powershell
+xy install Shell --repo Plugins --build
+```
+
+运行：
+
+```powershell
+X_Y --program build/out/modules/Shell/0.1.0/Shell.dll
+```
+
+Shell 内：
+
+```
+abi
+engine create a
+engine run a abi
+exit
+```
+
+插件只负责行编辑/解析；未知命令走：
+
+```
+Command::Registry::SetFallback
+  -> XyKernelV1::run
+  -> local -> shared -> root
+```
+
+`help` 仍是 Modules Shell 的内建命令，只列 Shell 内建；其他命令走 kernel。
+
+### deps / libs 语义
+
+- `deps`：X_Y / Modules 体系内、`xy` 能解析的依赖  
+  写法：`Name`（自动）、`Name:static`、`Name:shared`  
+  `xy` 自动加 include、lib 路径和链接项
+- `libs`：作者自己的第三方库、系统库  
+  `xy` 只加 `-l`，路径由 `libDirs` 提供
+- `includes`：作者自己的第三方头目录，相对插件源码目录
+- `libDirs`：作者自己的库目录，相对插件源码目录
+
+Shell 用：
+
+```
+deps = Terminal:static, InputConsole:static, Core:static, Memory:shared
+libs =
+includes =
+libDirs =
+```
+
+作者自己的库示例：
+
+```
+includes = third_party/include
+libDirs = third_party/lib
+libs = mylib, ws2_32
+```
 
 ### 构建环境 enve.json
 
@@ -506,13 +593,13 @@ create → load → services → run → share → shared → unload 拦截 → 
 
 入口：
 
-| 导出 | 用途 |
-|---|---|
-| `xy_abi_version_v1` | 必须导出，返回 `XY_ABI_VERSION` |
-| `xy_program_v1` | 微程序入口 |
-| `xy_commands_v1` | 命令表入口 |
-| `xy_module_v1` | 可选：模块初始化，注册服务 |
-| `xy_module_shutdown_v1` | 可选：卸载前反注册服务 |
+| 导出                    | 用途                            |
+| ----------------------- | ------------------------------- |
+| `xy_abi_version_v1`     | 必须导出，返回 `XY_ABI_VERSION` |
+| `xy_program_v1`         | 微程序入口                      |
+| `xy_commands_v1`        | 命令表入口                      |
+| `xy_module_v1`          | 可选：模块初始化，注册服务      |
+| `xy_module_shutdown_v1` | 可选：卸载前反注册服务          |
 
 加载顺序：验 ABI → `xy_module_v1(host)` → `xy_commands_v1(host)` → 登记命令。
 卸载顺序：`xy_module_shutdown_v1()` → 摘命令 → 摘服务 → `FreeLibrary`。
@@ -525,6 +612,26 @@ create → load → services → run → share → shared → unload 拦截 → 
 - 命令表、命令对象归 DLL 所有，卸载前必须有效
 - 一次性 program 禁止 `add_service`
 - 服务在 `xy_module_v1` 注册，`xy_module_shutdown_v1` 反注册；漏掉的由内核按 owner 清理并报泄漏
+
+### kernel 服务
+
+微程序 / 插件不能直接拿 `Engine.commands`，通过 `XyKernelV1` 把命令交回内核：
+
+```c
+#include <xy_kernel.h>
+
+const XyKernelV1* kernel =
+    (const XyKernelV1*)host->get_service(host->user, XY_KERNEL_SERVICE);
+
+const char* argv[] = {"help"};
+return kernel->run(kernel->user, 1, argv);
+```
+
+- 每个 Engine 注册一份 `kernel` 服务
+- `run` 查找：本地 commands → container.shared commands → root.commands
+- `argv[0]` 是命令名；找不到返回 127
+- Shell 微程序只需要解析行，然后调 `kernel->run`
+- Modules 侧 `Command::Registry::SetFallback` 可以把未知命令交给 `kernel->run`
 
 ### Memory 第三方库
 
@@ -611,9 +718,13 @@ v1.1.0-dev 已完成：
 
 - ABI 头、host、services、command table
 - 服务模块入口：`xy_module_v1` / `xy_module_shutdown_v1`
+- `kernel` 服务：每个 Engine 一份 `XyKernelV1`，`run` 走本地→shared→root
+- Shell 插件：`Plugins/Shell/0.1.0`，Modules Shell + `kernel` fallback
 - Engine 实例化：每个 Engine 一份 host / services / commands；`ModuleRegistry` 也归 Engine 所有（`Start()` 里建）
-- EngineContainer：单线程 `engine create/list/destroy/load/unload/run/services/shared/share/unshare`
+- EngineContainer：单线程 `engine create/list/destroy/load/unload/run/services/shared/share/unshare/share-command/unshare-command/shared-commands`
 - 容器共享服务：`share` / `unshare`，provider 共享期间禁止销毁/卸载
+- 命令查找：本地 → container.shared → root（和 services 一致）
+- 容器共享命令：`share-command` / `unshare-command` / `shared-commands`
 - 容器冒烟测试：`test/container_smoke.ps1` / `container_smoke.sh`
 - Memory 共享库：`Memory.dll` / `libMemory.so`，X_Y 不再整库链 Memory
 - Memory 依赖包：`out/modules/Memory/{include,bin,lib,package.xy}`
@@ -621,12 +732,15 @@ v1.1.0-dev 已完成：
 - IO 第三方 C++ 库：`out/modules/IO/{include,bin,lib,package.xy}`，链 IO + Memory
 - `pkg` 接受 `kind = library`，list/verify 能识别 Memory/IO
 - 跨 engine 服务查找：本地 → container.shared → root（子 Engine）
+- 跨 engine 命令查找：本地 → container.shared → root（子 Engine）
 - DLL 装载/卸载、微程序包装、命令 owner
 - 内建命令、shell、main
 - Windows 平台 Library / Process 实测
 - Linux 真机验收（用户确认已跑；验收输出未留档）
 - `pkg` v1：list / info / verify / install / remove
 - `xy` v1：build / module / install / doctor，仓库按 name/version 安装；`install` 可识别 Modules 侧 `module.xy`
+- `xy` program 构建支持 `deps` / `libs` / `includes` / `libDirs`；`deps` 支持 `:static` / `:shared`
+- Shell 插件：`Plugins/Shell/0.1.0`，Modules Shell + `kernel` fallback
 - `enve.json` 环境：`root` = out，bin/modules/lib/temp/source 统一解析
 - 固定运行目录：`out/bin` + `out/modules`，`X_Y` 自动设置 `XY_MODULES`
 

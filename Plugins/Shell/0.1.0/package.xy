@@ -1,0 +1,11 @@
+name = Shell
+version = 0.1.0
+kind = program
+abi = 1
+entry = xy_program_v1
+file = Shell.dll
+source = src
+deps = Terminal:static, InputConsole:static, Core:static, Memory:shared
+libs =
+includes =
+libDirs =

@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <string>
+#include <utility>
 
 namespace X_Y
 {
@@ -140,6 +141,16 @@ namespace X_Y
 
             ctx->services.Remove(name);
         }
+
+        int KernelRun(void* user, int argc, const char* const* argv)
+        {
+            auto* engine = static_cast<Engine*>(user);
+            if (engine == nullptr || argc < 1 || argv == nullptr || argv[0] == nullptr)
+            {
+                return 2;
+            }
+            return RunCommand(*engine, argc, argv);
+        }
     }
 
     void Engine::Start(bool withBuiltins)
@@ -154,6 +165,15 @@ namespace X_Y
         if (withBuiltins)
         {
             RegisterKernelCommands(*this);
+        }
+
+        kernel.size = sizeof(XyKernelV1);
+        kernel.version = XY_KERNEL_VERSION;
+        kernel.user = this;
+        kernel.run = &KernelRun;
+        if (!services.Add(XY_KERNEL_SERVICE, &kernel, "engine"))
+        {
+            std::fprintf(stderr, "X_Y: 注册 %s 服务失败\n", XY_KERNEL_SERVICE);
         }
     }
 
@@ -175,5 +195,67 @@ namespace X_Y
         ctx.host.remove_service = &HostRemoveService;
 
         return &ctx.host;
+    }
+
+    int RunCommand(Engine& engine, int argc, const char* const* argv)
+    {
+        if (argc < 1 || argv == nullptr || argv[0] == nullptr)
+        {
+            return 2;
+        }
+
+        const CommandRef ref = FindCommand(engine, argv[0]);
+        if (ref.command == nullptr)
+        {
+            std::fprintf(stderr, "没有命令 '%s'\n", argv[0]);
+            return 127;
+        }
+
+        struct OwnerScope
+        {
+            std::string& slot;
+            std::string previous;
+
+            OwnerScope(std::string& target, std::string owner)
+                : slot(target), previous(std::move(target))
+            {
+                slot = std::move(owner);
+            }
+
+            ~OwnerScope()
+            {
+                slot = std::move(previous);
+            }
+        };
+
+        OwnerScope scope(engine.currentModule, ref.owner);
+        return ref.command->invoke(ref.command->self, argc, argv);
+    }
+
+    CommandRef FindCommand(Engine& engine, const std::string& name)
+    {
+        if (const XyCommandV1* command = engine.commands.Find(name))
+        {
+            return {command, engine.commands.OwnerOf(name)};
+        }
+
+        if (engine.container != nullptr)
+        {
+            if (const XyCommandV1* command = engine.container->GetSharedCommand(name))
+            {
+                return {command, engine.container->SharedCommandOwner(name)};
+            }
+
+            Engine& root = engine.container->Root();
+            if (&root != &engine)
+            {
+                if (const XyCommandV1* command = root.commands.Find(name))
+                {
+                    return {command, root.commands.OwnerOf(name)};
+                }
+            }
+        }
+
+        return {};
     }
 }

@@ -34,6 +34,7 @@ Engine 是内核的一组运行期状态；每个 Engine 一份：
 #include "Services.h"
 
 #include <xy_api.h>
+#include <xy_kernel.h>
 
 #include <memory>
 #include <string>
@@ -64,6 +65,7 @@ namespace X_Y
         bool oneShot = false;
 
         XyHostV1 host{};
+        XyKernelV1 kernel{};
 
         // 填 host、markBaseline、建 modules；withBuiltins=true 时登记内建命令。
         // 根 engine 用 true；容器里的子 engine 用 false，避免每个子 engine
@@ -73,6 +75,18 @@ namespace X_Y
 
     // 1.x 兼容名；新代码用 Engine。
     using EngineContext = Engine;
+
+    struct CommandRef
+    {
+        const XyCommandV1* command = nullptr;
+        std::string owner;
+    };
+
+    // 命令查找：本地 → container.shared → root（root 自己只查本地 + shared）。
+    CommandRef FindCommand(Engine& engine, const std::string& name);
+
+    // 按 argv 分发命令；argv[0] 是命令名。找不到返回 127。
+    int RunCommand(Engine& engine, int argc, const char* const* argv);
 
     // 填 engine.host 并返回 &engine.host。只调一次；之后指针不变。
     // 同时把 Memory 的 OOM 策略设成 ReturnNull：host->alloc 失败返回 NULL，

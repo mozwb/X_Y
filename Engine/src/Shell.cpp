@@ -177,8 +177,8 @@ namespace X_Y
             }
 
             const std::string& name = tokens[first];
-            const XyCommandV1* cmd = ctx.commands.Find(name);
-            if (cmd == nullptr)
+            const CommandRef ref = FindCommand(ctx, name);
+            if (ref.command == nullptr)
             {
                 std::fprintf(stderr, "没有命令 '%s'（用 run help 看全部）\n", name.c_str());
                 return 3;
@@ -192,10 +192,10 @@ namespace X_Y
             }
             argv.push_back(nullptr);
 
-            OwnerScope scope(ctx.currentModule, ctx.commands.OwnerOf(name));
-            return cmd->invoke(cmd->self,
-                               static_cast<int>(tokens.size() - first),
-                               argv.data());
+            OwnerScope scope(ctx.currentModule, ref.owner);
+            return ref.command->invoke(ref.command->self,
+                                       static_cast<int>(tokens.size() - first),
+                                       argv.data());
         }
 
         bool ParseExitCode(const std::string& text, int& code)

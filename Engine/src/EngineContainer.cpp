@@ -79,9 +79,9 @@ namespace X_Y
             return false;
         }
 
-        if (HasSharedServices(it->get()))
+        if (HasSharedServices(it->get()) || HasSharedCommands(it->get()))
         {
-            error = "engine " + name + " 还有共享服务，先 unshare";
+            error = "engine " + name + " 还有共享服务/命令，先 unshare";
             return false;
         }
 
@@ -175,6 +175,102 @@ namespace X_Y
 
             SharedInfo info;
             info.service = service;
+            info.provider = it->second->name;
+            out.push_back(std::move(info));
+        }
+        return out;
+    }
+
+    bool EngineContainer::ShareCommand(const std::string& engineName,
+                                       const std::string& command,
+                                       std::string& error)
+    {
+        error.clear();
+
+        Engine* provider = Find(engineName);
+        if (provider == nullptr)
+        {
+            error = "没有 engine: " + engineName;
+            return false;
+        }
+        if (command.empty())
+        {
+            error = "命令名不能为空";
+            return false;
+        }
+
+        const XyCommandV1* cmd = provider->commands.Find(command);
+        if (cmd == nullptr)
+        {
+            error = "engine " + engineName + " 没有命令: " + command;
+            return false;
+        }
+        if (sharedCommands_.Find(command) != nullptr)
+        {
+            error = "命令已在共享表: " + command;
+            return false;
+        }
+
+        const std::string owner = "shared:" + provider->name;
+        if (!sharedCommands_.Add(cmd, owner))
+        {
+            error = "登记共享命令失败: " + command;
+            return false;
+        }
+
+        sharedCommandProviders_[command] = provider;
+        return true;
+    }
+
+    bool EngineContainer::UnshareCommand(const std::string& command, std::string& error)
+    {
+        error.clear();
+
+        if (!sharedCommands_.Remove(command))
+        {
+            error = "共享表里没有命令: " + command;
+            return false;
+        }
+        sharedCommandProviders_.erase(command);
+        return true;
+    }
+
+    const XyCommandV1* EngineContainer::GetSharedCommand(const std::string& command) const
+    {
+        return sharedCommands_.Find(command);
+    }
+
+    std::string EngineContainer::SharedCommandOwner(const std::string& command) const
+    {
+        return sharedCommands_.OwnerOf(command);
+    }
+
+    bool EngineContainer::HasSharedCommands(const Engine* engine) const
+    {
+        for (const auto& [name, provider] : sharedCommandProviders_)
+        {
+            (void)name;
+            if (provider == engine)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    std::vector<EngineContainer::SharedCommandInfo> EngineContainer::SharedCommandList() const
+    {
+        std::vector<SharedCommandInfo> out;
+        for (const auto& command : sharedCommands_.Names())
+        {
+            const auto it = sharedCommandProviders_.find(command);
+            if (it == sharedCommandProviders_.end() || it->second == nullptr)
+            {
+                continue;
+            }
+
+            SharedCommandInfo info;
+            info.command = command;
             info.provider = it->second->name;
             out.push_back(std::move(info));
         }

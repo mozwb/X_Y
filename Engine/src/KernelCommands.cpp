@@ -159,7 +159,9 @@ namespace X_Y
                              "用法: engine list | create <name> | destroy <name> | "
                              "load <name> <dll> | unload <name> <module> | "
                              "run <name> <命令...> | services <name> | shared | "
-                             "share <name> <service> | unshare <service>\n");
+                             "share <name> <service> | unshare <service> | "
+                             "share-command <name> <command> | unshare-command <command> | "
+                             "shared-commands\n");
                 return 2;
             }
 
@@ -400,6 +402,61 @@ namespace X_Y
                 return 0;
             }
 
+            if (std::strcmp(argv[1], "share-command") == 0)
+            {
+                if (argc < 4)
+                {
+                    std::fprintf(stderr, "用法: engine share-command <name> <command>\n");
+                    return 2;
+                }
+
+                std::string error;
+                if (!ctx->container->ShareCommand(argv[2], argv[3], error))
+                {
+                    std::fprintf(stderr, "engine share-command: %s\n", error.c_str());
+                    return 3;
+                }
+                std::printf("shared command %s from engine %s\n", argv[3], argv[2]);
+                return 0;
+            }
+
+            if (std::strcmp(argv[1], "unshare-command") == 0)
+            {
+                if (argc < 3)
+                {
+                    std::fprintf(stderr, "用法: engine unshare-command <command>\n");
+                    return 2;
+                }
+
+                std::string error;
+                if (!ctx->container->UnshareCommand(argv[2], error))
+                {
+                    std::fprintf(stderr, "engine unshare-command: %s\n", error.c_str());
+                    return 3;
+                }
+                std::printf("unshared command %s\n", argv[2]);
+                return 0;
+            }
+
+            if (std::strcmp(argv[1], "shared-commands") == 0)
+            {
+                const auto commands = ctx->container->SharedCommandList();
+                if (commands.empty())
+                {
+                    std::printf("容器没有共享命令\n");
+                    return 0;
+                }
+
+                std::printf("%-20s %s\n", "COMMAND", "PROVIDER");
+                for (const auto& item : commands)
+                {
+                    std::printf("%-20s %s\n",
+                                item.command.c_str(),
+                                item.provider.c_str());
+                }
+                return 0;
+            }
+
             std::fprintf(stderr, "engine: 未知子命令 '%s'\n", argv[1]);
             return 2;
         }
@@ -443,10 +500,12 @@ namespace X_Y
                 return 3;
             }
 
-            if (ctx->container != nullptr && ctx->container->HasSharedServices(ctx))
+            if (ctx->container != nullptr &&
+                (ctx->container->HasSharedServices(ctx) ||
+                 ctx->container->HasSharedCommands(ctx)))
             {
                 std::fprintf(stderr,
-                             "engine 还有共享服务，先 engine unshare <service> 再卸载模块\n");
+                             "engine 还有共享服务/命令，先 unshare 再卸载模块\n");
                 return 3;
             }
 
@@ -663,7 +722,7 @@ namespace X_Y
         };
         XyCommandV1 kEngine = {
             sizeof(XyCommandV1), "engine",
-            "engine list/create/destroy/load/unload/run/services/shared/share/unshare",
+            "engine list/create/destroy/load/unload/run/services/shared/share/unshare/share-command/unshare-command/shared-commands",
             &CmdEngine, nullptr
         };
         XyCommandV1 kMem = {

@@ -35,6 +35,8 @@ namespace X_Y
             // 共享表只借指针；先清表，再让 children/root 析构。
             sharedProviders_.clear();
             shared_.Clear();
+            sharedCommandProviders_.clear();
+            sharedCommands_.Clear();
         }
 
         EngineContainer(const EngineContainer&) = delete;
@@ -75,6 +77,23 @@ namespace X_Y
         // 当前共享表，按服务名字典序。
         std::vector<SharedInfo> SharedList() const;
 
+        // 命令共享（和服务的 shared 同层）：local -> shared commands -> root。
+        bool ShareCommand(const std::string& engineName, const std::string& command,
+                          std::string& error);
+        bool UnshareCommand(const std::string& command, std::string& error);
+
+        const XyCommandV1* GetSharedCommand(const std::string& command) const;
+        std::string SharedCommandOwner(const std::string& command) const;
+        bool HasSharedCommands(const Engine* engine) const;
+
+        struct SharedCommandInfo
+        {
+            std::string command;
+            std::string provider;
+        };
+
+        std::vector<SharedCommandInfo> SharedCommandList() const;
+
         // root + 子 engine，按创建顺序。
         std::vector<Info> List() const;
 
@@ -85,5 +104,7 @@ namespace X_Y
         std::vector<std::unique_ptr<Engine>> children_;
         Services shared_;
         std::map<std::string, Engine*> sharedProviders_;
+        CommandTable sharedCommands_;
+        std::map<std::string, Engine*> sharedCommandProviders_;
     };
 }
