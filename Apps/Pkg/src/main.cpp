@@ -332,9 +332,10 @@ namespace
         }
         if (manifest.Get("kind") != "program" &&
             manifest.Get("kind") != "module" &&
-            manifest.Get("kind") != "library")
+            manifest.Get("kind") != "library" &&
+            manifest.Get("kind") != "executable")
         {
-            error = "kind 必须是 program、module 或 library";
+            error = "kind 必须是 program、module、library 或 executable";
             return false;
         }
 
@@ -524,9 +525,10 @@ namespace
             }
             else if (manifest.Get("kind") != "program" &&
                      manifest.Get("kind") != "module" &&
-                     manifest.Get("kind") != "library")
+                     manifest.Get("kind") != "library" &&
+                     manifest.Get("kind") != "executable")
             {
-                reason = "kind 必须是 program、module 或 library";
+                reason = "kind 必须是 program、module、library 或 executable";
             }
             else
             {

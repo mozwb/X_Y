@@ -1,0 +1,11 @@
+name = LST
+version = 0.0.0
+kind = executable
+abi = 1
+file = bin/LST.exe
+source = src
+deps = IO:static,Core:static
+libs =
+libs_windows = comdlg32
+includes =
+libDirs =

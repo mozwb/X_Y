@@ -1,0 +1,17 @@
+name = Core
+version = 0.0.1
+kind = library
+abi = 1
+source = 
+include = include
+headers = include/Core
+file = bin/Core.dll
+static_file = lib/libCore.a
+shared_file = bin/Core.dll
+import_lib = lib/libCore.dll.a
+deps = 
+libs = 
+libs_windows = 
+libs_linux = 
+libDirs = 
+defines = 

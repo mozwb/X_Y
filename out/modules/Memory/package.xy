@@ -1,0 +1,17 @@
+name = Memory
+version = 0.0.1
+kind = library
+abi = 1
+source = 
+include = include
+headers = include/Memory
+file = 
+static_file = lib/libMemory.a
+shared_file = 
+import_lib = 
+deps = 
+libs = 
+libs_windows = psapi
+libs_linux = 
+libDirs = 
+defines = 

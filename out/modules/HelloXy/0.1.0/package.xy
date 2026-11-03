@@ -1,0 +1,7 @@
+name    = HelloXy
+version = 0.1.0
+kind    = program
+abi     = 1
+entry   = xy_program_v1
+file    = HelloXy.dll
+source  = Programs/HelloXy

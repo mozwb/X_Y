@@ -1,9 +1,9 @@
 # 构建产物
 **/build/
 **/dist/
-
+test/
 # 构建器临时目录
-/.cache/
+out/.cache/
 
 # 工具链产物
 *.o

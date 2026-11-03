@@ -202,7 +202,7 @@ Windows 的 `.dll`、Linux 的 `.so` 都在 `out/bin`；`out/lib` 只放静态�
 | `Engine/src/main.cpp`          | 参数、启动、模式选择                                                                              |
 | `Engine/src/Platform/*`        | 动态库和外部进程的平台差异                                                                        |
 | `Apps/Pkg`                     | `pkg list/info/verify/install/remove`                                                             |
-| `Builder`                      | `xy build/module/install/doctor`                                                                  |
+| `Builder`                      | `xy build/module/install/doctor`；构建 DLL 与独立 EXE                                           |
 | `Programs/HelloXy`             | 只认 `xy_api.h` 的最小微程序                                                                      |
 | `Plugins/Shell`                | Modules Shell + `kernel` 回调，作为 `xy_program_v1` 插件                                         |
 | `test/`                        | 容器冒烟测试和 echo fixture                                                                       |
@@ -369,11 +369,12 @@ engine destroy net
 
 ## 6. xy
 
-`xy` 是构建期工具，不进用户包。
+`xy` 是构建期工具，不进用户包。`xy build` 直接调用 C++ 编译器，不要求应用源码使用 CMake。
 
 ```
 xy build   <源目录> [--out <目录>] [--include <Engine/include>] [--cxx <编译器>]
-xy module  <name> [--modules-root <Modules/Modules>] [--out <目录>] [--cxx <编译器>]
+xy module  <name> [version] [--link auto|source|static|shared]
+           [--repo <模块仓库>] [--out <modules 目录>] [--cxx <编译器>]
 xy install <name> [version] [--repo <仓库>] [--root <安装根>]
            [--build] [--force] [--include ...] [--cxx ...]
            [--x-y <X_Y>] [--pkg <pkg>]
@@ -381,53 +382,79 @@ xy doctor  [--repo <仓库>] [--include ...] [--cxx ...]
 xy env
 ```
 
-### Modules 构建
+`package.xy` 的 `kind` 决定链接类型：
 
-`xy module` 直接读 Modules 侧的 `module.xy`，先建依赖，再建自己：
+- `program` / `module`：按共享库构建，继续用于 X_Y 的 DLL/SO 装载。
+- `executable`：按独立进程构建，不需要 `Engine/include`；产物可通过 X_Y 的 `exec` 命令启动。
 
-```bash
-xy module IO
+`xy build` 只构建清单中声明的项目，不会联网或从源码仓库隐式获取依赖。开发模块必须先用 `xy module` 准备到 `enve.json` 的 `modules` 目录。
+
+例如独立程序的清单：
+
+```
+name = HelloTool
+version = 1.0.0
+kind = executable
+abi = 1
+file = bin/HelloTool.exe
+source = src
 ```
 
-`Modules/Modules/IO/module.xy`：
+源码放在 `src/` 中，执行：
+
+```powershell
+xy build path/to/HelloTool --out build/out
+X_Y --run exec build/out/HelloTool/1.0.0/bin/HelloTool.exe arg1 arg2
+```
+
+`file` 是相对包目录的输出路径；Linux 下也可以使用不带 `.exe` 的文件名。`deps`、`libs`、`includes` 和 `libDirs` 对 DLL 与可执行程序都有效。
+
+### 开发模块
+
+```bash
+xy module IO --link static
+xy module Memory --link shared
+xy module HeaderOnly --link source
+```
+
+模块仓库使用统一的 `package.xy` 清单，也兼容旧的 `module.xy`。模块清单示例：
 
 ```
 name = IO
 version = 0.0.1
 kind = library
-sources = src
+source = src
 include = ..
 headers = .
 exclude = src/FilesSystem.cpp
-deps = Memory
+deps = Memory:static
 libs =
+libs_windows =
+libs_linux =
+libDirs =
 defines =
 ```
 
-流程：
+- `--link auto` 优先复用静态库，其次共享库；均不存在时从源码构建静态库。
+- `--link source` 只准备源码和头文件；仍递归准备依赖模块的源码。
+- `--link static` / `shared` 优先复用该类型的预编译产物，不存在时尝试从源码构建。
+- 二进制模式只安装库和头文件；即使为了生成库而读取/编译了仓库源码，也不会把源码复制到输出目录。
+- 依赖模块会递归准备；`xy build` 不会自动下载或编译未准备的依赖。
+- `--repo` 指定模块源码仓库，默认取 `enve.json` 的 `source`；`--out` 指定模块安装目录，默认取 `enve.json` 的 `modules`。
 
-```
-xy module IO
-  ├─ 读 Modules/Modules/IO/module.xy
-  ├─ deps = Memory
-  │  └─ xy module Memory -> out/modules/Memory
-  └─ 编 IO -> out/modules/IO
-```
-
-产物：
+准备后的开发模块使用统一目录布局：
 
 ```
 out/modules/IO/
-├─ include/IO/{Files.h,Stream.h}
-├─ bin/IO.dll
-├─ lib/libIO.dll.a
+├─ include/IO/...
+├─ bin/IO.dll                 # 选择 shared 时存在
+├─ lib/libIO.a                # 选择 static 时存在
+├─ lib/libIO.dll.a            # Windows shared 的 import library
+├─ src/                       # 选择 source 或从源码构建时存在
 └─ package.xy
 ```
 
-`--modules-root` 默认找 `../../../../Modules/Modules` 或 `./Modules/Modules`；
-`--out` 默认 `<xy>/../modules`。
-
-`xy install IO` 也会先查 Modules 侧的 `IO/module.xy`，有就直接走依赖构建，不要求 `package.xy` 仓库。
+`xy build` 的 `deps` 用于引用这些模块，例如 `deps = IO:static, Memory:shared`。`libs`、`libs_windows`、`libs_linux` 和 `libDirs` 用于声明第三方链接库，不会被当作 `xy module` 的源码模块。
 
 ### Shell 插件
 
@@ -477,6 +504,7 @@ Command::Registry::SetFallback
   `xy` 自动加 include、lib 路径和链接项
 - `libs`：作者自己的第三方库、系统库  
   `xy` 只加 `-l`，路径由 `libDirs` 提供
+- `libs_windows` / `libs_linux`：仅在对应平台加入的系统库，例如 Windows 文件对话框使用 `libs_windows = comdlg32`
 - `includes`：作者自己的第三方头目录，相对插件源码目录
 - `libDirs`：作者自己的库目录，相对插件源码目录
 
@@ -499,13 +527,14 @@ libs = mylib, ws2_32
 
 ### 构建环境 enve.json
 
-`root` 就是 `out` 目录；`bin` / `modules` / `lib` / `temp` 默认都相对它：
+`root` 就是 `out` 目录；`bin` / `modules` / `program` / `lib` / `temp` 默认都相对它：
 
 ```json
 {
     "root": "build/out",
     "bin": "bin",
     "modules": "modules",
+    "program": "programs",
     "lib": "lib",
     "temp": ".cache/tmp",
     "source": "../Modules/Modules"
@@ -513,11 +542,14 @@ libs = mylib, ws2_32
 ```
 
 - `root`：输出根，相当于 `out/`
-- `bin`：可执行文件和运行库
+- `bin`：X_Y、xy、pkg 等运行文件
 - `modules`：模块/包安装目录
+- `program`：`xy build` 在没有传 `--out` 时，`kind = executable` 的输出目录
 - `lib`：库目录
 - `temp`：编译器和链接器的临时目录
 - `source`：Modules 源码根
+
+因此上面的配置会将独立程序默认构建到 `build/out/programs/<name>/<version>/<file>`；`xy build ... --out <目录>` 可单次覆盖默认位置。DLL/SO 包的默认输出行为不变。
 
 `xy env` 会打印当前解析结果：
 
@@ -528,7 +560,7 @@ root    = D:\workbench\X_Y\build\out
 ...
 ```
 
-相对路径按 `enve.json` 所在目录解析；不写 `root` 时默认是配置文件所在目录。
+`root` 一般相对 `enve.json` 所在目录解析；若配置放在 `out/enve.json`，则 `root` 相对项目根解析，以兼容把配置文件放入输出目录的布局。未写 `root` 时默认是配置文件所在目录；其余目录按解析后的 `root` 解析。
 `xy` 启动时会把 `TMP` / `TEMP` / `TMPDIR` 指到 `temp`，编译器和链接器的临时文件不再落到系统 TEMP。
 
 ### 仓库
@@ -542,7 +574,7 @@ root    = D:\workbench\X_Y\build\out
       src/...          # 源码包（可选）
 ```
 
-- `file` 存在 → 二进制包
+- `file` 存在 → 可运行二进制包
 - `source` 目录存在 → 源码包
 - 版本省略 → 选最高版本
 - 有二进制默认用二进制；`--build` 强制源码
@@ -556,7 +588,7 @@ xy install HelloXy 0.1.0 --repo repo/
   └─ 只有源码 / --build -> xy build -> pkg install
 ```
 
-`xy` 自己不写 `modules/`，收包始终由 `pkg` 做。
+`install` 面向可直接使用的程序/插件包；开发库的源码、静态库或共享库由 `xy module` 准备。包安装本身仍交给 `pkg`。
 `--root` 默认 `bin/../modules`，和 `pkg` 的默认 root 一致。
 
 ### 自检
@@ -579,6 +611,18 @@ bash X_Y/test/container_smoke.sh
 
 `container_smoke` 会编 `echo_service` / `echo_client` 到 `build/test-fixtures`，跑：
 create → load → services → run → share → shared → unload 拦截 → unshare → unload → destroy。
+
+### xy 可执行程序冒烟测试
+
+测试覆盖 `xy module` 的递归源码/静态/共享准备、模块依赖传递链接，以及独立程序的构建和运行：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File X_Y\test\xy_build.ps1
+```
+
+```bash
+bash X_Y/test/xy_build.sh
+```
 
 ---
 
@@ -726,6 +770,10 @@ v1.1.0-dev 已完成：
 - 命令查找：本地 → container.shared → root（和 services 一致）
 - 容器共享命令：`share-command` / `unshare-command` / `shared-commands`
 - 容器冒烟测试：`test/container_smoke.ps1` / `container_smoke.sh`
+- `xy build`：支持 `kind = executable`，可直接编译并运行独立 C++ 可执行程序
+- `xy module`：支持 `auto` / `source` / `static` / `shared`，递归准备模块依赖并生成开发目录
+- `xy build`：从 `enve.modules` 解析本地开发模块并递归链接依赖；缺失模块时提示先运行 `xy module`
+- `xy` 构建冒烟测试：`test/xy_build.ps1` / `xy_build.sh`
 - Memory 共享库：`Memory.dll` / `libMemory.so`，X_Y 不再整库链 Memory
 - Memory 依赖包：`out/modules/Memory/{include,bin,lib,package.xy}`
 - Memory 显式 API：`X_Y::New/Delete/Malloc/Free/Buffer`；全局 new 不再覆盖
@@ -738,8 +786,8 @@ v1.1.0-dev 已完成：
 - Windows 平台 Library / Process 实测
 - Linux 真机验收（用户确认已跑；验收输出未留档）
 - `pkg` v1：list / info / verify / install / remove
-- `xy` v1：build / module / install / doctor，仓库按 name/version 安装；`install` 可识别 Modules 侧 `module.xy`
-- `xy` program 构建支持 `deps` / `libs` / `includes` / `libDirs`；`deps` 支持 `:static` / `:shared`
+- `xy`：`build` 本地构建、`module` 准备开发依赖、`install` 安装可运行包；模块清单以 `package.xy` 为主并兼容旧 `module.xy`
+- `xy build` 支持 `deps` / `libs` / `includes` / `libDirs`；`deps` 支持 `:static` / `:shared` / `:auto`
 - Shell 插件：`Plugins/Shell/0.1.0`，Modules Shell + `kernel` fallback
 - `enve.json` 环境：`root` = out，bin/modules/lib/temp/source 统一解析
 - 固定运行目录：`out/bin` + `out/modules`，`X_Y` 自动设置 `XY_MODULES`

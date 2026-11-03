@@ -1,0 +1,9 @@
+{
+    "root": "D:/workbench/X_Y/out",
+    "bin": "bin",
+    "modules": "modules",
+    "lib": "lib",
+    "temp": ".cache/tmp",
+    "source": "../Modules/Modules",
+    "program": "programs"
+}

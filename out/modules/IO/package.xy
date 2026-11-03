@@ -1,0 +1,17 @@
+name = IO
+version = 0.0.1
+kind = library
+abi = 1
+source = 
+include = include
+headers = include/IO
+file = 
+static_file = lib/libIO.a
+shared_file = 
+import_lib = 
+deps = Memory:static
+libs = 
+libs_windows = 
+libs_linux = 
+libDirs = 
+defines = 
